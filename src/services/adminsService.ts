@@ -1,5 +1,5 @@
 'use client';
-import { getFirestore, collection, getDocs, doc, addDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import type { Admin } from '@/lib/types';
 import { initializeFirebase } from '@/firebase';
@@ -16,11 +16,16 @@ export async function getAdmins(): Promise<Admin[]> {
 
 export async function addAdmin(adminData: Omit<Admin, 'id' | 'authUid'>, password: string): Promise<string> {
     const userCredential = await createUserWithEmailAndPassword(auth, adminData.email, password);
-    const docRef = await addDoc(adminsCollection, {
+    const user = userCredential.user;
+
+    // Utilise setDoc avec l'UID de l'utilisateur comme ID de document pour être cohérent
+    const adminDocRef = doc(db, 'admins', user.uid);
+    await setDoc(adminDocRef, {
         ...adminData,
-        authUid: userCredential.user.uid // Link Firestore doc to Auth user
+        authUid: user.uid // Lie le document Firestore à l'utilisateur Auth
     });
-    return docRef.id;
+
+    return user.uid; // Retourne l'UID, qui est aussi l'ID du document
 }
 
 export async function deleteAdmin(id: string): Promise<void> {
