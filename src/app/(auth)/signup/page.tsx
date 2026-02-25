@@ -16,9 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { addDoc, collection } from "firebase/firestore";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -33,8 +34,27 @@ export default function SignupPage() {
     event.preventDefault();
     setIsLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      // In a real app, you would also save the user's first and last name to a Firestore 'users' collection.
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Create an adherent document in Firestore for the new user
+      await addDoc(collection(db, "adherents"), {
+        authUid: user.uid,
+        prenom: firstName,
+        nom: lastName,
+        email: email,
+        dateInscription: new Date().toISOString(),
+        telephone: '',
+        adresse: '',
+        dateNaissance: '',
+        genre: 'Autre',
+        estMembreBureau: false,
+        estBenevole: false,
+        estMembreFaaf: false,
+        accordeDroitImage: false,
+        cotisationAJour: false,
+      });
+
       toast({
         title: "Inscription réussie",
         description: "Votre compte a été créé. Vous pouvez maintenant vous connecter.",
