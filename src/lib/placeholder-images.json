@@ -1,3 +1,40 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "event-1",
+      "description": "A community gathering in a bright, modern hall.",
+      "imageUrl": "https://images.unsplash.com/photo-1555069855-e580a9adbf43?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxjb21tdW5pdHklMjBtZWV0aW5nfGVufDB8fHx8MTc3MTk4MTM3M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "community meeting"
+    },
+    {
+      "id": "event-2",
+      "description": "People collaborating during a workshop.",
+      "imageUrl": "https://images.unsplash.com/photo-1649252504279-b8a8480e8875?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHx3b3Jrc2hvcCUyMGNvbGxhYm9yYXRpb258ZW58MHx8fHwxNzcxOTE2MTAxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "workshop collaboration"
+    },
+    {
+      "id": "event-3",
+      "description": "An outdoor festival or fair with tents.",
+      "imageUrl": "https://images.unsplash.com/photo-1767328421844-2b9184c49654?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxvdXRkb29yJTIwZmVzdGl2YWx8ZW58MHx8fHwxNzcxOTU2OTk3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "outdoor festival"
+    },
+    {
+      "id": "event-4",
+      "description": "A formal conference or presentation.",
+      "imageUrl": "https://images.unsplash.com/photo-1595020879621-9d16e1d14c9f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxjb25mZXJlbmNlJTIwcHJlc2VudGF0aW9ufGVufDB8fHx8MTc3MjAwNDc2OXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "conference presentation"
+    },
+    {
+      "id": "event-5",
+      "description": "A sports event or team activity.",
+      "imageUrl": "https://images.unsplash.com/photo-1771257807779-a72e74deaa11?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxzcG9ydHMlMjBhY3Rpdml0eXxlbnwwfHx8fDE3NzIwMDQ3Njl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "sports activity"
+    },
+    {
+      "id": "event-6",
+      "description": "A group of volunteers working together.",
+      "imageUrl": "https://images.unsplash.com/photo-1652811717003-acaf7ed25c1b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHx2b2x1bnRlZXJzJTIwd29ya2luZ3xlbnwwfHx8fDE3NzE5Njk4MzB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "volunteers working"
+    }
+  ]
 }
