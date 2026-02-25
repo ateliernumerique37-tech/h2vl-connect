@@ -56,7 +56,6 @@ export default function SignupPage() {
       // Create admin document
       const adminRef = doc(db, "admins", user.uid);
       batch.set(adminRef, {
-        authUid: user.uid,
         prenom: firstName,
         nom: lastName,
         email: email,
@@ -66,8 +65,6 @@ export default function SignupPage() {
       // Create adherent document
       const adherentRef = doc(db, "adherents", user.uid);
        batch.set(adherentRef, {
-          id: user.uid,
-          authUid: user.uid,
           prenom: firstName,
           nom: lastName,
           email: email,

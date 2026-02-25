@@ -1,6 +1,5 @@
 export interface Adherent {
   id: string;
-  authUid?: string;
   prenom: string;
   nom: string;
   email: string;
@@ -59,7 +58,6 @@ export interface Cotisation {
 
 export interface Admin {
   id: string;
-  authUid: string;
   prenom: string;
   nom: string;
   email: string;

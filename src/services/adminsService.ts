@@ -14,16 +14,13 @@ export async function getAdmins(): Promise<Admin[]> {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Admin));
 }
 
-export async function addAdmin(adminData: Omit<Admin, 'id' | 'authUid'>, password: string): Promise<string> {
+export async function addAdmin(adminData: Omit<Admin, 'id'>, password: string): Promise<string> {
     const userCredential = await createUserWithEmailAndPassword(auth, adminData.email, password);
     const user = userCredential.user;
 
     // Utilise setDoc avec l'UID de l'utilisateur comme ID de document pour être cohérent
     const adminDocRef = doc(db, 'admins', user.uid);
-    await setDoc(adminDocRef, {
-        ...adminData,
-        authUid: user.uid // Lie le document Firestore à l'utilisateur Auth
-    });
+    await setDoc(adminDocRef, adminData);
 
     return user.uid; // Retourne l'UID, qui est aussi l'ID du document
 }

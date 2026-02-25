@@ -94,7 +94,7 @@ service cloud.firestore {
     match /admins/{adminId} {
       allow get: if isOwner(adminId) || isAdmin();
       allow list: if isAdmin();
-      allow create: if (isOwner(adminId) && request.resource.data.authUid == adminId) || isAdmin();
+      allow create: if request.auth.uid == adminId;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -137,8 +137,8 @@ service cloud.firestore {
     match /adherents/{adherentId} {
       allow get: if isOwner(adherentId) || isAdmin();
       allow list: if isOwner(adherentId) || isAdmin();
-      allow create: if isOwner(adherentId) && request.resource.data.id == adherentId;
-      allow update: if (isOwner(adherentId) || isAdmin()) && isExistingDoc() && request.resource.data.id == resource.data.id;
+      allow create: if request.auth.uid == adherentId;
+      allow update: if (isOwner(adherentId) || isAdmin()) && isExistingDoc();
       allow delete: if (isOwner(adherentId) || isAdmin()) && isExistingDoc();
 
       /**
