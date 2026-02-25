@@ -1,11 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 function DashboardSkeleton() {
     return (
@@ -40,6 +42,33 @@ function DashboardSkeleton() {
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
+  const db = useFirestore();
+
+  useEffect(() => {
+    if (user && db) {
+      const healPhantomAdmin = async () => {
+        const adminRef = doc(db, 'admins', user.uid);
+        try {
+          const adminSnap = await getDoc(adminRef);
+          if (!adminSnap.exists()) {
+            // This is a phantom user, their auth account exists but not their DB record.
+            // Let's create it. The security rules should allow this (isOwner).
+            const emailName = user.email ? user.email.split('@')[0] : 'Admin';
+            await setDoc(adminRef, {
+              prenom: emailName,
+              nom: '',
+              email: user.email,
+              role: 'Administrateur',
+            });
+          }
+        } catch (error) {
+          console.error("AuthGuard: Failed to check/heal phantom admin user.", error);
+        }
+      };
+
+      healPhantomAdmin();
+    }
+  }, [user, db]);
 
   if (isUserLoading) {
     return <DashboardSkeleton />;
