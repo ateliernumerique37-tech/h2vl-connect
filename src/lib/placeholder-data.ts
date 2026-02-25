@@ -8,7 +8,7 @@ export const adherents: Adherent[] = [
       email: 'alice.martin@email.com',
       telephone: '0612345678',
       adresse: '123 Rue de Paris, 75001 Paris',
-      dateNaissance: '1990-08-28T00:00:00.000Z', // Note: Birthday set for demonstration
+      dateNaissance: new Date(new Date().setFullYear(new Date().getFullYear() - 34)).toISOString(),
       genre: 'F',
       dateInscription: '2022-01-10T00:00:00.000Z',
       estMembreBureau: true,
@@ -71,7 +71,7 @@ export const evenements: Evenement[] = [
   {
     id: 'evt-1',
     titre: 'Assemblée Générale 2024',
-    description: "Discussion sur les projets futurs.",
+    description: "Joignez-vous à nous pour notre assemblée générale annuelle. Nous discuterons des accomplissements de l'année passée, des projets futurs, et élirons les nouveaux membres du bureau. Un moment clé pour la vie de notre association.",
     date: new Date(new Date().getFullYear(), 8, 15, 18).toISOString(), // Sep 15 of current year
     lieu: "Salle des fêtes, Lyon",
     prix: 0,
@@ -79,17 +79,17 @@ export const evenements: Evenement[] = [
   },
   {
     id: 'evt-2',
-    titre: 'Atelier de Codage',
-    description: "Apprendre les bases du web.",
+    titre: 'Atelier Créatif : Poterie & Céramique',
+    description: "Exprimez votre créativité lors de notre atelier de poterie. Ouvert à tous les niveaux, des débutants curieux aux confirmés. Venez modeler, créer et repartir avec votre propre œuvre. Matériel fourni.",
     date: new Date(new Date().getFullYear(), 9, 5, 9).toISOString(), // Oct 5 of current year
-    lieu: "Espace Co-working, Paris",
+    lieu: "L'Atelier des Arts, Paris",
     prix: 15,
     imageId: 'event-2'
   },
     {
     id: 'evt-3',
-    titre: 'Pique-nique 2023',
-    description: "Pique-nique de l'année dernière.",
+    titre: 'Pique-nique Annuel 2023',
+    description: "Retour sur notre traditionnel pique-nique au parc. Un grand moment de convivialité, de partage et de jeux en plein air qui a rassemblé petits et grands.",
     date: new Date(new Date().getFullYear() - 1, 6, 20, 12).toISOString(), // July 20 of last year
     lieu: "Parc de la Tête d'Or, Lyon",
     prix: 0,

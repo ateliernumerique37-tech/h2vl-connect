@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Users, BadgeCheck, Cake } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import type { Adherent } from '@/lib/types';
+import { adherents } from '@/lib/placeholder-data';
 
 const isBirthdayToday = (dateString: string) => {
     if (!dateString) return false;
@@ -17,7 +18,6 @@ const isBirthdayToday = (dateString: string) => {
 };
 
 export default function DashboardHomePage() {
-    const [adherents, setAdherents] = useState<Adherent[]>([]);
 
     const totalAdherents = adherents.length;
     const adherentsAJour = adherents.filter(a => a.cotisationAJour).length;

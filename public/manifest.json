@@ -1,7 +1,11 @@
 {
   "name": "H2vl Connect",
-  "short_name": "H2vl Connect",
+  "short_name": "H2vl",
   "description": "Application de gestion pour l'association H2vl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1A75D1",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
@@ -12,17 +16,6 @@
       "src": "/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
-    },
-    {
-      "src": "/icons/maskable-icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
-  ],
-  "theme_color": "#1A75D1",
-  "background_color": "#F0F4F8",
-  "start_url": "/",
-  "display": "standalone",
-  "orientation": "portrait"
+  ]
 }

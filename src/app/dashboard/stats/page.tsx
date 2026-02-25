@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import type { Adherent, Evenement, Inscription } from '@/lib/types';
+import { adherents, evenements, inscriptions } from '@/lib/placeholder-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -21,10 +22,6 @@ const getAge = (dateString: string) => {
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
 
 export default function StatsPage() {
-    const [adherents, setAdherents] = useState<Adherent[]>([]);
-    const [evenements, setEvenements] = useState<Evenement[]>([]);
-    const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
-
     const currentYear = new Date().getFullYear().toString();
     const [selectedYear, setSelectedYear] = useState(currentYear);
 

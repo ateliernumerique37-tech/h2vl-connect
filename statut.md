@@ -1,6 +1,6 @@
 # Statut de l'Application H2vl Connect
 
-Ce document résume l'état actuel de l'application de gestion pour l'association H2vl.
+Ce document résume l'état actuel de l'application de gestion pour l'association H2vl, développée en tant que Progressive Web App (PWA) avec Next.js et l'App Router.
 
 ## 1. Arborescence des Dossiers (Navigation)
 
@@ -23,7 +23,7 @@ La navigation est gérée par une barre latérale définie dans `src/components/
 Les interfaces sont définies dans `src/lib/types.ts`.
 
 ### Adherent
-```typescript
+`ts
 export interface Adherent {
   id: string;
   prenom: string;
@@ -40,10 +40,10 @@ export interface Adherent {
   accordeDroitImage: boolean;
   cotisationAJour: boolean;
 }
-```
+`
 
 ### Evenement
-```typescript
+`ts
 export interface Evenement {
   id: string;
   titre: string;
@@ -61,10 +61,10 @@ export interface Evenement {
     desserts?: string[];
   };
 }
-```
+`
 
 ### Inscription
-```typescript
+`ts
 export interface Inscription {
   id: string;
   id_evenement: string;
@@ -79,10 +79,10 @@ export interface Inscription {
     dessertChoisi?: string;
   };
 }
-```
+`
 
 ### Cotisation
-```typescript
+`ts
 export interface Cotisation {
   id: string;
   adherentId: string;
@@ -90,27 +90,28 @@ export interface Cotisation {
   datePaiement: string; // ISO string
   montant: number;
 }
-```
+`
 
 ### Admin
-```typescript
+`ts
 export interface Admin {
   id: string;
+  prenom: string;
   nom: string;
   email: string;
   role?: string;
 }
-```
+`
 
 ### LogAdmin
-```typescript
+`ts
 export interface LogAdmin {
   id: string;
   nomAdmin: string;
   actionRealisee: string;
   dateAction: string; // ISO string
 }
-```
+`
 
 ## 3. Liste des Écrans et Fonctionnalités
 
@@ -151,10 +152,14 @@ export interface LogAdmin {
   - **Fonctionnalités**:
     - Gestion des comptes administrateurs (ajouter, modifier, supprimer).
     - Journal d'audit affichant l'historique des actions.
+- **Authentification**:
+  - Pages de connexion, d'inscription et de mot de passe oublié.
+  - Protection des routes du tableau de bord. Seuls les utilisateurs connectés peuvent y accéder.
 
 ## 4. Règle d'Or sur l'Accessibilité (WCAG 2.1 AA)
 
 - **Pas de Menus Cachés**: Toutes les actions principales (Modifier, Supprimer) sont des boutons directement visibles. Les menus déroulants de type "kebab" sont proscrits pour les actions critiques.
-- **Boutons Nominatifs**: Les `accessibilityLabel` des boutons d'action sont dynamiques et contextuels pour être explicites (ex: `Modifier l'adhérent Jean Dupont`).
+- **Attributs ARIA pour la sémantique**:
+  - Les `aria-label` des boutons d'action sont dynamiques et contextuels pour être explicites (ex: `aria-label="Modifier l'adhérent Jean Dupont"`).
+  - Utilisation stricte des rôles ARIA (`role="search"`, `role="heading"`, `role="switch"`, etc.) pour définir la sémantique des composants et garantir une navigation claire pour les lecteurs d'écran.
 - **Texte Brut pour les Données Visuelles**: Tout graphique ou visualisation de données est accompagné d'un équivalent textuel pour les lecteurs d'écran.
-- **Rôles ARIA**: Utilisation stricte des rôles ARIA (`header`, `search`, `switch`, etc.) pour définir la sémantique des composants.

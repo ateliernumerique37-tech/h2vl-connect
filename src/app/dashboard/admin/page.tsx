@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-
+import AiEventForm from "@/components/admin/ai-event-form";
 
 export default function AdminPage() {
   const [administrateurs, setAdministrateurs] = useState<Admin[]>(mockAdmins);
@@ -67,9 +67,11 @@ export default function AdminPage() {
       <header>
         <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Tableau de bord Administrateur</h1>
         <p className="text-muted-foreground">
-          Gérez les accès et consultez l'historique des actions.
+          Gérez les accès, consultez l'historique des actions et utilisez les outils IA.
         </p>
       </header>
+      
+      <AiEventForm />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
