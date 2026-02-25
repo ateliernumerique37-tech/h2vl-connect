@@ -18,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import AiEventForm from "@/components/admin/ai-event-form";
 import { getAdmins, addAdmin, deleteAdmin } from "@/services/adminsService";
 import { getLogs, addLog } from "@/services/logsService";
 import { batchAddAdherents } from "@/services/adherentsService";
@@ -33,7 +32,6 @@ function AdminPageSkeleton() {
                     Gérez les accès, consultez l'historique des actions et utilisez les outils IA.
                 </p>
             </header>
-            <AiEventForm />
             <Card>
                  <CardHeader className="flex flex-row items-center justify-between">
                      <div>
@@ -148,7 +146,7 @@ export default function AdminPage() {
     }
   }
 
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -258,8 +256,6 @@ export default function AdminPage() {
         </p>
       </header>
       
-      <AiEventForm />
-
       <Card>
         <CardHeader>
           <CardTitle>Importer des adhérents</CardTitle>
