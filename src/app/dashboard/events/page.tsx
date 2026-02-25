@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import AiEventForm from '@/components/admin/ai-event-form';
+import { useFirestore } from '@/firebase';
 
 
 function EventsPageSkeleton() {
@@ -59,11 +60,13 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('upcoming');
   const [selectedYear, setSelectedYear] = useState('Tous');
+  const db = useFirestore();
   
   useEffect(() => {
+    if (!db) return;
     async function fetchEvents() {
         try {
-            const data = await getEvenements();
+            const data = await getEvenements(db);
             setAllEvents(data);
         } catch (error) {
             console.error("Failed to fetch events:", error);
@@ -72,7 +75,7 @@ export default function EventsPage() {
         }
     }
     fetchEvents();
-  }, []);
+  }, [db]);
   
   const years = useMemo(() => {
     const eventYears = allEvents.map(e => new Date(e.date).getFullYear());

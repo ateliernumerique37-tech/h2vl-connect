@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import type { Adherent } from '@/lib/types';
 import { getAdherents } from '@/services/adherentsService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useFirestore } from '@/firebase';
 
 const isBirthdayToday = (dateString: string) => {
     if (!dateString) return false;
@@ -67,11 +68,13 @@ function DashboardSkeleton() {
 export default function DashboardHomePage() {
     const [adherents, setAdherents] = useState<Adherent[]>([]);
     const [loading, setLoading] = useState(true);
+    const db = useFirestore();
 
     useEffect(() => {
+        if (!db) return;
         async function fetchAdherents() {
             try {
-                const data = await getAdherents();
+                const data = await getAdherents(db);
                 setAdherents(data);
             } catch (error) {
                 console.error("Failed to fetch adherents:", error);
@@ -80,7 +83,7 @@ export default function DashboardHomePage() {
             }
         }
         fetchAdherents();
-    }, []);
+    }, [db]);
 
     const totalAdherents = adherents.length;
     const adherentsAJour = adherents.filter(a => a.cotisationAJour).length;

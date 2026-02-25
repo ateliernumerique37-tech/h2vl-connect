@@ -14,12 +14,15 @@ import { addEvenement } from '@/services/evenementsService';
 import { addLog } from '@/services/logsService';
 import type { Evenement } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { useAuth, useFirestore } from '@/firebase';
 
 export default function CreateEventPage() {
     const [necessiteMenu, setNecessiteMenu] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
+    const db = useFirestore();
+    const auth = useAuth();
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -54,8 +57,8 @@ export default function CreateEventPage() {
                 newEvent.optionsMenu = optionsMenu;
             }
 
-            await addEvenement(newEvent);
-            await addLog(`Création de l'événement : ${newEvent.titre}`);
+            await addEvenement(db, newEvent);
+            await addLog(db, auth, `Création de l'événement : ${newEvent.titre}`);
             
             toast({
                 title: "Événement créé",

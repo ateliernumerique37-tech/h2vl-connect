@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PlusCircle, Trash2 } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
+import { useFirestore } from '@/firebase';
 
 function AdherentDetailSkeleton() {
     return (
@@ -54,6 +55,7 @@ function AdherentDetailSkeleton() {
 export default function AdherentDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const db = useFirestore();
   const id = params.id as string;
   const { toast } = useToast();
   
@@ -64,12 +66,12 @@ export default function AdherentDetailPage() {
   const [showAddCotisationDialog, setShowAddCotisationDialog] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !db) return;
     async function fetchData() {
         try {
             const [adherentData, cotisationsData] = await Promise.all([
-                getAdherentById(id),
-                getCotisationsForAdherent(id)
+                getAdherentById(db, id),
+                getCotisationsForAdherent(db, id)
             ]);
             
             if (adherentData) {
@@ -85,7 +87,7 @@ export default function AdherentDetailPage() {
         }
     }
     fetchData();
-  }, [id, toast]);
+  }, [id, db, toast]);
 
   if (loading) {
       return <AdherentDetailSkeleton />;
@@ -104,7 +106,7 @@ export default function AdherentDetailPage() {
   const handleSwitchChange = async (field: keyof Adherent, checked: boolean) => {
     setFormData(prev => ({...prev, [field]: checked}));
     try {
-        await updateAdherent(id, { [field]: checked });
+        await updateAdherent(db, id, { [field]: checked });
         
         const fieldLabels: Record<keyof Adherent, string> = {
             estMembreBureau: "Membre du bureau",
@@ -129,7 +131,7 @@ export default function AdherentDetailPage() {
   
   const handleDelete = async () => {
     try {
-        await deleteAdherent(id);
+        await deleteAdherent(db, id);
         toast({
             title: "Adhérent supprimé",
             description: `${adherent.prenom} ${adherent.nom} a été supprimé.`,
@@ -143,8 +145,8 @@ export default function AdherentDetailPage() {
 
   const handleAddCotisation = async () => {
     try {
-        await addCotisation(id);
-        const cotisationsData = await getCotisationsForAdherent(id);
+        await addCotisation(db, id);
+        const cotisationsData = await getCotisationsForAdherent(db, id);
         setAdherentCotisations(cotisationsData);
         setFormData(prev => ({...prev, cotisationAJour: true}));
         setShowAddCotisationDialog(false);
@@ -160,7 +162,7 @@ export default function AdherentDetailPage() {
 
   const handleSaveChanges = async () => {
     try {
-        await updateAdherent(id, formData);
+        await updateAdherent(db, id, formData);
         setAdherent(prev => prev ? {...prev, ...formData} : null);
         toast({
             title: "Modifications enregistrées",

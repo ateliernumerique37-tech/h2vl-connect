@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useFirestore } from '@/firebase';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -62,17 +63,19 @@ export default function StatsPage() {
     const [adherents, setAdherents] = useState<Adherent[]>([]);
     const [evenements, setEvenements] = useState<Evenement[]>([]);
     const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
+    const db = useFirestore();
     
     const currentYear = new Date().getFullYear().toString();
     const [selectedYear, setSelectedYear] = useState(currentYear);
 
     useEffect(() => {
+        if (!db) return;
         async function fetchData() {
             try {
                 const [adherentsData, evenementsData, inscriptionsData] = await Promise.all([
-                    getAdherents(),
-                    getEvenements(),
-                    getInscriptions()
+                    getAdherents(db),
+                    getEvenements(db),
+                    getInscriptions(db)
                 ]);
                 setAdherents(adherentsData);
                 setEvenements(evenementsData);
@@ -84,7 +87,7 @@ export default function StatsPage() {
             }
         }
         fetchData();
-    }, []);
+    }, [db]);
 
     const years = useMemo(() => {
         const eventYears = evenements.map(e => new Date(e.date).getFullYear());

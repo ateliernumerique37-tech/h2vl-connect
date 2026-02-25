@@ -1,22 +1,20 @@
 'use client';
-import { getFirestore, collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, query, where, writeBatch, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, query, where, writeBatch, orderBy, Firestore } from 'firebase/firestore';
 import type { Adherent, Cotisation } from '@/lib/types';
-import { initializeFirebase } from '@/firebase';
 
-const { firestore: db } = initializeFirebase();
-
-const adherentsCollection = collection(db, 'adherents');
-const cotisationsCollection = collection(db, 'cotisations');
+const adherentsCollectionName = 'adherents';
+const cotisationsCollectionName = 'cotisations';
 
 // ADHERENT CRUD
 
-export async function getAdherents(): Promise<Adherent[]> {
+export async function getAdherents(db: Firestore): Promise<Adherent[]> {
+  const adherentsCollection = collection(db, adherentsCollectionName);
   const snapshot = await getDocs(query(adherentsCollection, orderBy('nom'), orderBy('prenom')));
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Adherent));
 }
 
-export async function getAdherentById(id: string): Promise<Adherent | undefined> {
-    const docRef = doc(db, 'adherents', id);
+export async function getAdherentById(db: Firestore, id: string): Promise<Adherent | undefined> {
+    const docRef = doc(db, adherentsCollectionName, id);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
         return { id: docSnap.id, ...docSnap.data() } as Adherent;
@@ -24,17 +22,20 @@ export async function getAdherentById(id: string): Promise<Adherent | undefined>
     return undefined;
 }
 
-export async function addAdherent(adherentData: Omit<Adherent, 'id'>): Promise<string> {
+export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'id'>): Promise<string> {
+    const adherentsCollection = collection(db, adherentsCollectionName);
     const docRef = await addDoc(adherentsCollection, adherentData);
     
     if (adherentData.cotisationAJour) {
-        await addCotisation(docRef.id);
+        await addCotisation(db, docRef.id);
     }
     
     return docRef.id;
 }
 
-export async function batchAddAdherents(adherents: Omit<Adherent, 'id' | 'authUid'>[]): Promise<void> {
+export async function batchAddAdherents(db: Firestore, adherents: Omit<Adherent, 'id'>[]): Promise<void> {
+    const adherentsCollection = collection(db, adherentsCollectionName);
+    const cotisationsCollection = collection(db, cotisationsCollectionName);
     const batch = writeBatch(db);
 
     adherents.forEach(adherent => {
@@ -56,15 +57,16 @@ export async function batchAddAdherents(adherents: Omit<Adherent, 'id' | 'authUi
 }
 
 
-export async function updateAdherent(id: string, updates: Partial<Adherent>): Promise<void> {
-    const docRef = doc(db, 'adherents', id);
+export async function updateAdherent(db: Firestore, id: string, updates: Partial<Adherent>): Promise<void> {
+    const docRef = doc(db, adherentsCollectionName, id);
     await updateDoc(docRef, updates);
 }
 
-export async function deleteAdherent(id: string): Promise<void> {
+export async function deleteAdherent(db: Firestore, id: string): Promise<void> {
+    const cotisationsCollection = collection(db, cotisationsCollectionName);
     const batch = writeBatch(db);
     
-    const adherentRef = doc(db, 'adherents', id);
+    const adherentRef = doc(db, adherentsCollectionName, id);
     batch.delete(adherentRef);
     
     // Also delete related cotisations
@@ -79,7 +81,8 @@ export async function deleteAdherent(id: string): Promise<void> {
 
 // COTISATION-RELATED FUNCTIONS
 
-export async function getCotisationsForAdherent(adherentId: string): Promise<Cotisation[]> {
+export async function getCotisationsForAdherent(db: Firestore, adherentId: string): Promise<Cotisation[]> {
+    const cotisationsCollection = collection(db, cotisationsCollectionName);
     const q = query(
         cotisationsCollection, 
         where('adherentId', '==', adherentId), 
@@ -89,10 +92,10 @@ export async function getCotisationsForAdherent(adherentId: string): Promise<Cot
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cotisation));
 }
 
-export async function addCotisation(adherentId: string): Promise<void> {
+export async function addCotisation(db: Firestore, adherentId: string): Promise<void> {
     const batch = writeBatch(db);
 
-    const cotisationRef = doc(collection(db, 'cotisations'));
+    const cotisationRef = doc(collection(db, cotisationsCollectionName));
     batch.set(cotisationRef, {
         adherentId: adherentId,
         annee: new Date().getFullYear(),
@@ -100,7 +103,7 @@ export async function addCotisation(adherentId: string): Promise<void> {
         montant: 15,
     });
 
-    const adherentRef = doc(db, 'adherents', adherentId);
+    const adherentRef = doc(db, adherentsCollectionName, adherentId);
     batch.update(adherentRef, { cotisationAJour: true });
 
     await batch.commit();

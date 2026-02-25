@@ -22,6 +22,7 @@ import { getAdmins, addAdmin, deleteAdmin } from "@/services/adminsService";
 import { getLogs, addLog } from "@/services/logsService";
 import { batchAddAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth, useFirestore } from "@/firebase";
 
 function AdminPageSkeleton() {
     return (
@@ -69,14 +70,17 @@ export default function AdminPage() {
   const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const db = useFirestore();
+  const auth = useAuth();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   
   useEffect(() => {
+    if (!db) return;
     async function fetchData() {
         try {
-            const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
+            const [adminsData, logsData] = await Promise.all([getAdmins(db), getLogs(db)]);
             setAdministrateurs(adminsData);
             setLogsAdmin(logsData);
         } catch (error) {
@@ -87,7 +91,7 @@ export default function AdminPage() {
         }
     }
     fetchData();
-  }, [toast]);
+  }, [db, toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
@@ -98,10 +102,10 @@ export default function AdminPage() {
     setIsSubmitting(true);
     try {
         const { password, ...adminInfo } = newAdminData;
-        await addAdmin(adminInfo, password);
-        await addLog(`Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
+        await addAdmin(db, auth, adminInfo, password);
+        await addLog(db, auth, `Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
         
-        const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
+        const [adminsData, logsData] = await Promise.all([getAdmins(db), getLogs(db)]);
         setAdministrateurs(adminsData);
         setLogsAdmin(logsData);
 
@@ -125,10 +129,10 @@ export default function AdminPage() {
   
   const handleDeleteAdmin = async (admin: Admin) => {
     try {
-        await deleteAdmin(admin.id);
-        await addLog(`Suppression de l'administrateur : ${admin.prenom} ${admin.nom}`);
+        await deleteAdmin(db, admin.id);
+        await addLog(db, auth, `Suppression de l'administrateur : ${admin.prenom} ${admin.nom}`);
         
-        const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
+        const [adminsData, logsData] = await Promise.all([getAdmins(db), getLogs(db)]);
         setAdministrateurs(adminsData);
         setLogsAdmin(logsData);
 
@@ -181,7 +185,7 @@ export default function AdminPage() {
             }
         }
 
-        const newAdherents: Omit<Adherent, 'id' | 'authUid'>[] = rows.map(row => {
+        const newAdherents: Omit<Adherent, 'id'>[] = rows.map(row => {
           const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
           const adherentData: { [key: string]: any } = {};
           headers.forEach((header, index) => {
@@ -205,10 +209,10 @@ export default function AdminPage() {
           };
         });
 
-        await batchAddAdherents(newAdherents);
-        await addLog(`Importation en masse de ${adherentsCount} adhérents via CSV.`);
+        await batchAddAdherents(db, newAdherents);
+        await addLog(db, auth, `Importation en masse de ${adherentsCount} adhérents via CSV.`);
 
-        const logsData = await getLogs();
+        const logsData = await getLogs(db);
         setLogsAdmin(logsData);
 
         toast({

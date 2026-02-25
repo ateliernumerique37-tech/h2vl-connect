@@ -20,6 +20,7 @@ import { getEvenementById, deleteEvenement } from '@/services/evenementsService'
 import { getInscriptionsForEvent, addInscription, updateInscription } from '@/services/inscriptionsService';
 import { getAdherents } from '@/services/adherentsService';
 import { addLog } from '@/services/logsService';
+import { useAuth, useFirestore } from '@/firebase';
 
 function EventDetailSkeleton() {
     return (
@@ -169,6 +170,8 @@ export default function EventDetailPage() {
     const router = useRouter();
     const id = params.id as string;
     const { toast } = useToast();
+    const db = useFirestore();
+    const auth = useAuth();
     
     const [event, setEvent] = useState<Evenement | undefined>();
     const [adherents, setAdherents] = useState<Adherent[]>([]);
@@ -176,13 +179,13 @@ export default function EventDetailPage() {
     const [loading, setLoading] = useState(true);
     
     useEffect(() => {
-        if (!id) return;
+        if (!id || !db) return;
         async function fetchEventData() {
             try {
                 const [eventData, inscriptionsData, adherentsData] = await Promise.all([
-                    getEvenementById(id),
-                    getInscriptionsForEvent(id),
-                    getAdherents()
+                    getEvenementById(db, id),
+                    getInscriptionsForEvent(db, id),
+                    getAdherents(db)
                 ]);
 
                 if (eventData) {
@@ -204,11 +207,11 @@ export default function EventDetailPage() {
             }
         }
         fetchEventData();
-    }, [id, toast]);
+    }, [id, db, toast]);
 
     const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
         try {
-            await updateInscription(inscriptionId, { a_paye: hasPaid });
+            await updateInscription(db, inscriptionId, { a_paye: hasPaid });
             let adherentName = '';
             setEventInscriptions(prev => 
                 prev.map(inscription => {
@@ -235,7 +238,7 @@ export default function EventDetailPage() {
                 ...inscriptionData,
                 date_inscription: new Date().toISOString()
             };
-            const newId = await addInscription(newInscriptionData);
+            const newId = await addInscription(db, newInscriptionData);
             
             const adherent = adherents.find(a => a.id === newInscriptionData.id_adherent);
             const newPopulatedInscription = { ...newInscriptionData, id: newId, adherent };
@@ -243,7 +246,7 @@ export default function EventDetailPage() {
             setEventInscriptions(prev => [...prev, newPopulatedInscription]);
             
             if (event && adherent) {
-                await addLog(`Inscription de ${adherent.prenom} ${adherent.nom} à l'événement ${event.titre}`);
+                await addLog(db, auth, `Inscription de ${adherent.prenom} ${adherent.nom} à l'événement ${event.titre}`);
                 toast({
                     title: "Inscription réussie",
                     description: `${adherent.prenom} ${adherent.nom} a été inscrit à l'événement ${event.titre}.`,
@@ -258,8 +261,8 @@ export default function EventDetailPage() {
     const handleDelete = async () => {
         if (!event) return;
         try {
-            await deleteEvenement(event.id);
-            await addLog(`Suppression de l'événement : ${event.titre}`);
+            await deleteEvenement(db, event.id);
+            await addLog(db, auth, `Suppression de l'événement : ${event.titre}`);
             toast({
                 title: "Événement supprimé",
                 description: `L'événement "${event.titre}" a été supprimé.`,

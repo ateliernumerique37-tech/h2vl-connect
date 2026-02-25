@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth, useFirestore } from '@/firebase';
 
 function EditEventSkeleton() {
     return (
@@ -58,6 +59,8 @@ export default function EditEventPage() {
     const router = useRouter();
     const id = params.id as string;
     const { toast } = useToast();
+    const db = useFirestore();
+    const auth = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,10 +80,10 @@ export default function EditEventPage() {
 
 
     useEffect(() => {
-        if (!id) return;
+        if (!id || !db) return;
         async function fetchEvent() {
             try {
-                const foundEvent = await getEvenementById(id);
+                const foundEvent = await getEvenementById(db, id);
                 if (foundEvent) {
                     setTitre(foundEvent.titre);
                     setDescription(foundEvent.description);
@@ -110,7 +113,7 @@ export default function EditEventPage() {
             }
         }
         fetchEvent();
-    }, [id, toast]);
+    }, [id, db, toast]);
 
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -137,8 +140,8 @@ export default function EditEventPage() {
                 };
             }
 
-            await updateEvenement(id, updatedEvent);
-            await addLog(`Modification de l'événement : ${titre}`);
+            await updateEvenement(db, id, updatedEvent);
+            await addLog(db, auth, `Modification de l'événement : ${titre}`);
 
             toast({
                 title: "Événement modifié",

@@ -12,9 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useFirestore } from '@/firebase';
 
 export default function CreateAdherentPage() {
     const router = useRouter();
+    const db = useFirestore();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     
@@ -54,7 +56,7 @@ export default function CreateAdherentPage() {
                 ...formData,
                 dateInscription: new Date().toISOString()
             };
-            await addAdherent(newAdherentData);
+            await addAdherent(db, newAdherentData);
             toast({
                 title: "Adhérent ajouté",
                 description: `${formData.prenom} ${formData.nom} a été ajouté avec succès.`,

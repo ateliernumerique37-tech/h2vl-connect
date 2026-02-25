@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from '@/components/ui/skeleton';
+import { useFirestore } from '@/firebase';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -59,6 +60,7 @@ function AdherentsPageSkeleton() {
 export default function AdherentsPage() {
   const [adherents, setAdherents] = useState<Adherent[]>([]);
   const [loading, setLoading] = useState(true);
+  const db = useFirestore();
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,9 +73,10 @@ export default function AdherentsPage() {
   const [ageFilter, setAgeFilter] = useState('Tous');
   
   useEffect(() => {
+    if (!db) return;
     async function fetchAdherents() {
         try {
-            const data = await getAdherents();
+            const data = await getAdherents(db);
             setAdherents(data);
         } catch (error) {
             console.error("Failed to fetch adherents:", error);
@@ -82,7 +85,7 @@ export default function AdherentsPage() {
         }
     }
     fetchAdherents();
-  }, []);
+  }, [db]);
 
   const hasActiveFilters = searchTerm || genreFilter !== 'Tous' || cotisationFilter !== 'Tous' || benevoleFilter !== 'Tous' || faafFilter !== 'Tous' || bureauFilter !== 'Tous' || droitImageFilter !== 'Tous' || ageFilter !== 'Tous';
 
@@ -114,7 +117,7 @@ export default function AdherentsPage() {
       .filter(adherent => {
         if (faafFilter === 'Tous') return true;
         const isFaaf = adherent.estMembreFaaf;
-        return (faafFilter === 'Oui') ? isFaaf : !isBenevole;
+        return (faafFilter === 'Oui') ? isBenevole : !isBenevole;
       })
       .filter(adherent => {
         if (bureauFilter === 'Tous') return true;
