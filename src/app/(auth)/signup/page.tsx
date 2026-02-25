@@ -14,11 +14,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { collection, addDoc } from "firebase/firestore";
+import { addAdmin } from "@/services/adminsService";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -33,23 +31,18 @@ export default function SignupPage() {
     event.preventDefault();
     setIsLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Create an admin document in Firestore for the new user
-      await addDoc(collection(db, "admins"), {
-        authUid: user.uid,
+      await addAdmin({
         prenom: firstName,
         nom: lastName,
         email: email,
         role: 'Administrateur',
-      });
+      }, password);
 
       toast({
         title: "Inscription réussie",
-        description: "Votre compte administrateur a été créé. Vous pouvez maintenant vous connecter.",
+        description: "Votre compte a été créé et vous êtes maintenant connecté.",
       });
-      router.push('/login');
+      router.push('/dashboard');
     } catch (error: any) {
       console.error(error);
       let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
