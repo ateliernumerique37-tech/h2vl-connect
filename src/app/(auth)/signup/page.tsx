@@ -15,10 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { addAdherent } from "@/services/adherentsService";
+import { collection, addDoc } from "firebase/firestore";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -36,27 +36,18 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Create an adherent document in Firestore for the new user
-      await addAdherent({
+      // Create an admin document in Firestore for the new user
+      await addDoc(collection(db, "admins"), {
         authUid: user.uid,
         prenom: firstName,
         nom: lastName,
         email: email,
-        dateInscription: new Date().toISOString(),
-        telephone: '',
-        adresse: '',
-        dateNaissance: '',
-        genre: 'Autre',
-        estMembreBureau: false,
-        estBenevole: false,
-        estMembreFaaf: false,
-        accordeDroitImage: false,
-        cotisationAJour: false,
+        role: 'Administrateur',
       });
 
       toast({
         title: "Inscription réussie",
-        description: "Votre compte a été créé. Vous pouvez maintenant vous connecter.",
+        description: "Votre compte administrateur a été créé. Vous pouvez maintenant vous connecter.",
       });
       router.push('/login');
     } catch (error: any) {
@@ -86,7 +77,7 @@ export default function SignupPage() {
           </div>
           <CardTitle className="text-2xl">Inscription</CardTitle>
           <CardDescription>
-            Créez un compte pour devenir membre
+            Créez un compte administrateur
           </CardDescription>
         </CardHeader>
         <CardContent>
