@@ -34,7 +34,7 @@ export async function getAdherentById(id: string): Promise<Adherent | undefined>
     return undefined;
 }
 
-export async function addAdherent(adherentData: Omit<Adherent, 'id' | 'authUid'>): Promise<string> {
+export async function addAdherent(adherentData: Omit<Adherent, 'id'>): Promise<string> {
     const docRef = await addDoc(adherentsCollection, adherentData);
     
     if (adherentData.cotisationAJour) {

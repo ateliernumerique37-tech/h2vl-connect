@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from "react";
@@ -16,10 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { addDoc, collection } from "firebase/firestore";
+import { addAdherent } from "@/services/adherentsService";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -38,7 +37,7 @@ export default function SignupPage() {
       const user = userCredential.user;
 
       // Create an adherent document in Firestore for the new user
-      await addDoc(collection(db, "adherents"), {
+      await addAdherent({
         authUid: user.uid,
         prenom: firstName,
         nom: lastName,
