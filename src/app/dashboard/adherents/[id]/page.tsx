@@ -1,8 +1,8 @@
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
-import { adherents, cotisations } from '@/lib/placeholder-data';
 import type { Adherent, Cotisation } from '@/lib/types';
+import { getAdherentById, updateAdherent, deleteAdherent, getCotisationsForAdherent, addCotisation } from '@/services/adherentsService';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -57,93 +57,119 @@ export default function AdherentDetailPage() {
   const id = params.id as string;
   const { toast } = useToast();
   
-  const [adherent, setAdherent] = useState<Adherent | undefined>(undefined);
+  const [adherent, setAdherent] = useState<Adherent | null>(null);
+  const [formData, setFormData] = useState<Partial<Adherent>>({});
   const [adherentCotisations, setAdherentCotisations] = useState<Cotisation[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddCotisationDialog, setShowAddCotisationDialog] = useState(false);
 
   useEffect(() => {
-    // In a real app, you would fetch data here based on the id
-    const foundAdherent = adherents.find((a) => a.id === id);
-    if(foundAdherent) {
-      setAdherent(foundAdherent);
-      const foundCotisations = cotisations.filter(c => c.adherentId === id);
-      setAdherentCotisations(foundCotisations);
+    if (!id) return;
+    async function fetchData() {
+        try {
+            const [adherentData, cotisationsData] = await Promise.all([
+                getAdherentById(id),
+                getCotisationsForAdherent(id)
+            ]);
+            
+            if (adherentData) {
+                setAdherent(adherentData);
+                setFormData(adherentData);
+                setAdherentCotisations(cotisationsData);
+            }
+        } catch (error) {
+            console.error("Failed to fetch adherent data:", error);
+            toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de charger les données de l'adhérent." });
+        } finally {
+            setLoading(false);
+        }
     }
-    const timer = setTimeout(() => setLoading(false), 500); // Simulate loading
-    return () => clearTimeout(timer);
-  }, [id]);
+    fetchData();
+  }, [id, toast]);
 
   if (loading) {
       return <AdherentDetailSkeleton />;
   }
 
   if (!adherent) {
+    // This will be triggered after loading is false and adherent is still null
     return notFound();
   }
   
-  const handleSwitchChange = (field: keyof Adherent, checked: boolean) => {
-    setAdherent(prev => {
-        if (!prev) return undefined;
-        const updatedAdherent = {...prev, [field]: checked};
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({...prev, [name]: value}));
+  };
+
+  const handleSwitchChange = async (field: keyof Adherent, checked: boolean) => {
+    setFormData(prev => ({...prev, [field]: checked}));
+    try {
+        await updateAdherent(id, { [field]: checked });
+        
         const fieldLabels: Record<keyof Adherent, string> = {
             estMembreBureau: "Membre du bureau",
             estBenevole: "Bénévole",
             estMembreFaaf: "Membre FAAF",
             accordeDroitImage: "Droit à l'image",
             cotisationAJour: "Cotisation à jour",
-            id: '',
-            prenom: '',
-            nom: '',
-            email: '',
-            telephone: '',
-            adresse: '',
-            dateNaissance: '',
-            genre: 'Autre',
-            dateInscription: ''
+            id: '', prenom: '', nom: '', email: '', telephone: '', adresse: '', dateNaissance: '', genre: 'Autre', dateInscription: ''
         };
         const status = checked ? 'activé' : 'désactivé';
         toast({
             title: "Mise à jour du statut",
-            description: `Le statut "${fieldLabels[field]}" pour ${prev.prenom} ${prev.nom} a été ${status}.`,
+            description: `Le statut "${fieldLabels[field]}" pour ${adherent.prenom} ${adherent.nom} a été ${status}.`,
         });
-        return updatedAdherent;
-    });
+    } catch (error) {
+        console.error(`Failed to update ${field}:`, error);
+        toast({ variant: 'destructive', title: 'Erreur de mise à jour', description: `N'a pas pu mettre à jour le statut.` });
+        // Revert UI change on error
+        setFormData(prev => ({...prev, [field]: !checked}));
+    }
   };
   
-  const handleDelete = () => {
-    console.log(`Deleting adherent ${adherent.id}`);
-     toast({
-        title: "Adhérent supprimé",
-        description: `${adherent.prenom} ${adherent.nom} a été supprimé.`,
-        variant: 'destructive',
-    });
-    router.push('/dashboard/adherents');
+  const handleDelete = async () => {
+    try {
+        await deleteAdherent(id);
+        toast({
+            title: "Adhérent supprimé",
+            description: `${adherent.prenom} ${adherent.nom} a été supprimé.`,
+        });
+        router.push('/dashboard/adherents');
+    } catch (error) {
+        console.error("Failed to delete adherent:", error);
+        toast({ variant: 'destructive', title: 'Erreur de suppression', description: "Impossible de supprimer l'adhérent." });
+    }
   };
 
-  const handleAddCotisation = () => {
-    const currentYear = new Date().getFullYear();
-    const newCotisation: Cotisation = {
-      id: `cot-${new Date().getTime()}`,
-      adherentId: id,
-      annee: currentYear,
-      datePaiement: new Date().toISOString(),
-      montant: 15,
-    };
-    setAdherentCotisations(prev => [...prev, newCotisation].sort((a,b) => new Date(b.datePaiement).getTime() - new Date(a.datePaiement).getTime()));
-    setAdherent(prev => prev ? {...prev, cotisationAJour: true} : undefined);
-    setShowAddCotisationDialog(false);
-    toast({
-        title: "Cotisation ajoutée",
-        description: `Une cotisation de 15,00 € a été ajoutée pour ${adherent.prenom} ${adherent.nom}.`,
-    });
+  const handleAddCotisation = async () => {
+    try {
+        await addCotisation(id);
+        const cotisationsData = await getCotisationsForAdherent(id);
+        setAdherentCotisations(cotisationsData);
+        setFormData(prev => ({...prev, cotisationAJour: true}));
+        setShowAddCotisationDialog(false);
+        toast({
+            title: "Cotisation ajoutée",
+            description: `Une cotisation de 15,00 € a été ajoutée pour ${adherent.prenom} ${adherent.nom}.`,
+        });
+    } catch (error) {
+        console.error("Failed to add cotisation:", error);
+        toast({ variant: 'destructive', title: 'Erreur', description: "Impossible d'ajouter la cotisation." });
+    }
   };
 
-  const handleSaveChanges = () => {
-    toast({
-        title: "Modifications enregistrées",
-        description: `Les informations de ${adherent.prenom} ${adherent.nom} ont été mises à jour.`,
-    });
+  const handleSaveChanges = async () => {
+    try {
+        await updateAdherent(id, formData);
+        setAdherent(prev => prev ? {...prev, ...formData} : null);
+        toast({
+            title: "Modifications enregistrées",
+            description: `Les informations de ${adherent.prenom} ${adherent.nom} ont été mises à jour.`,
+        });
+    } catch (error) {
+        console.error("Failed to save changes:", error);
+        toast({ variant: 'destructive', title: 'Erreur', description: "Impossible d'enregistrer les modifications." });
+    }
   };
 
 
@@ -159,30 +185,30 @@ export default function AdherentDetailPage() {
         <CardContent className="space-y-4">
            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="first-name">Prénom</Label>
-              <Input id="first-name" defaultValue={adherent.prenom} aria-label={`Modifier le prénom, actuellement ${adherent.prenom}`} />
+              <Label htmlFor="prenom">Prénom</Label>
+              <Input id="prenom" name="prenom" value={formData.prenom || ''} onChange={handleInputChange} aria-label={`Modifier le prénom, actuellement ${adherent.prenom}`} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="last-name">Nom</Label>
-              <Input id="last-name" defaultValue={adherent.nom} aria-label={`Modifier le nom, actuellement ${adherent.nom}`} />
+              <Label htmlFor="nom">Nom</Label>
+              <Input id="nom" name="nom" value={formData.nom || ''} onChange={handleInputChange} aria-label={`Modifier le nom, actuellement ${adherent.nom}`} />
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" defaultValue={adherent.email} aria-label={`Modifier l'email, actuellement ${adherent.email}`} />
+            <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} aria-label={`Modifier l'email, actuellement ${adherent.email}`} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone">Téléphone</Label>
-            <Input id="phone" type="tel" defaultValue={adherent.telephone} aria-label={`Modifier le téléphone, actuellement ${adherent.telephone}`} />
+            <Label htmlFor="telephone">Téléphone</Label>
+            <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} aria-label={`Modifier le téléphone, actuellement ${adherent.telephone}`} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="address">Adresse</Label>
-            <Input id="address" defaultValue={adherent.adresse} aria-label={`Modifier l'adresse`} />
+            <Label htmlFor="adresse">Adresse</Label>
+            <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} aria-label={`Modifier l'adresse`} />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-                <Label htmlFor="birth-date">Date de naissance</Label>
-                <Input id="birth-date" defaultValue={new Date(adherent.dateNaissance).toLocaleDateString('fr-FR')} aria-label={`Modifier la date de naissance`} />
+                <Label htmlFor="dateNaissance">Date de naissance</Label>
+                <Input id="dateNaissance" name="dateNaissance" type="date" value={formData.dateNaissance ? formData.dateNaissance.split('T')[0] : ''} onChange={handleInputChange} aria-label={`Modifier la date de naissance`} />
             </div>
              <div className="space-y-2">
                 <Label htmlFor="inscription-date">Date d'inscription</Label>
@@ -230,7 +256,7 @@ export default function AdherentDetailPage() {
                 </Label>
                 <Switch 
                     id="switch-membre-bureau" 
-                    checked={adherent.estMembreBureau}
+                    checked={formData.estMembreBureau}
                     onCheckedChange={(checked) => handleSwitchChange('estMembreBureau', checked)}
                     aria-label="Activer le statut de membre du bureau"
                 />
@@ -244,7 +270,7 @@ export default function AdherentDetailPage() {
                 </Label>
                  <Switch 
                     id="switch-benevole" 
-                    checked={adherent.estBenevole} 
+                    checked={formData.estBenevole} 
                     onCheckedChange={(checked) => handleSwitchChange('estBenevole', checked)}
                     aria-label="Activer le statut de bénévole"
                  />
@@ -258,7 +284,7 @@ export default function AdherentDetailPage() {
                 </Label>
                  <Switch 
                     id="switch-membre-faaf" 
-                    checked={adherent.estMembreFaaf} 
+                    checked={formData.estMembreFaaf} 
                     onCheckedChange={(checked) => handleSwitchChange('estMembreFaaf', checked)}
                     aria-label="Activer le statut de membre FAAF"
                  />
@@ -272,7 +298,7 @@ export default function AdherentDetailPage() {
                 </Label>
                  <Switch 
                     id="switch-droit-image" 
-                    checked={adherent.accordeDroitImage} 
+                    checked={formData.accordeDroitImage} 
                     onCheckedChange={(checked) => handleSwitchChange('accordeDroitImage', checked)}
                     aria-label="Activer le droit à l'image"
                  />
@@ -286,7 +312,7 @@ export default function AdherentDetailPage() {
                 </Label>
                  <Switch 
                     id="switch-cotisation-jour"
-                    checked={adherent.cotisationAJour} 
+                    checked={formData.cotisationAJour} 
                     onCheckedChange={(checked) => handleSwitchChange('cotisationAJour', checked)}
                     aria-label="Marquer la cotisation comme à jour"
                  />

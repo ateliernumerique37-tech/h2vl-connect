@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import type { Adherent } from "@/lib/types";
-import { adherents as mockAdherents } from "@/lib/placeholder-data";
+import { getAdherents } from '@/services/adherentsService';
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import { AdherentCard } from "@/components/adherent-card";
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -24,9 +25,40 @@ const getAge = (dateString: string) => {
   return age;
 };
 
+function AdherentsPageSkeleton() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <Skeleton className="h-8 w-64" />
+                    <Skeleton className="mt-2 h-4 w-80" />
+                </div>
+                <Skeleton className="h-10 w-44" />
+            </div>
+            <Card>
+                <CardHeader><CardTitle><Skeleton className="h-6 w-48" /></CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                        {[...Array(7)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                    </div>
+                </CardContent>
+            </Card>
+             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {[...Array(3)].map((_, i) => (
+                    <Card key={i}><CardHeader className="flex flex-row items-center gap-4 p-4">
+                        <Skeleton className="h-10 w-10 rounded-full" />
+                        <div className="grid gap-1.5"><Skeleton className="h-4 w-32" /><Skeleton className="h-4 w-40" /></div>
+                    </CardHeader></Card>
+                ))}
+            </div>
+        </div>
+    )
+}
+
 export default function AdherentsPage() {
-  const [adherents, setAdherents] = useState<Adherent[]>(mockAdherents);
-  const { toast } = useToast();
+  const [adherents, setAdherents] = useState<Adherent[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,6 +70,20 @@ export default function AdherentsPage() {
   const [droitImageFilter, setDroitImageFilter] = useState('Tous');
   const [ageFilter, setAgeFilter] = useState('Tous');
   
+  useEffect(() => {
+    async function fetchAdherents() {
+        try {
+            const data = await getAdherents();
+            setAdherents(data);
+        } catch (error) {
+            console.error("Failed to fetch adherents:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
+    fetchAdherents();
+  }, []);
+
   const hasActiveFilters = searchTerm || genreFilter !== 'Tous' || cotisationFilter !== 'Tous' || benevoleFilter !== 'Tous' || faafFilter !== 'Tous' || bureauFilter !== 'Tous' || droitImageFilter !== 'Tous' || ageFilter !== 'Tous';
 
 
@@ -92,7 +138,10 @@ export default function AdherentsPage() {
         }
       });
   }, [adherents, searchTerm, genreFilter, cotisationFilter, benevoleFilter, faafFilter, bureauFilter, droitImageFilter, ageFilter]);
-
+  
+  if (loading) {
+      return <AdherentsPageSkeleton />;
+  }
 
   return (
     <div className="space-y-6">
@@ -103,12 +152,11 @@ export default function AdherentsPage() {
             Gérez les membres de votre association.
           </p>
         </div>
-        <Button 
-            aria-label="Ajouter un nouvel adhérent à l'association"
-            onClick={() => toast({ title: "Fonctionnalité à venir", description: "La création d'adhérent sera bientôt disponible."})}
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Ajouter un adhérent
+        <Button asChild>
+            <Link href="/dashboard/adherents/create" aria-label="Ajouter un nouvel adhérent à l'association">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Ajouter un adhérent
+            </Link>
         </Button>
       </div>
 
