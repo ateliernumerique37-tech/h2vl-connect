@@ -85,7 +85,7 @@ service cloud.firestore {
     match /admins/{adminId} {
       allow get: if isOwner(adminId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow list: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow create: if request.auth.uid == adminId;
+      allow create: if isOwner(adminId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow update: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow delete: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
@@ -98,8 +98,7 @@ service cloud.firestore {
      * @principle Secures the audit trail to be append-only and readable only by authorized personnel.
      */
     match /logs_admin/{logId} {
-        allow read, list: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-        allow create: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        allow read, list, create: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
         allow update, delete: if false;
     }
 
@@ -111,11 +110,8 @@ service cloud.firestore {
      * @principle Enforces public read access for discovery but centralizes content management with administrators.
      */
     match /evenements/{evenementId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow update: if exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && isExistingDoc();
-      allow delete: if exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && isExistingDoc();
+      allow get, list: if true;
+      allow create, update, delete: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     /**
@@ -127,8 +123,8 @@ service cloud.firestore {
      */
     match /adherents/{adherentId} {
       allow get: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow list: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow create: if request.auth.uid == adherentId;
+      allow list: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      allow create: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow update: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc();
       allow delete: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc();
 
