@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, notFound } from 'next/navigation';
+import { useParams, notFound, useRouter } from 'next/navigation';
 import { adherents, cotisations } from '@/lib/placeholder-data';
 import type { Adherent, Cotisation } from '@/lib/types';
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from 'react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { PlusCircle, Trash2 } from "lucide-react";
 
 function AdherentDetailSkeleton() {
     return (
@@ -49,11 +52,13 @@ function AdherentDetailSkeleton() {
 
 export default function AdherentDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
   
   const [adherent, setAdherent] = useState<Adherent | undefined>(undefined);
   const [adherentCotisations, setAdherentCotisations] = useState<Cotisation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddCotisationDialog, setShowAddCotisationDialog] = useState(false);
 
   useEffect(() => {
     const foundAdherent = adherents.find((a) => a.id === id);
@@ -77,6 +82,26 @@ export default function AdherentDetailPage() {
   const handleSwitchChange = (field: keyof Adherent, checked: boolean) => {
     setAdherent(prev => prev ? {...prev, [field]: checked} : undefined);
   };
+  
+  const handleDelete = () => {
+    console.log(`Deleting adherent ${adherent.id}`);
+    router.push('/dashboard/adherents');
+  };
+
+  const handleAddCotisation = () => {
+    const currentYear = new Date().getFullYear();
+    const newCotisation: Cotisation = {
+      id: `cot-${new Date().getTime()}`,
+      adherentId: id,
+      annee: currentYear,
+      datePaiement: new Date().toISOString(),
+      montant: 15,
+    };
+    setAdherentCotisations(prev => [...prev, newCotisation].sort((a,b) => new Date(b.datePaiement).getTime() - new Date(a.datePaiement).getTime()));
+    setAdherent(prev => prev ? {...prev, cotisationAJour: true} : undefined);
+    setShowAddCotisationDialog(false);
+  };
+
 
   return (
     <div className="space-y-6">
@@ -121,8 +146,29 @@ export default function AdherentDetailPage() {
             </div>
           </div>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex justify-between">
           <Button>Enregistrer les modifications</Button>
+           <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" aria-label={`Supprimer l'adhérent ${adherent.prenom} ${adherent.nom}`}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Supprimer
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Cette action est irréversible. Elle supprimera définitivement l'adhérent
+                  <span className="font-semibold"> {adherent.prenom} {adherent.nom}</span> et toutes les données associées.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete}>Continuer</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardFooter>
       </Card>
 
@@ -234,6 +280,28 @@ export default function AdherentDetailPage() {
             </TableBody>
           </Table>
         </CardContent>
+         <CardFooter>
+          <Dialog open={showAddCotisationDialog} onOpenChange={setShowAddCotisationDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Ajouter une cotisation
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Ajouter une cotisation</DialogTitle>
+                <DialogDescription>
+                  Confirmez l'ajout d'une cotisation de 15,00 € pour l'année en cours ({new Date().getFullYear()}) pour {adherent.prenom} {adherent.nom}.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAddCotisationDialog(false)}>Annuler</Button>
+                <Button onClick={handleAddCotisation}>Confirmer et ajouter</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardFooter>
       </Card>
     </div>
   );

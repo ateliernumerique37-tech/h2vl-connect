@@ -1,12 +1,13 @@
 'use client';
 
-import { useParams, notFound } from 'next/navigation';
+import { useParams, notFound, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { adherents, evenements, inscriptions } from '@/lib/placeholder-data';
 import type { Evenement, Adherent, Inscription } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, MapPin, Euro, Users, PlusCircle } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 function EventDetailSkeleton() {
     return (
@@ -162,6 +164,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
 
 export default function EventDetailPage() {
     const params = useParams();
+    const router = useRouter();
     const id = params.id as string;
     
     const [event, setEvent] = useState<Evenement | undefined>();
@@ -196,6 +199,11 @@ export default function EventDetailPage() {
         const adherent = adherents.find(a => a.id === newInscription.id_adherent);
         setEventInscriptions(prev => [...prev, { ...newInscription, adherent }]);
     };
+    
+    const handleDelete = () => {
+        console.log(`Deleting event ${event?.id}`);
+        router.push('/dashboard/events');
+    };
 
     if (loading) {
         return <EventDetailSkeleton />;
@@ -208,6 +216,8 @@ export default function EventDetailPage() {
     const formattedDate = new Date(event.date).toLocaleDateString("fr-FR", {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
+    
+    const shortDate = new Date(event.date).toLocaleDateString('fr-FR');
 
     return (
         <div className="space-y-8">
@@ -234,6 +244,34 @@ export default function EventDetailPage() {
                         <span>{event.prix > 0 ? `${event.prix.toFixed(2)} € par participant` : "Gratuit"}</span>
                     </div>
                 </CardContent>
+                <CardFooter className="flex justify-start gap-2">
+                    <Link href={`/dashboard/events/${event.id}/edit`} passHref>
+                        <Button variant="outline" aria-label={`Modifier l'événement ${event.titre} du ${shortDate}`}>
+                            <Pencil className="mr-2 h-4 w-4" /> Modifier
+                        </Button>
+                    </Link>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" aria-label={`Supprimer l'événement ${event.titre} du ${shortDate}`}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Supprimer
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Cette action est irréversible. Elle supprimera définitivement l'événement 
+                              <span className="font-semibold"> {event.titre}</span>.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDelete}>Continuer</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                </CardFooter>
             </Card>
 
             <div className="flex justify-center">
