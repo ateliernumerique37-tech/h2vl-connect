@@ -34,7 +34,7 @@ export async function getAdherentById(id: string): Promise<Adherent | undefined>
     return undefined;
 }
 
-export async function addAdherent(adherentData: Omit<Adherent, 'id'>): Promise<string> {
+export async function addAdherent(adherentData: Omit<Adherent, 'id' | 'authUid'>): Promise<string> {
     const docRef = await addDoc(adherentsCollection, adherentData);
     
     if (adherentData.cotisationAJour) {
@@ -43,6 +43,28 @@ export async function addAdherent(adherentData: Omit<Adherent, 'id'>): Promise<s
     
     return docRef.id;
 }
+
+export async function batchAddAdherents(adherents: Omit<Adherent, 'id' | 'authUid'>[]): Promise<void> {
+    const batch = writeBatch(db);
+
+    adherents.forEach(adherent => {
+        const adherentRef = doc(adherentsCollection);
+        batch.set(adherentRef, adherent);
+
+        if (adherent.cotisationAJour) {
+            const cotisationRef = doc(cotisationsCollection);
+            batch.set(cotisationRef, {
+                adherentId: adherentRef.id,
+                annee: new Date().getFullYear(),
+                datePaiement: new Date().toISOString(),
+                montant: 15,
+            });
+        }
+    });
+
+    await batch.commit();
+}
+
 
 export async function updateAdherent(id: string, updates: Partial<Adherent>): Promise<void> {
     const docRef = doc(db, 'adherents', id);

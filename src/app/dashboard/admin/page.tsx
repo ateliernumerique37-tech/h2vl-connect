@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Pencil, Trash2, Loader2 } from "lucide-react";
-import type { Admin, LogAdmin } from "@/lib/types";
+import { PlusCircle, Pencil, Trash2, Loader2, Upload } from "lucide-react";
+import type { Admin, LogAdmin, Adherent } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import AiEventForm from "@/components/admin/ai-event-form";
 import { getAdmins, addAdmin, deleteAdmin } from "@/services/adminsService";
 import { getLogs, addLog } from "@/services/logsService";
+import { batchAddAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function AdminPageSkeleton() {
@@ -71,6 +72,9 @@ export default function AdminPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  
   useEffect(() => {
     async function fetchData() {
         try {
@@ -85,7 +89,7 @@ export default function AdminPage() {
         }
     }
     fetchData();
-  }, []);
+  }, [toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
@@ -99,7 +103,6 @@ export default function AdminPage() {
         await addAdmin(adminInfo, password);
         await addLog(`Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
         
-        // Refresh data
         const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
         setAdministrateurs(adminsData);
         setLogsAdmin(logsData);
@@ -127,7 +130,6 @@ export default function AdminPage() {
         await deleteAdmin(admin.id);
         await addLog(`Suppression de l'administrateur : ${admin.prenom} ${admin.nom}`);
         
-        // Refresh data
         const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
         setAdministrateurs(adminsData);
         setLogsAdmin(logsData);
@@ -145,6 +147,103 @@ export default function AdminPage() {
         });
     }
   }
+
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+      setIsImporting(true);
+      const text = e.target?.result as string;
+      let adherentsCount = 0;
+
+      try {
+        const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
+        if (lines.length < 2) {
+          throw new Error("Le fichier CSV est vide ou ne contient que l'en-tête.");
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const rows = lines.slice(1);
+        adherentsCount = rows.length;
+
+        toast({
+          title: "Importation en cours...",
+          description: `Importation de ${adherentsCount} adhérents en cours, veuillez patienter.`,
+        });
+
+        const toBoolean = (value: string | undefined) => (value || '').trim().toLowerCase() === 'oui';
+        
+        const requiredHeaders = ['Prenom', 'Nom', 'Email'];
+        for (const rh of requiredHeaders) {
+            if (!headers.includes(rh)) {
+                throw new Error(`Colonne manquante dans le fichier CSV : ${rh}`);
+            }
+        }
+
+        const newAdherents: Omit<Adherent, 'id' | 'authUid'>[] = rows.map(row => {
+          const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
+          const adherentData: { [key: string]: any } = {};
+          headers.forEach((header, index) => {
+            adherentData[header] = values[index];
+          });
+          
+          return {
+            prenom: adherentData.Prenom || '',
+            nom: adherentData.Nom || '',
+            email: adherentData.Email || '',
+            telephone: adherentData.Telephone || '',
+            adresse: adherentData.Adresse || '',
+            dateNaissance: adherentData.DateNaissance ? new Date(adherentData.DateNaissance).toISOString() : '',
+            genre: ['H', 'F', 'Autre'].includes(adherentData.Genre) ? adherentData.Genre : 'Autre',
+            dateInscription: adherentData.DateInscription ? new Date(adherentData.DateInscription).toISOString() : new Date().toISOString(),
+            estMembreBureau: toBoolean(adherentData.MembreBureau),
+            estBenevole: toBoolean(adherentData.Benevole),
+            estMembreFaaf: toBoolean(adherentData.MembreFAAF),
+            accordeDroitImage: toBoolean(adherentData.DroitImage),
+            cotisationAJour: toBoolean(adherentData.CotisationAJour),
+          };
+        });
+
+        await batchAddAdherents(newAdherents);
+        await addLog(`Importation en masse de ${adherentsCount} adhérents via CSV.`);
+
+        const logsData = await getLogs();
+        setLogsAdmin(logsData);
+
+        toast({
+          title: "Succès",
+          description: `${adherentsCount} adhérents ont été importés avec succès.`,
+        });
+
+      } catch (error: any) {
+        console.error("CSV Import Error:", error);
+        toast({
+          variant: 'destructive',
+          title: "Erreur d'importation",
+          description: error.message || "Impossible d'importer le fichier CSV.",
+        });
+      } finally {
+        setIsImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+
+    reader.onerror = () => {
+      toast({
+        variant: 'destructive',
+        title: "Erreur de lecture",
+        description: "Impossible de lire le fichier.",
+      });
+      setIsImporting(false);
+    };
+
+    reader.readAsText(file, 'UTF-8');
+  };
   
   if (loading) {
       return <AdminPageSkeleton />;
@@ -160,6 +259,36 @@ export default function AdminPage() {
       </header>
       
       <AiEventForm />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Importer des adhérents</CardTitle>
+          <CardDescription>
+            Ajoutez plusieurs adhérents en même temps à partir d'un fichier CSV.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+            aria-label="Importer une liste d'adhérents à partir d'un fichier CSV"
+          >
+            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+            Importer des adhérents via CSV
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleFileImport}
+            disabled={isImporting}
+          />
+          <p className="text-sm text-muted-foreground mt-4">
+            Le fichier CSV doit contenir les colonnes : Prenom, Nom, Email, Telephone, Adresse, DateNaissance, Genre, DateInscription, MembreBureau, Benevole, MembreFAAF, DroitImage, CotisationAJour.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
