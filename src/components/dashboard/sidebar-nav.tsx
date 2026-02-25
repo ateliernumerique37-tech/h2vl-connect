@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Shield, User, Users } from "lucide-react";
+import { CalendarDays, Shield, Users } from "lucide-react";
 import {
   SidebarHeader,
   SidebarMenu,
@@ -23,11 +23,6 @@ const menuItems = [
     href: "/dashboard/adherents",
     icon: Users,
     label: "Adhérents",
-  },
-  {
-    href: "/dashboard/profile",
-    icon: User,
-    label: "Mon Profil",
   },
   {
     href: "/dashboard/admin",

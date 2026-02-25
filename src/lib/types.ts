@@ -55,3 +55,16 @@ export interface Cotisation {
   datePaiement: string; // ISO string
   montant: number;
 }
+
+export interface Admin {
+  id: string;
+  nom: string;
+  email: string;
+}
+
+export interface LogAdmin {
+  id: string;
+  nomAdmin: string;
+  actionRealisee: string;
+  dateAction: string; // ISO string
+}

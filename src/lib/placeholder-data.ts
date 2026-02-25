@@ -1,4 +1,4 @@
-import type { Adherent, Evenement, Inscription, Cotisation } from './types';
+import type { Adherent, Evenement, Inscription, Cotisation, Admin, LogAdmin } from './types';
 
 export const adherents: Adherent[] = [
   {
@@ -153,4 +153,15 @@ export const inscriptions: Inscription[] = [
     a_paye: true,
     date_inscription: '2024-10-15T10:00:00.000Z',
   },
+];
+
+export const administrateurs: Admin[] = [
+    { id: 'admin-1', nom: 'Sophie Manager', email: 'sophie.manager@example.com' },
+    { id: 'user-1', nom: 'Jean Dupont', email: 'jean.dupont@email.com' },
+];
+
+export const logsAdmin: LogAdmin[] = [
+    { id: 'log-1', nomAdmin: 'Sophie Manager', actionRealisee: "A créé l'événement 'Assemblée Générale Annuelle'", dateAction: '2024-09-01T10:00:00.000Z' },
+    { id: 'log-2', nomAdmin: 'Jean Dupont', actionRealisee: "A modifié l'adhérent 'Marie Martin'", dateAction: '2024-09-02T14:20:00.000Z' },
+    { id: 'log-3', nomAdmin: 'Sophie Manager', actionRealisee: "A supprimé l'inscription de 'Paul Bernard' à 'Atelier de Codage'", dateAction: '2024-09-03T09:05:00.000Z' },
 ];
