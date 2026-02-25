@@ -6,7 +6,6 @@ import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUser } from '@/firebase';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 function DashboardSkeleton() {
     return (
@@ -62,7 +61,6 @@ export default function DashboardLayout({
 }) {
 
   return (
-    <FirebaseClientProvider>
       <AuthGuard>
         <SidebarProvider>
           <Sidebar>
@@ -76,6 +74,5 @@ export default function DashboardLayout({
           </SidebarInset>
         </SidebarProvider>
       </AuthGuard>
-    </FirebaseClientProvider>
   );
 }
