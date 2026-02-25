@@ -61,6 +61,7 @@ export default function AdherentDetailPage() {
   const [showAddCotisationDialog, setShowAddCotisationDialog] = useState(false);
 
   useEffect(() => {
+    // In a real app, you would fetch data here based on the id
     const foundAdherent = adherents.find((a) => a.id === id);
     if(foundAdherent) {
       setAdherent(foundAdherent);

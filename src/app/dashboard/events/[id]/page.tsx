@@ -172,6 +172,7 @@ export default function EventDetailPage() {
     const [loading, setLoading] = useState(true);
     
     useEffect(() => {
+        // In a real app, you would fetch data here based on the id
         const foundEvent = evenements.find((e) => e.id === id);
         if (foundEvent) {
             setEvent(foundEvent);

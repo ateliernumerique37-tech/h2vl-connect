@@ -1,32 +1,18 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { Adherent } from "@/lib/types";
 import { adherents as mockAdherents } from "@/lib/placeholder-data";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import { AdherentCard } from "@/components/adherent-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-function AdherentCardSkeleton() {
-  return (
-    <div className="p-4 space-y-4 rounded-lg border bg-card text-card-foreground shadow-sm">
-      <div className="flex items-center space-x-4">
-        <Skeleton className="h-10 w-10 rounded-full" />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-[150px]" />
-          <Skeleton className="h-4 w-[200px]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const getAge = (dateString: string) => {
+  if (!dateString) return 0;
   const birthDate = new Date(dateString);
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
@@ -38,8 +24,7 @@ const getAge = (dateString: string) => {
 };
 
 export default function AdherentsPage() {
-  const [adherents, setAdherents] = useState<Adherent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [adherents, setAdherents] = useState<Adherent[]>(mockAdherents);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,16 +35,9 @@ export default function AdherentsPage() {
   const [bureauFilter, setBureauFilter] = useState('Tous');
   const [droitImageFilter, setDroitImageFilter] = useState('Tous');
   const [ageFilter, setAgeFilter] = useState('Tous');
+  
+  const hasActiveFilters = searchTerm || genreFilter !== 'Tous' || cotisationFilter !== 'Tous' || benevoleFilter !== 'Tous' || faafFilter !== 'Tous' || bureauFilter !== 'Tous' || droitImageFilter !== 'Tous' || ageFilter !== 'Tous';
 
-  useEffect(() => {
-    // Simulate API call
-    const timer = setTimeout(() => {
-      setAdherents(mockAdherents);
-      setLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, []);
 
   const filteredAdherents = useMemo(() => {
     return adherents
@@ -70,8 +48,8 @@ export default function AdherentsPage() {
           adherent.prenom.toLowerCase().includes(searchLower) ||
           adherent.nom.toLowerCase().includes(searchLower) ||
           adherent.email.toLowerCase().includes(searchLower) ||
-          adherent.telephone.toLowerCase().includes(searchLower) ||
-          adherent.adresse.toLowerCase().includes(searchLower)
+          adherent.telephone?.toLowerCase().includes(searchLower) ||
+          adherent.adresse?.toLowerCase().includes(searchLower)
         );
       })
       .filter(adherent => genreFilter === 'Tous' ? true : adherent.genre === genreFilter)
@@ -248,15 +226,14 @@ export default function AdherentsPage() {
       </Card>
 
 
-      {loading ? (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-             <AdherentCardSkeleton key={i} />
-          ))}
-        </div>
-      ) : filteredAdherents.length === 0 ? (
+      {filteredAdherents.length === 0 ? (
         <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
-            <p className="text-muted-foreground">Aucun adhérent ne correspond à vos critères de recherche.</p>
+            <p className="text-muted-foreground">
+              {hasActiveFilters
+                ? 'Aucun adhérent ne correspond à vos critères de recherche.'
+                : 'Aucun adhérent enregistré pour le moment.'
+              }
+            </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

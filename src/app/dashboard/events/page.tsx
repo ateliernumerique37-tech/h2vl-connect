@@ -20,6 +20,8 @@ export default function EventsPage() {
     return uniqueYears;
   }, []);
 
+  const hasActiveFilters = period !== 'upcoming' || selectedYear !== 'Tous';
+
   const filteredEvents = useMemo(() => {
     const now = new Date();
     return allEvents
@@ -88,7 +90,12 @@ export default function EventsPage() {
 
        {filteredEvents.length === 0 ? (
          <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
-            <p className="text-muted-foreground">Aucun événement ne correspond à vos critères.</p>
+            <p className="text-muted-foreground">
+              {hasActiveFilters
+                ? "Aucun événement ne correspond à vos critères."
+                : "Aucun événement enregistré pour le moment."
+              }
+            </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

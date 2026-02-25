@@ -60,6 +60,7 @@ export interface Admin {
   id: string;
   nom: string;
   email: string;
+  role?: string;
 }
 
 export interface LogAdmin {
