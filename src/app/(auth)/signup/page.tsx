@@ -16,7 +16,9 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { addAdmin } from "@/services/adminsService";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -31,26 +33,46 @@ export default function SignupPage() {
     event.preventDefault();
     setIsLoading(true);
     try {
-      await addAdmin({
+      // Step 1: Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Step 2: Create admin document in Firestore, using UID as document ID
+      await setDoc(doc(db, "admins", user.uid), {
+        authUid: user.uid,
         prenom: firstName,
         nom: lastName,
         email: email,
         role: 'Administrateur',
-      }, password);
+      });
 
       toast({
         title: "Inscription réussie",
         description: "Votre compte a été créé et vous êtes maintenant connecté.",
       });
       router.push('/dashboard');
+
     } catch (error: any) {
-      console.error(error);
+      console.error("Signup Error:", error);
       let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = "Cette adresse email est déjà utilisée.";
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = "Le mot de passe doit comporter au moins 6 caractères.";
-      }
+       if (error.code) {
+            switch (error.code) {
+              case 'auth/email-already-in-use':
+                errorMessage = "Cette adresse email est déjà utilisée.";
+                break;
+              case 'auth/weak-password':
+                errorMessage = "Le mot de passe doit comporter au moins 6 caractères.";
+                break;
+              case 'auth/invalid-email':
+                errorMessage = "L'adresse email n'est pas valide.";
+                break;
+              case 'permission-denied':
+                 errorMessage = "Impossible de créer le profil dans la base de données. Vérifiez les règles de sécurité Firestore.";
+                 break;
+              default:
+                errorMessage = "Échec de l'inscription : " + error.message;
+            }
+          }
       toast({
         variant: "destructive",
         title: "Échec de l'inscription",
