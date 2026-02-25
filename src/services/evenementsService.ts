@@ -1,7 +1,9 @@
 'use client';
-import { db } from '@/lib/firebase';
+import { getFirestore, collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, orderBy, query, writeBatch, where } from 'firebase/firestore';
 import type { Evenement } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, orderBy, query, writeBatch, where } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+
+const { firestore: db } = initializeFirebase();
 
 const evenementsCollection = collection(db, 'evenements');
 

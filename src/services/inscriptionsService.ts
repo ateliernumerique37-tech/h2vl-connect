@@ -1,7 +1,9 @@
 'use client';
-import { db } from '@/lib/firebase';
+import { getFirestore, collection, getDocs, doc, addDoc, updateDoc, query, where } from 'firebase/firestore';
 import type { Inscription } from '@/lib/types';
-import { collection, getDocs, doc, addDoc, updateDoc, query, where } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+
+const { firestore: db } = initializeFirebase();
 
 const inscriptionsCollection = collection(db, 'inscriptions');
 

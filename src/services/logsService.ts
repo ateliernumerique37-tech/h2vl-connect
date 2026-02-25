@@ -1,7 +1,10 @@
 'use client';
-import { db, auth } from '@/lib/firebase';
+import { getFirestore, collection, getDocs, addDoc, orderBy, query } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import type { LogAdmin } from '@/lib/types';
-import { collection, getDocs, addDoc, orderBy, query } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+
+const { firestore: db, auth } = initializeFirebase();
 
 const logsCollection = collection(db, 'logs_admin');
 

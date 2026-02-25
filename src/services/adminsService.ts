@@ -1,8 +1,11 @@
 'use client';
-import { db, auth } from '@/lib/firebase';
+import { getFirestore, collection, getDocs, doc, addDoc, deleteDoc } from 'firebase/firestore';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import type { Admin } from '@/lib/types';
-import { collection, getDocs, doc, addDoc, deleteDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { initializeFirebase } from '@/firebase';
+
+const { firestore: db, auth } = initializeFirebase();
+
 
 const adminsCollection = collection(db, 'admins');
 

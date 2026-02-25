@@ -18,10 +18,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { useAuth, useFirestore } from "@/firebase";
 
 export default function SignupPage() {
   const router = useRouter();
+  const auth = useAuth();
+  const db = useFirestore();
   const { toast } = useToast();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -32,12 +34,24 @@ export default function SignupPage() {
   const handleSignup = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
+    
+    if (!db) {
+        toast({
+            variant: "destructive",
+            title: "Erreur",
+            description: "La base de données n'est pas initialisée.",
+        });
+        setIsLoading(false);
+        return;
+    }
+
     try {
       // Step 1: Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Step 2: Create admin document in Firestore, using UID as document ID
+      // Step 2: Create admin document in Firestore
+      // Corrected collection path to 'admins' as per your service logic.
       await setDoc(doc(db, "admins", user.uid), {
         authUid: user.uid,
         prenom: firstName,
@@ -47,8 +61,8 @@ export default function SignupPage() {
       });
 
       toast({
-        title: "Inscription réussie",
-        description: "Votre compte a été créé et vous êtes maintenant connecté.",
+        title: "Inscription réussie !",
+        description: "Votre compte administrateur a été créé et vous êtes maintenant connecté.",
       });
       router.push('/dashboard');
 
@@ -71,7 +85,6 @@ export default function SignupPage() {
                   descriptiveError = "Échec de la création du profil. Vérifiez les règles de sécurité Firestore.";
                   break;
               default:
-                  // For any other Firebase error, show the specific message.
                   descriptiveError = `Erreur : ${error.message} (code: ${error.code})`;
           }
       } else if (error.message) {

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -10,12 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/firebase';
 
 export default function ForgotPasswordPage() {
     const router = useRouter();
+    const auth = useAuth();
     const { toast } = useToast();
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);

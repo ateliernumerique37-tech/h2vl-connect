@@ -1,4 +1,3 @@
-
 'use client';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,15 +11,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
-import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth, useUser } from "@/firebase";
 
 export function UserNav() {
   const router = useRouter();
+  const auth = useAuth();
+  const { user } = useUser();
   const { toast } = useToast();
-  const user = auth.currentUser;
 
   const handleLogout = async () => {
     await signOut(auth);

@@ -1,19 +1,9 @@
 'use client';
-import { db } from '@/lib/firebase';
+import { getFirestore, collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, query, where, writeBatch, orderBy } from 'firebase/firestore';
 import type { Adherent, Cotisation } from '@/lib/types';
-import { 
-    collection, 
-    getDocs, 
-    doc, 
-    getDoc, 
-    addDoc, 
-    updateDoc, 
-    deleteDoc, 
-    query, 
-    where, 
-    writeBatch,
-    orderBy,
-} from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+
+const { firestore: db } = initializeFirebase();
 
 const adherentsCollection = collection(db, 'adherents');
 const cotisationsCollection = collection(db, 'cotisations');
