@@ -11,7 +11,7 @@ export async function getAdmins(): Promise<Admin[]> {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Admin));
 }
 
-export async function addAdmin(adminData: Omit<Admin, 'id'>, password: string): Promise<string> {
+export async function addAdmin(adminData: Omit<Admin, 'id' | 'authUid'>, password: string): Promise<string> {
     const userCredential = await createUserWithEmailAndPassword(auth, adminData.email, password);
     const docRef = await addDoc(adminsCollection, {
         ...adminData,
