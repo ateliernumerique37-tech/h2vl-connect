@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PlusCircle, Trash2 } from "lucide-react";
+import { useToast } from '@/hooks/use-toast';
 
 function AdherentDetailSkeleton() {
     return (
@@ -54,6 +55,7 @@ export default function AdherentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const { toast } = useToast();
   
   const [adherent, setAdherent] = useState<Adherent | undefined>(undefined);
   const [adherentCotisations, setAdherentCotisations] = useState<Cotisation[]>([]);
@@ -81,11 +83,41 @@ export default function AdherentDetailPage() {
   }
   
   const handleSwitchChange = (field: keyof Adherent, checked: boolean) => {
-    setAdherent(prev => prev ? {...prev, [field]: checked} : undefined);
+    setAdherent(prev => {
+        if (!prev) return undefined;
+        const updatedAdherent = {...prev, [field]: checked};
+        const fieldLabels: Record<keyof Adherent, string> = {
+            estMembreBureau: "Membre du bureau",
+            estBenevole: "Bénévole",
+            estMembreFaaf: "Membre FAAF",
+            accordeDroitImage: "Droit à l'image",
+            cotisationAJour: "Cotisation à jour",
+            id: '',
+            prenom: '',
+            nom: '',
+            email: '',
+            telephone: '',
+            adresse: '',
+            dateNaissance: '',
+            genre: 'Autre',
+            dateInscription: ''
+        };
+        const status = checked ? 'activé' : 'désactivé';
+        toast({
+            title: "Mise à jour du statut",
+            description: `Le statut "${fieldLabels[field]}" pour ${prev.prenom} ${prev.nom} a été ${status}.`,
+        });
+        return updatedAdherent;
+    });
   };
   
   const handleDelete = () => {
     console.log(`Deleting adherent ${adherent.id}`);
+     toast({
+        title: "Adhérent supprimé",
+        description: `${adherent.prenom} ${adherent.nom} a été supprimé.`,
+        variant: 'destructive',
+    });
     router.push('/dashboard/adherents');
   };
 
@@ -101,6 +133,17 @@ export default function AdherentDetailPage() {
     setAdherentCotisations(prev => [...prev, newCotisation].sort((a,b) => new Date(b.datePaiement).getTime() - new Date(a.datePaiement).getTime()));
     setAdherent(prev => prev ? {...prev, cotisationAJour: true} : undefined);
     setShowAddCotisationDialog(false);
+    toast({
+        title: "Cotisation ajoutée",
+        description: `Une cotisation de 15,00 € a été ajoutée pour ${adherent.prenom} ${adherent.nom}.`,
+    });
+  };
+
+  const handleSaveChanges = () => {
+    toast({
+        title: "Modifications enregistrées",
+        description: `Les informations de ${adherent.prenom} ${adherent.nom} ont été mises à jour.`,
+    });
   };
 
 
@@ -148,7 +191,7 @@ export default function AdherentDetailPage() {
           </div>
         </CardContent>
         <CardFooter className="flex justify-between">
-          <Button>Enregistrer les modifications</Button>
+          <Button onClick={handleSaveChanges}>Enregistrer les modifications</Button>
            <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" aria-label={`Supprimer l'adhérent ${adherent.prenom} ${adherent.nom}`}>

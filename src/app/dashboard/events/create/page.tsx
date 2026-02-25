@@ -1,15 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 
 export default function CreateEventPage() {
     const [necessiteMenu, setNecessiteMenu] = useState(false);
+    const router = useRouter();
+    const { toast } = useToast();
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -26,7 +30,11 @@ export default function CreateEventPage() {
             data.optionsMenu = optionsMenu;
         }
         console.log('Form data:', data);
-        // Here you would typically send the data to your backend
+        toast({
+            title: "Événement créé",
+            description: `L'événement "${data.titre}" a été créé avec succès.`,
+        });
+        router.push('/dashboard/events');
     };
 
     return (

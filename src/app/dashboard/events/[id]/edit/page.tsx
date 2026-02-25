@@ -10,11 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 
 export default function EditEventPage() {
     const params = useParams();
     const router = useRouter();
     const id = params.id as string;
+    const { toast } = useToast();
 
     const [event, setEvent] = useState<Evenement | undefined>();
     const [loading, setLoading] = useState(true);
@@ -75,8 +77,12 @@ export default function EditEventPage() {
             fromages,
             desserts,
         });
-        // Here you would typically send the data to your backend
-        // and then redirect
+
+        toast({
+            title: "Événement modifié",
+            description: `L'événement "${titre}" a été mis à jour.`,
+        });
+        
         router.push(`/dashboard/events/${id}`);
     };
 

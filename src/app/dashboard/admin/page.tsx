@@ -17,6 +17,8 @@ import type { Admin, LogAdmin } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 
 export default function AdminPage() {
@@ -24,6 +26,7 @@ export default function AdminPage() {
   const [logsAdmin, setLogsAdmin] = useState<LogAdmin[]>(mockLogs);
   const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
   const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
+  const { toast } = useToast();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
@@ -40,7 +43,23 @@ export default function AdminPage() {
     };
     setAdministrateurs(prev => [...prev, newAdmin]);
     setIsAddAdminDialogOpen(false);
+    toast({
+      title: "Administrateur ajouté",
+      description: `Le compte pour ${newAdmin.prenom} ${newAdmin.nom} a été créé.`,
+    });
     setNewAdminData({ prenom: '', nom: '', email: '', role: '', password: '' });
+  }
+  
+  const handleDeleteAdmin = (adminId: string) => {
+    const adminToDelete = administrateurs.find(a => a.id === adminId);
+    setAdministrateurs(prev => prev.filter(admin => admin.id !== adminId));
+    if (adminToDelete) {
+        toast({
+            title: "Administrateur supprimé",
+            description: `Le compte de ${adminToDelete.prenom} ${adminToDelete.nom} a été supprimé.`,
+            variant: 'destructive'
+        });
+    }
   }
 
   return (
@@ -121,12 +140,29 @@ export default function AdminPage() {
                     <TableCell>{admin.role || 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" aria-label={`Modifier le compte administrateur de ${admin.prenom} ${admin.nom}`}>
+                          <Button variant="outline" size="sm" aria-label={`Modifier le compte administrateur de ${admin.prenom} ${admin.nom}`} onClick={() => toast({ title: "Action non disponible", description: "La modification n'est pas encore implémentée."})}>
                            <Pencil className="mr-2 h-4 w-4" /> Modifier
                           </Button>
-                          <Button variant="destructive" size="sm" aria-label={`Supprimer le compte administrateur de ${admin.prenom} ${admin.nom}`}>
-                           <Trash2 className="mr-2 h-4 w-4" /> Supprimer
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" aria-label={`Supprimer le compte administrateur de ${admin.prenom} ${admin.nom}`}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                    Cette action est irréversible. Elle supprimera définitivement le compte administrateur de
+                                    <span className="font-semibold"> {admin.prenom} {admin.nom}</span>.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteAdmin(admin.id)}>Continuer</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -170,7 +206,7 @@ export default function AdminPage() {
                 })
               ) : (
                  <TableRow>
-                  <TableCell colSpan={3} className="text-center">Aucun log disponible.</TableCell>
+                  <TableCell colSpan={3} className="text-center" role="text">Aucune action récente.</TableCell>
                 </TableRow>
               )}
             </TableBody>

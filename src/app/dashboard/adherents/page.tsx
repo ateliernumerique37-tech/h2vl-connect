@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from '@/hooks/use-toast';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -25,6 +26,7 @@ const getAge = (dateString: string) => {
 
 export default function AdherentsPage() {
   const [adherents, setAdherents] = useState<Adherent[]>(mockAdherents);
+  const { toast } = useToast();
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,12 +68,12 @@ export default function AdherentsPage() {
       .filter(adherent => {
         if (faafFilter === 'Tous') return true;
         const isFaaf = adherent.estMembreFaaf;
-        return (faafFilter === 'Oui') ? isFaaf : !isFaaf;
+        return (faafFilter === 'Oui') ? isFaaf : !isBenevole;
       })
       .filter(adherent => {
         if (bureauFilter === 'Tous') return true;
         const isBureau = adherent.estMembreBureau;
-        return (bureauFilter === 'Oui') ? isBureau : !isBureau;
+        return (bureauFilter === 'Oui') ? isBureau : !isBenevole;
       })
       .filter(adherent => {
         if (droitImageFilter === 'Tous') return true;
@@ -103,6 +105,7 @@ export default function AdherentsPage() {
         </div>
         <Button 
             aria-label="Ajouter un nouvel adhérent à l'association"
+            onClick={() => toast({ title: "Fonctionnalité à venir", description: "La création d'adhérent sera bientôt disponible."})}
         >
           <PlusCircle className="mr-2 h-4 w-4" />
           Ajouter un adhérent

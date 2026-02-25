@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
 
 function EventDetailSkeleton() {
     return (
@@ -166,6 +167,7 @@ export default function EventDetailPage() {
     const params = useParams();
     const router = useRouter();
     const id = params.id as string;
+    const { toast } = useToast();
     
     const [event, setEvent] = useState<Evenement | undefined>();
     const [eventInscriptions, setEventInscriptions] = useState<(Inscription & { adherent?: Adherent })[]>([]);
@@ -189,20 +191,40 @@ export default function EventDetailPage() {
     }, [id]);
 
     const handlePaymentStatusChange = (inscriptionId: string, hasPaid: boolean) => {
+        let adherentName = '';
         setEventInscriptions(prev => 
-            prev.map(inscription => 
-                inscription.id === inscriptionId ? { ...inscription, a_paye: hasPaid } : inscription
-            )
+            prev.map(inscription => {
+                if (inscription.id === inscriptionId) {
+                    adherentName = inscription.adherent ? `${inscription.adherent.prenom} ${inscription.adherent.nom}` : 'un adhérent';
+                    return { ...inscription, a_paye: hasPaid };
+                }
+                return inscription;
+            })
         );
+        toast({
+            title: "Statut de paiement mis à jour",
+            description: `Le paiement de ${adherentName} a été marqué comme ${hasPaid ? 'réglé' : 'non réglé'}.`,
+        });
     };
     
     const handleNewRegistration = (newInscription: Inscription) => {
         const adherent = adherents.find(a => a.id === newInscription.id_adherent);
         setEventInscriptions(prev => [...prev, { ...newInscription, adherent }]);
+        if (event && adherent) {
+            toast({
+                title: "Inscription réussie",
+                description: `${adherent.prenom} ${adherent.nom} a été inscrit à l'événement ${event.titre}.`,
+            });
+        }
     };
     
     const handleDelete = () => {
         console.log(`Deleting event ${event?.id}`);
+        toast({
+            title: "Événement supprimé",
+            description: `L'événement "${event?.titre}" a été supprimé.`,
+            variant: 'destructive',
+        });
         router.push('/dashboard/events');
     };
 

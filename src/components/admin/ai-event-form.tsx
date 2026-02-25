@@ -29,10 +29,14 @@ export default function AiEventForm() {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (state.message === 'Success' && state.description) {
+    if (state.message === 'Succès' && state.description) {
       setDescription(state.description);
+      toast({
+        title: 'Description générée!',
+        description: 'La description a été générée et est prête à être copiée.',
+      });
       formRef.current?.reset();
-    } else if (state.message && state.message !== 'Success') {
+    } else if (state.message && state.message !== 'Succès') {
       toast({
         variant: "destructive",
         title: "Erreur de génération",

@@ -135,6 +135,4 @@ export const administrateurs: Admin[] = [
     { id: 'admin-1', prenom: 'Gérard', nom: 'Larcher', email: 'gerard.larcher@example.com', role: 'Président' }
 ];
 
-export const logsAdmin: LogAdmin[] = [
-    { id: 'log-1', nomAdmin: 'Gérard Larcher', actionRealisee: "A modifié l'adhérent Alice Martin", dateAction: '2024-05-10T10:00:00.000Z' }
-];
+export const logsAdmin: LogAdmin[] = [];
