@@ -3,22 +3,15 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Debug: Check if Firebase environment variables are loaded
-console.log("Contrôle des clés Firebase :", { apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "Présente" : "MANQUANTE" });
-
-// Safety check for environment variables
-if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-    throw new Error("Variables d'environnement Next.js manquantes. Vérifiez le fichier .env.local et redémarrez le serveur.");
-}
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  projectId: "studio-6079106449-cf583",
+  appId: "1:574767759997:web:a098dcd67797dde00b2714",
+  apiKey: "AIzaSyCuDzDd6YMZhKa20nl7jxfbKbBfR4gsalY",
+  authDomain: "studio-6079106449-cf583.firebaseapp.com",
+  measurementId: "",
+  messagingSenderId: "574767759997",
+  storageBucket: "studio-6079106449-cf583.appspot.com"
 };
 
 // Initialize Firebase
