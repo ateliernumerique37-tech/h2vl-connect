@@ -58,6 +58,7 @@ export interface Cotisation {
 
 export interface Admin {
   id: string;
+  prenom: string;
   nom: string;
   email: string;
   role?: string;

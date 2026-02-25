@@ -23,19 +23,24 @@ export default function AdminPage() {
   const [administrateurs, setAdministrateurs] = useState<Admin[]>(mockAdmins);
   const [logsAdmin, setLogsAdmin] = useState<LogAdmin[]>(mockLogs);
   const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
+  const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
 
-  // This would be replaced by a server action
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
+  };
+
   const handleAddAdmin = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
     const newAdmin: Admin = {
       id: `admin-${new Date().getTime()}`,
-      nom: formData.get('nom') as string,
-      email: formData.get('email') as string,
-      role: formData.get('role') as string,
+      prenom: newAdminData.prenom,
+      nom: newAdminData.nom,
+      email: newAdminData.email,
+      role: newAdminData.role,
     };
     setAdministrateurs(prev => [...prev, newAdmin]);
     setIsAddAdminDialogOpen(false);
+    setNewAdminData({ prenom: '', nom: '', email: '', role: '', password: '' });
   }
 
   return (
@@ -70,20 +75,28 @@ export default function AdminPage() {
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
+                    <Label htmlFor="prenom">Prénom</Label>
+                    <Input id="prenom" name="prenom" value={newAdminData.prenom} onChange={handleInputChange} placeholder="Jean" aria-label="Saisir le prénom du nouvel administrateur" required />
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor="nom">Nom</Label>
-                    <Input id="nom" name="nom" placeholder="Jean Dupont" aria-label="Saisir le nom de l'administrateur" required />
+                    <Input id="nom" name="nom" value={newAdminData.nom} onChange={handleInputChange} placeholder="Dupont" aria-label="Saisir le nom de l'administrateur" required />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" name="email" type="email" placeholder="jean.dupont@email.com" aria-label="Saisir l'email de l'administrateur" required />
+                    <Input id="email" name="email" type="email" value={newAdminData.email} onChange={handleInputChange} placeholder="jean.dupont@email.com" aria-label="Saisir l'email de l'administrateur" required />
+                  </div>
+                   <div className="grid gap-2">
+                    <Label htmlFor="password">Mot de passe</Label>
+                    <Input id="password" name="password" type="password" value={newAdminData.password} onChange={handleInputChange} aria-label="Saisir le mot de passe de l'administrateur, saisie masquée" required />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="role">Rôle / Poste</Label>
-                    <Input id="role" name="role" placeholder="Président" aria-label="Saisir le rôle de l'administrateur" />
+                    <Input id="role" name="role" value={newAdminData.role} onChange={handleInputChange} placeholder="Président" aria-label="Saisir le rôle de l'administrateur" />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Ajouter l'administrateur</Button>
+                  <Button type="submit" aria-label={`Enregistrer le compte administrateur de ${newAdminData.prenom} ${newAdminData.nom}`}>Ajouter l'administrateur</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -103,15 +116,15 @@ export default function AdminPage() {
               {administrateurs.length > 0 ? (
                 administrateurs.map((admin) => (
                   <TableRow key={admin.id}>
-                    <TableCell className="font-medium">{admin.nom}</TableCell>
+                    <TableCell className="font-medium">{admin.prenom} {admin.nom}</TableCell>
                     <TableCell>{admin.email}</TableCell>
                     <TableCell>{admin.role || 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" aria-label={`Modifier le compte administrateur de ${admin.nom}`}>
+                          <Button variant="outline" size="sm" aria-label={`Modifier le compte administrateur de ${admin.prenom} ${admin.nom}`}>
                            <Pencil className="mr-2 h-4 w-4" /> Modifier
                           </Button>
-                          <Button variant="destructive" size="sm" aria-label={`Supprimer le compte administrateur de ${admin.nom}`}>
+                          <Button variant="destructive" size="sm" aria-label={`Supprimer le compte administrateur de ${admin.prenom} ${admin.nom}`}>
                            <Trash2 className="mr-2 h-4 w-4" /> Supprimer
                           </Button>
                       </div>

@@ -132,7 +132,7 @@ export const inscriptions: Inscription[] = [
 export const cotisations: Cotisation[] = [];
 
 export const administrateurs: Admin[] = [
-    { id: 'admin-1', nom: 'Gérard Larcher', email: 'gerard.larcher@example.com', role: 'Président' }
+    { id: 'admin-1', prenom: 'Gérard', nom: 'Larcher', email: 'gerard.larcher@example.com', role: 'Président' }
 ];
 
 export const logsAdmin: LogAdmin[] = [
