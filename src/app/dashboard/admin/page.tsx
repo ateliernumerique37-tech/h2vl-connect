@@ -8,8 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PlusCircle, Pencil, Trash2 } from "lucide-react";
 import { administrateurs, logsAdmin } from "@/lib/placeholder-data";
 
 export default function AdminPage() {
@@ -39,9 +38,7 @@ export default function AdminPage() {
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -49,20 +46,15 @@ export default function AdminPage() {
                 <TableRow key={admin.id}>
                   <TableCell className="font-medium">{admin.nom}</TableCell>
                   <TableCell>{admin.email}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Ouvrir le menu d'actions</span>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" aria-label={`Modifier les permissions de ${admin.nom}`}>
+                           <Pencil className="mr-2 h-4 w-4" /> Modifier
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Modifier les permissions</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">Supprimer</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        <Button variant="destructive" size="sm" aria-label={`Supprimer l'administrateur ${admin.nom}`}>
+                           <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                        </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
