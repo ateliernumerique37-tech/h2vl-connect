@@ -17,7 +17,7 @@ import { Logo } from "@/components/icons";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, writeBatch } from "firebase/firestore";
 import { useAuth, useFirestore } from "@/firebase";
 
 export default function SignupPage() {
@@ -50,15 +50,41 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Step 2: Create admin document in Firestore
-      // Corrected collection path to 'admins' as per your service logic.
-      await setDoc(doc(db, "admins", user.uid), {
+      // Step 2: Create admin and adherent documents in a single transaction
+      const batch = writeBatch(db);
+
+      // Create admin document
+      const adminRef = doc(db, "admins", user.uid);
+      batch.set(adminRef, {
         authUid: user.uid,
         prenom: firstName,
         nom: lastName,
         email: email,
         role: 'Administrateur',
       });
+      
+      // Create adherent document
+      const adherentRef = doc(db, "adherents", user.uid);
+       batch.set(adherentRef, {
+          id: user.uid,
+          authUid: user.uid,
+          prenom: firstName,
+          nom: lastName,
+          email: email,
+          dateInscription: new Date().toISOString(),
+          telephone: '',
+          adresse: '',
+          dateNaissance: '',
+          genre: 'Autre',
+          estMembreBureau: true,
+          estBenevole: false,
+          estMembreFaaf: false,
+          accordeDroitImage: false,
+          cotisationAJour: false,
+       });
+
+      await batch.commit();
+
 
       toast({
         title: "Inscription réussie !",

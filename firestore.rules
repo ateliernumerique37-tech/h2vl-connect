@@ -17,6 +17,7 @@
  *   which are publicly readable by anyone.
  * - /admins/{adminId}: A special collection where the existence of a document
  *   grants a user administrative rights across the database.
+ * - /logs_admin/{logId}: Contains audit logs of administrative actions.
  *
  * Key Security Decisions:
  * - Admin Access: A user is considered an administrator if a document with their
@@ -97,6 +98,19 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
+    
+    /**
+     * @description Audit trail for admin actions. Only admins can create and read logs.
+     * @path /logs_admin/{logId}
+     * @allow (read, list, create) Any administrator can read and create logs.
+     * @deny (update, delete) Logs are immutable.
+     * @principle Secures the audit trail to be append-only and readable only by authorized personnel.
+     */
+    match /logs_admin/{logId} {
+        allow read, list: if isAdmin();
+        allow create: if isAdmin();
+        allow update, delete: if false;
+    }
 
     /**
      * @description Publicly readable event information. Writes are restricted to admins.
@@ -144,4 +158,3 @@ service cloud.firestore {
     }
   }
 }
-    
