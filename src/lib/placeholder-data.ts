@@ -7,7 +7,10 @@ export const adherents: Adherent[] = [
     prenom: 'Jean',
     email: 'jean.dupont@email.com',
     telephone: '0612345678',
-    date_inscription: '2023-01-15T10:00:00.000Z',
+    adresse: '123 Rue de la République, 69001 Lyon',
+    dateNaissance: '1985-05-20T00:00:00.000Z',
+    genre: 'H',
+    dateInscription: '2023-01-15T10:00:00.000Z',
   },
   {
     id: 'user-2',
@@ -15,7 +18,10 @@ export const adherents: Adherent[] = [
     prenom: 'Marie',
     email: 'marie.martin@email.com',
     telephone: '0687654321',
-    date_inscription: '2023-02-20T14:30:00.000Z',
+    adresse: '456 Avenue des Champs-Élysées, 75008 Paris',
+    dateNaissance: '1992-11-30T00:00:00.000Z',
+    genre: 'F',
+    dateInscription: '2023-02-20T14:30:00.000Z',
   },
   {
     id: 'user-3',
@@ -23,7 +29,10 @@ export const adherents: Adherent[] = [
     prenom: 'Paul',
     email: 'paul.bernard@email.com',
     telephone: '0611223344',
-    date_inscription: '2023-03-10T09:00:00.000Z',
+    adresse: '789 Boulevard de la Liberté, 59000 Lille',
+    dateNaissance: '1978-03-12T00:00:00.000Z',
+    genre: 'H',
+    dateInscription: '2023-03-10T09:00:00.000Z',
   },
 ];
 

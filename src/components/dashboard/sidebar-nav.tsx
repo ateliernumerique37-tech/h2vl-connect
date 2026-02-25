@@ -10,19 +10,19 @@ import {
   SidebarMenuButton,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/icons";
-import { Button } from "../ui/button";
 
 const menuItems = [
   {
     href: "/dashboard/events",
     icon: CalendarDays,
     label: "Événements",
+  },
+  {
+    href: "/dashboard/adherents",
+    icon: Users,
+    label: "Adhérents",
   },
   {
     href: "/dashboard/profile",
@@ -53,20 +53,19 @@ export function SidebarNav() {
         <SidebarMenu>
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname.startsWith(item.href)}
-                tooltip={{
-                  children: item.label,
-                  "aria-label": item.label,
-                }}
-                aria-label={item.label}
-              >
-                <Link href={item.href}>
+              <Link href={item.href} passHref legacyBehavior>
+                <SidebarMenuButton
+                  isActive={pathname.startsWith(item.href)}
+                  tooltip={{
+                    children: item.label,
+                    "aria-label": item.label,
+                  }}
+                  aria-label={item.label}
+                >
                   <item.icon />
                   <span>{item.label}</span>
-                </Link>
-              </SidebarMenuButton>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>

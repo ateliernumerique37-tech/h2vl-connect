@@ -44,7 +44,7 @@ export function MembersTable({ data }: MembersTableProps) {
                 <TableCell className="font-medium">{adherent.prenom} {adherent.nom}</TableCell>
                 <TableCell>{adherent.email}</TableCell>
                 <TableCell>{adherent.telephone}</TableCell>
-                <TableCell>{new Date(adherent.date_inscription).toLocaleDateString('fr-FR')}</TableCell>
+                <TableCell>{new Date(adherent.dateInscription).toLocaleDateString('fr-FR')}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

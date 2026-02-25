@@ -1,10 +1,13 @@
 export interface Adherent {
   id: string;
-  nom: string;
   prenom: string;
+  nom: string;
   email: string;
   telephone: string;
-  date_inscription: string; // ISO string format
+  adresse: string;
+  dateNaissance: string; // ISO string
+  genre: 'H' | 'F' | 'Autre';
+  dateInscription: string; // ISO string
 }
 
 export interface Evenement {
