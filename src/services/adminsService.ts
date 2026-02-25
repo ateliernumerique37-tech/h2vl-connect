@@ -1,7 +1,7 @@
 'use client';
-import { collection, getDocs, doc, setDoc, deleteDoc, type Firestore, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, type Firestore } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, type Auth } from 'firebase/auth';
-import type { Admin, Adherent } from '@/lib/types';
+import type { Admin } from '@/lib/types';
 
 export async function getAdmins(db: Firestore): Promise<Admin[]> {
     const adminsCollection = collection(db, 'admins');
@@ -13,32 +13,9 @@ export async function addAdmin(db: Firestore, auth: Auth, adminData: Omit<Admin,
     const userCredential = await createUserWithEmailAndPassword(auth, adminData.email, password);
     const user = userCredential.user;
     
-    const batch = writeBatch(db);
-
     // Create admin document
     const adminDocRef = doc(db, 'admins', user.uid);
-    batch.set(adminDocRef, adminData);
-
-    // Create corresponding adherent document
-    const adherentRef = doc(db, 'adherents', user.uid);
-    const adherentData: Omit<Adherent, 'id'> = {
-        prenom: adminData.prenom,
-        nom: adminData.nom,
-        email: adminData.email,
-        dateInscription: new Date().toISOString(),
-        telephone: '',
-        adresse: '',
-        dateNaissance: '',
-        genre: 'Autre',
-        estMembreBureau: true, // Admins are implicitly bureau members
-        estBenevole: false,
-        estMembreFaaf: false,
-        accordeDroitImage: false,
-        cotisationAJour: true, // Admins should be up-to-date
-    };
-    batch.set(adherentRef, adherentData);
-
-    await batch.commit();
+    await setDoc(adminDocRef, adminData);
 
     return user.uid;
 }

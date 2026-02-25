@@ -124,7 +124,7 @@ service cloud.firestore {
     match /adherents/{adherentId} {
       allow get: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow list: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow create: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      allow create: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow update: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc();
       allow delete: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc();
 
