@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { adherents, evenements, inscriptions } from '@/lib/placeholder-data';
+import type { Adherent, Evenement, Inscription } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -21,6 +21,10 @@ const getAge = (dateString: string) => {
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
 
 export default function StatsPage() {
+    const [adherents, setAdherents] = useState<Adherent[]>([]);
+    const [evenements, setEvenements] = useState<Evenement[]>([]);
+    const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
+
     const currentYear = new Date().getFullYear().toString();
     const [selectedYear, setSelectedYear] = useState(currentYear);
 
@@ -29,7 +33,7 @@ export default function StatsPage() {
         const memberYears = adherents.map(a => new Date(a.dateInscription).getFullYear());
         const allYears = [...eventYears, ...memberYears, new Date().getFullYear()];
         return [...new Set(allYears)].sort((a,b) => b-a).map(String);
-    }, []);
+    }, [adherents, evenements]);
 
     const filteredData = useMemo(() => {
         const yearNum = parseInt(selectedYear);
@@ -70,7 +74,7 @@ export default function StatsPage() {
             averageInscriptions,
         };
 
-    }, [selectedYear]);
+    }, [selectedYear, adherents, evenements, inscriptions]);
 
     return (
         <div className="space-y-6">
@@ -142,9 +146,13 @@ export default function StatsPage() {
                            </ResponsiveContainer>
                         </div>
                         <div className="sr-only" aria-hidden="true">
-                           <p>Répartition par genre:</p>
+                           <p>Détail de la répartition par genre :</p>
                            <ul>
-                            {filteredData.genderChartData.map(d => <li key={d.name}>{d.name}: {d.value}</li>)}
+                            {filteredData.genderChartData.length > 0 ? (
+                                filteredData.genderChartData.map(d => <li key={d.name}>{d.name}: {d.value}</li>)
+                            ) : (
+                                <li>Aucune donnée de genre disponible.</li>
+                            )}
                            </ul>
                         </div>
                     </CardContent>
