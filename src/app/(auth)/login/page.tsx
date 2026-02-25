@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from "react";
@@ -32,15 +31,30 @@ export default function LoginPage() {
       });
       router.push('/dashboard');
     } catch (error: any) {
-      console.error(error);
-      let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        errorMessage = "Identifiants incorrects. Veuillez vérifier votre email et mot de passe.";
+      console.error("Login Error:", error);
+      
+      let descriptiveError = "Une erreur inattendue est survenue. Veuillez réessayer.";
+      if (error.code) {
+          switch (error.code) {
+              case 'auth/user-not-found':
+              case 'auth/wrong-password':
+              case 'auth/invalid-credential':
+                  descriptiveError = "Identifiants incorrects. Veuillez vérifier votre email et mot de passe.";
+                  break;
+              case 'auth/too-many-requests':
+                  descriptiveError = "Accès temporairement désactivé en raison de trop nombreuses tentatives. Réessayez plus tard.";
+                  break;
+              default:
+                  descriptiveError = `Erreur : ${error.message} (code: ${error.code})`;
+          }
+      } else if (error.message) {
+          descriptiveError = error.message;
       }
+
       toast({
         variant: "destructive",
         title: "Échec de la connexion",
-        description: errorMessage,
+        description: descriptiveError,
       });
     } finally {
       setIsLoading(false);

@@ -54,29 +54,34 @@ export default function SignupPage() {
 
     } catch (error: any) {
       console.error("Signup Error:", error);
-      let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
-       if (error.code) {
-            switch (error.code) {
+      
+      let descriptiveError = "Une erreur inattendue est survenue. Veuillez réessayer.";
+      if (error.code) {
+          switch (error.code) {
               case 'auth/email-already-in-use':
-                errorMessage = "Cette adresse email est déjà utilisée.";
-                break;
+                  descriptiveError = "Cette adresse email est déjà utilisée par un autre compte.";
+                  break;
               case 'auth/weak-password':
-                errorMessage = "Le mot de passe doit comporter au moins 6 caractères.";
-                break;
+                  descriptiveError = "Le mot de passe est trop faible. Il doit comporter au moins 6 caractères.";
+                  break;
               case 'auth/invalid-email':
-                errorMessage = "L'adresse email n'est pas valide.";
-                break;
+                  descriptiveError = "L'adresse email n'est pas valide.";
+                  break;
               case 'permission-denied':
-                 errorMessage = "Impossible de créer le profil dans la base de données. Vérifiez les règles de sécurité Firestore.";
-                 break;
+                  descriptiveError = "Échec de la création du profil. Vérifiez les règles de sécurité Firestore.";
+                  break;
               default:
-                errorMessage = "Échec de l'inscription : " + error.message;
-            }
+                  // For any other Firebase error, show the specific message.
+                  descriptiveError = `Erreur : ${error.message} (code: ${error.code})`;
           }
+      } else if (error.message) {
+          descriptiveError = error.message;
+      }
+
       toast({
         variant: "destructive",
         title: "Échec de l'inscription",
-        description: errorMessage,
+        description: descriptiveError,
       });
     } finally {
       setIsLoading(false);
