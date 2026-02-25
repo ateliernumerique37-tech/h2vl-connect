@@ -9,35 +9,65 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { useFormState } from 'react-dom';
-import { generateDescription, type GenerateDescriptionState } from '@/actions/generate-description';
 import AiEventForm from '@/components/admin/ai-event-form';
+import { addEvenement } from '@/services/evenementsService';
+import { addLog } from '@/services/logsService';
+import type { Evenement } from '@/lib/types';
+import { Loader2 } from 'lucide-react';
 
 export default function CreateEventPage() {
     const [necessiteMenu, setNecessiteMenu] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
 
-    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        setIsSubmitting(true);
         const formData = new FormData(event.currentTarget);
-        const data = Object.fromEntries(formData.entries());
         
-        if (data.necessiteMenu === 'on') {
-            const optionsMenu: { [key: string]: string[] } = {};
-            if (data.aperitifs) optionsMenu.aperitifs = (data.aperitifs as string).split(',').map(s => s.trim()).filter(Boolean);
-            if (data.entrees) optionsMenu.entrees = (data.entrees as string).split(',').map(s => s.trim()).filter(Boolean);
-            if (data.plats) optionsMenu.plats = (data.plats as string).split(',').map(s => s.trim()).filter(Boolean);
-            if (data.fromages) optionsMenu.fromages = (data.fromages as string).split(',').map(s => s.trim()).filter(Boolean);
-            if (data.desserts) optionsMenu.desserts = (data.desserts as string).split(',').map(s => s.trim()).filter(Boolean);
-            data.optionsMenu = optionsMenu;
+        try {
+            const newEvent: Omit<Evenement, 'id'> = {
+                titre: formData.get('titre') as string,
+                description: formData.get('description') as string,
+                date: new Date(formData.get('date') as string).toISOString(),
+                lieu: formData.get('lieu') as string,
+                prix: parseFloat(formData.get('prix') as string),
+                imageId: `event-${Math.floor(Math.random() * 6) + 1}`, // Temporary random image
+                necessiteMenu: formData.get('necessiteMenu') === 'on',
+                optionsMenu: {},
+            };
+            
+            if (newEvent.necessiteMenu) {
+                const optionsMenu: { [key: string]: string[] } = {};
+                const aperitifs = formData.get('aperitifs') as string;
+                const entrees = formData.get('entrees') as string;
+                const plats = formData.get('plats') as string;
+                const fromages = formData.get('fromages') as string;
+                const desserts = formData.get('desserts') as string;
+
+                if (aperitifs) optionsMenu.aperitifs = aperitifs.split(',').map(s => s.trim()).filter(Boolean);
+                if (entrees) optionsMenu.entrees = entrees.split(',').map(s => s.trim()).filter(Boolean);
+                if (plats) optionsMenu.plats = plats.split(',').map(s => s.trim()).filter(Boolean);
+                if (fromages) optionsMenu.fromages = fromages.split(',').map(s => s.trim()).filter(Boolean);
+                if (desserts) optionsMenu.desserts = desserts.split(',').map(s => s.trim()).filter(Boolean);
+                newEvent.optionsMenu = optionsMenu;
+            }
+
+            await addEvenement(newEvent);
+            await addLog(`Création de l'événement : ${newEvent.titre}`);
+            
+            toast({
+                title: "Événement créé",
+                description: `L'événement "${newEvent.titre}" a été créé avec succès.`,
+            });
+            router.push('/dashboard/events');
+
+        } catch (error) {
+            console.error("Failed to create event:", error);
+            toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de créer l'événement." });
+            setIsSubmitting(false);
         }
-        console.log('Form data:', data);
-        toast({
-            title: "Événement créé",
-            description: `L'événement "${data.titre}" a été créé avec succès.`,
-        });
-        router.push('/dashboard/events');
     };
     
     return (
@@ -142,7 +172,10 @@ export default function CreateEventPage() {
                 </Card>
 
                 <div className="flex justify-start">
-                    <Button type="submit">Créer l'événement</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Créer l'événement
+                    </Button>
                 </div>
             </form>
         </div>

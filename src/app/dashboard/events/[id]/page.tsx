@@ -2,7 +2,6 @@
 
 import { useParams, notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { adherents, evenements, inscriptions } from '@/lib/placeholder-data';
 import type { Evenement, Adherent, Inscription } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -17,6 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { getEvenementById, deleteEvenement } from '@/services/evenementsService';
+import { getInscriptionsForEvent, addInscription, updateInscription } from '@/services/inscriptionsService';
+import { getAdherents } from '@/services/adherentsService';
+import { addLog } from '@/services/logsService';
 
 function EventDetailSkeleton() {
     return (
@@ -85,7 +88,7 @@ const MenuChoiceSection = ({ category, options, selected, onSelect, eventId }: {
 };
 
 
-function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Evenement; adherentsList: Adherent[]; onRegister: (inscription: Inscription) => void }) {
+function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Evenement; adherentsList: Adherent[]; onRegister: (inscription: Omit<Inscription, 'id' | 'date_inscription'>) => void }) {
     const [selectedAdherentId, setSelectedAdherentId] = useState<string>();
     const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
     const [isOpen, setIsOpen] = useState(false);
@@ -93,12 +96,10 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
     const handleRegister = () => {
         if (!selectedAdherentId) return;
 
-        const newInscription: Inscription = {
-            id: `ins-${new Date().getTime()}`,
+        const newInscription: Omit<Inscription, 'id' | 'date_inscription'> = {
             id_evenement: event.id,
             id_adherent: selectedAdherentId,
             a_paye: false,
-            date_inscription: new Date().toISOString(),
             ...(event.necessiteMenu && { choixMenu: menuChoices })
         };
         onRegister(newInscription);
@@ -146,11 +147,11 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                                 <CardTitle role="header">Choix du Menu</CardTitle>
                             </CardHeader>
                             <CardContent className="p-0 space-y-4">
-                                {event.optionsMenu.aperitifs && <MenuChoiceSection category="Apéritifs" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />}
-                                {event.optionsMenu.entrees && <MenuChoiceSection category="Entrées" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />}
-                                {event.optionsMenu.plats && <MenuChoiceSection category="Plats" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />}
-                                {event.optionsMenu.fromages && <MenuChoiceSection category="Fromages" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />}
-                                {event.optionsMenu.desserts && <MenuChoiceSection category="Desserts" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />}
+                                {event.optionsMenu.aperitifs && event.optionsMenu.aperitifs.length > 0 && <MenuChoiceSection category="Apéritifs" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />}
+                                {event.optionsMenu.entrees && event.optionsMenu.entrees.length > 0 && <MenuChoiceSection category="Entrées" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />}
+                                {event.optionsMenu.plats && event.optionsMenu.plats.length > 0 && <MenuChoiceSection category="Plats" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />}
+                                {event.optionsMenu.fromages && event.optionsMenu.fromages.length > 0 && <MenuChoiceSection category="Fromages" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />}
+                                {event.optionsMenu.desserts && event.optionsMenu.desserts.length > 0 && <MenuChoiceSection category="Desserts" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />}
                             </CardContent>
                         </Card>
                     )}
@@ -170,62 +171,104 @@ export default function EventDetailPage() {
     const { toast } = useToast();
     
     const [event, setEvent] = useState<Evenement | undefined>();
+    const [adherents, setAdherents] = useState<Adherent[]>([]);
     const [eventInscriptions, setEventInscriptions] = useState<(Inscription & { adherent?: Adherent })[]>([]);
     const [loading, setLoading] = useState(true);
     
     useEffect(() => {
-        // In a real app, you would fetch data here based on the id
-        const foundEvent = evenements.find((e) => e.id === id);
-        if (foundEvent) {
-            setEvent(foundEvent);
-            const foundInscriptions = inscriptions
-                .filter(i => i.id_evenement === id)
-                .map(inscription => {
-                    const adherent = adherents.find(a => a.id === inscription.id_adherent);
-                    return { ...inscription, adherent };
-                });
-            setEventInscriptions(foundInscriptions);
-        }
-        const timer = setTimeout(() => setLoading(false), 500); // Simulate loading
-        return () => clearTimeout(timer);
-    }, [id]);
+        if (!id) return;
+        async function fetchEventData() {
+            try {
+                const [eventData, inscriptionsData, adherentsData] = await Promise.all([
+                    getEvenementById(id),
+                    getInscriptionsForEvent(id),
+                    getAdherents()
+                ]);
 
-    const handlePaymentStatusChange = (inscriptionId: string, hasPaid: boolean) => {
-        let adherentName = '';
-        setEventInscriptions(prev => 
-            prev.map(inscription => {
-                if (inscription.id === inscriptionId) {
-                    adherentName = inscription.adherent ? `${inscription.adherent.prenom} ${inscription.adherent.nom}` : 'un adhérent';
-                    return { ...inscription, a_paye: hasPaid };
+                if (eventData) {
+                    setEvent(eventData);
+                    setAdherents(adherentsData);
+                    const populatedInscriptions = inscriptionsData.map(inscription => {
+                        const adherent = adherentsData.find(a => a.id === inscription.id_adherent);
+                        return { ...inscription, adherent };
+                    });
+                    setEventInscriptions(populatedInscriptions);
+                } else {
+                    notFound();
                 }
-                return inscription;
-            })
-        );
-        toast({
-            title: "Statut de paiement mis à jour",
-            description: `Le paiement de ${adherentName} a été marqué comme ${hasPaid ? 'réglé' : 'non réglé'}.`,
-        });
-    };
-    
-    const handleNewRegistration = (newInscription: Inscription) => {
-        const adherent = adherents.find(a => a.id === newInscription.id_adherent);
-        setEventInscriptions(prev => [...prev, { ...newInscription, adherent }]);
-        if (event && adherent) {
+            } catch (error) {
+                console.error("Failed to fetch event data:", error);
+                toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de charger les données.' });
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchEventData();
+    }, [id, toast]);
+
+    const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
+        try {
+            await updateInscription(inscriptionId, { a_paye: hasPaid });
+            let adherentName = '';
+            setEventInscriptions(prev => 
+                prev.map(inscription => {
+                    if (inscription.id === inscriptionId) {
+                        adherentName = inscription.adherent ? `${inscription.adherent.prenom} ${inscription.adherent.nom}` : 'un adhérent';
+                        return { ...inscription, a_paye: hasPaid };
+                    }
+                    return inscription;
+                })
+            );
             toast({
-                title: "Inscription réussie",
-                description: `${adherent.prenom} ${adherent.nom} a été inscrit à l'événement ${event.titre}.`,
+                title: "Statut de paiement mis à jour",
+                description: `Le paiement de ${adherentName} a été marqué comme ${hasPaid ? 'réglé' : 'non réglé'}.`,
             });
+        } catch (error) {
+            console.error("Failed to update payment status:", error);
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de mettre à jour le statut du paiement.' });
         }
     };
     
-    const handleDelete = () => {
-        console.log(`Deleting event ${event?.id}`);
-        toast({
-            title: "Événement supprimé",
-            description: `L'événement "${event?.titre}" a été supprimé.`,
-            variant: 'destructive',
-        });
-        router.push('/dashboard/events');
+    const handleNewRegistration = async (inscriptionData: Omit<Inscription, 'id' | 'date_inscription'>) => {
+        try {
+            const newInscriptionData = {
+                ...inscriptionData,
+                date_inscription: new Date().toISOString()
+            };
+            const newId = await addInscription(newInscriptionData);
+            
+            const adherent = adherents.find(a => a.id === newInscriptionData.id_adherent);
+            const newPopulatedInscription = { ...newInscriptionData, id: newId, adherent };
+
+            setEventInscriptions(prev => [...prev, newPopulatedInscription]);
+            
+            if (event && adherent) {
+                await addLog(`Inscription de ${adherent.prenom} ${adherent.nom} à l'événement ${event.titre}`);
+                toast({
+                    title: "Inscription réussie",
+                    description: `${adherent.prenom} ${adherent.nom} a été inscrit à l'événement ${event.titre}.`,
+                });
+            }
+        } catch (error) {
+            console.error("Failed to register adherent:", error);
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible d\'inscrire l\'adhérent.' });
+        }
+    };
+    
+    const handleDelete = async () => {
+        if (!event) return;
+        try {
+            await deleteEvenement(event.id);
+            await addLog(`Suppression de l'événement : ${event.titre}`);
+            toast({
+                title: "Événement supprimé",
+                description: `L'événement "${event.titre}" a été supprimé.`,
+            });
+            router.push('/dashboard/events');
+        } catch (error) {
+            console.error("Failed to delete event:", error);
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de supprimer l\'événement.' });
+        }
     };
 
     if (loading) {

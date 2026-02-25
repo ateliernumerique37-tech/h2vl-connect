@@ -1,9 +1,10 @@
 'use client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Users, BadgeCheck, Cake } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Adherent } from '@/lib/types';
-import { adherents } from '@/lib/placeholder-data';
+import { getAdherents } from '@/services/adherentsService';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const isBirthdayToday = (dateString: string) => {
     if (!dateString) return false;
@@ -17,7 +18,69 @@ const isBirthdayToday = (dateString: string) => {
     }
 };
 
+function DashboardSkeleton() {
+    return (
+        <div className="space-y-6">
+            <header>
+                <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Tableau de Bord</h1>
+                <p className="text-muted-foreground">
+                    Vue d'ensemble de l'activité de votre association.
+                </p>
+            </header>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium" role="heading" aria-level={2}>Total des adhérents</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    </CardHeader>
+                    <CardContent>
+                        <Skeleton className="h-8 w-1/4" />
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium" role="heading" aria-level={2}>Adhérents à jour de cotisation</CardTitle>
+                        <BadgeCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    </CardHeader>
+                    <CardContent>
+                        <Skeleton className="h-8 w-1/4" />
+                    </CardContent>
+                </Card>
+            </div>
+             <Card>
+                <CardHeader>
+                    <CardTitle role="heading" aria-level={2} className="flex items-center gap-2">
+                        <Cake className="h-6 w-6 text-primary" aria-hidden="true" />
+                        Anniversaires du jour
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-1/2" />
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    )
+}
+
 export default function DashboardHomePage() {
+    const [adherents, setAdherents] = useState<Adherent[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchAdherents() {
+            try {
+                const data = await getAdherents();
+                setAdherents(data);
+            } catch (error) {
+                console.error("Failed to fetch adherents:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchAdherents();
+    }, []);
 
     const totalAdherents = adherents.length;
     const adherentsAJour = adherents.filter(a => a.cotisationAJour).length;
@@ -25,6 +88,10 @@ export default function DashboardHomePage() {
     const birthdayAdherents = useMemo(() => {
         return adherents.filter(adherent => isBirthdayToday(adherent.dateNaissance));
     }, [adherents]);
+    
+    if (loading) {
+        return <DashboardSkeleton />;
+    }
 
     return (
         <div className="space-y-6">

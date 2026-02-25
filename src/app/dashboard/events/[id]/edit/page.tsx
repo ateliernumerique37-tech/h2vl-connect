@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, notFound, useRouter } from 'next/navigation';
-import { evenements } from '@/lib/placeholder-data';
+import { getEvenementById, updateEvenement } from '@/services/evenementsService';
+import { addLog } from '@/services/logsService';
 import type { Evenement } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -11,6 +12,46 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function EditEventSkeleton() {
+    return (
+         <div className="space-y-6">
+            <header>
+                 <Skeleton className="h-9 w-1/2" />
+                 <Skeleton className="h-4 w-3/4 mt-2" />
+            </header>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle><Skeleton className="h-7 w-1/3" /></CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-1/4" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                     <div className="space-y-2">
+                        <Skeleton className="h-4 w-1/4" />
+                        <Skeleton className="h-20 w-full" />
+                    </div>
+                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
+                        <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
+                    </div>
+                     <div className="space-y-2">
+                        <Skeleton className="h-4 w-1/4" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                </CardContent>
+            </Card>
+             <div className="flex justify-start">
+                <Skeleton className="h-10 w-48" />
+            </div>
+        </div>
+    )
+}
 
 export default function EditEventPage() {
     const params = useParams();
@@ -18,9 +59,8 @@ export default function EditEventPage() {
     const id = params.id as string;
     const { toast } = useToast();
 
-    const [event, setEvent] = useState<Evenement | undefined>();
     const [loading, setLoading] = useState(true);
-    const [necessiteMenu, setNecessiteMenu] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     // State for form fields
     const [titre, setTitre] = useState('');
@@ -28,6 +68,7 @@ export default function EditEventPage() {
     const [date, setDate] = useState('');
     const [lieu, setLieu] = useState('');
     const [prix, setPrix] = useState('0');
+    const [necessiteMenu, setNecessiteMenu] = useState(false);
     const [aperitifs, setAperitifs] = useState('');
     const [entrees, setEntrees] = useState('');
     const [plats, setPlats] = useState('');
@@ -36,62 +77,84 @@ export default function EditEventPage() {
 
 
     useEffect(() => {
-        const foundEvent = evenements.find((e) => e.id === id);
-        if (foundEvent) {
-            setEvent(foundEvent);
-            setTitre(foundEvent.titre);
-            setDescription(foundEvent.description);
-            // Format date for datetime-local input
-            const d = new Date(foundEvent.date);
-            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-            setDate(d.toISOString().slice(0, 16));
-            
-            setLieu(foundEvent.lieu);
-            setPrix(foundEvent.prix.toString());
-            setNecessiteMenu(foundEvent.necessiteMenu || false);
-            if (foundEvent.optionsMenu) {
-                setAperitifs(foundEvent.optionsMenu.aperitifs?.join(', ') || '');
-                setEntrees(foundEvent.optionsMenu.entrees?.join(', ') || '');
-                setPlats(foundEvent.optionsMenu.plats?.join(', ') || '');
-                setFromages(foundEvent.optionsMenu.fromages?.join(', ') || '');
-                setDesserts(foundEvent.optionsMenu.desserts?.join(', ') || '');
+        if (!id) return;
+        async function fetchEvent() {
+            try {
+                const foundEvent = await getEvenementById(id);
+                if (foundEvent) {
+                    setTitre(foundEvent.titre);
+                    setDescription(foundEvent.description);
+                    // Format date for datetime-local input
+                    const d = new Date(foundEvent.date);
+                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                    setDate(d.toISOString().slice(0, 16));
+                    
+                    setLieu(foundEvent.lieu);
+                    setPrix(foundEvent.prix.toString());
+                    setNecessiteMenu(foundEvent.necessiteMenu || false);
+                    if (foundEvent.optionsMenu) {
+                        setAperitifs(foundEvent.optionsMenu.aperitifs?.join(', ') || '');
+                        setEntrees(foundEvent.optionsMenu.entrees?.join(', ') || '');
+                        setPlats(foundEvent.optionsMenu.plats?.join(', ') || '');
+                        setFromages(foundEvent.optionsMenu.fromages?.join(', ') || '');
+                        setDesserts(foundEvent.optionsMenu.desserts?.join(', ') || '');
+                    }
+                } else {
+                    notFound();
+                }
+            } catch (error) {
+                console.error("Failed to fetch event:", error);
+                toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de charger les données de l\'événement.' });
+            } finally {
+                setLoading(false);
             }
         }
-        setLoading(false);
-    }, [id]);
+        fetchEvent();
+    }, [id, toast]);
 
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setIsSubmitting(true);
         
-        console.log('Form data submitted:', {
-            titre,
-            description,
-            date,
-            lieu,
-            prix,
-            necessiteMenu,
-            aperitifs,
-            entrees,
-            plats,
-            fromages,
-            desserts,
-        });
+        try {
+            const updatedEvent: Partial<Evenement> = {
+                titre,
+                description,
+                date: new Date(date).toISOString(),
+                lieu,
+                prix: parseFloat(prix),
+                necessiteMenu,
+            };
 
-        toast({
-            title: "Événement modifié",
-            description: `L'événement "${titre}" a été mis à jour.`,
-        });
-        
-        router.push(`/dashboard/events/${id}`);
+            if (necessiteMenu) {
+                updatedEvent.optionsMenu = {
+                    aperitifs: aperitifs.split(',').map(s => s.trim()).filter(Boolean),
+                    entrees: entrees.split(',').map(s => s.trim()).filter(Boolean),
+                    plats: plats.split(',').map(s => s.trim()).filter(Boolean),
+                    fromages: fromages.split(',').map(s => s.trim()).filter(Boolean),
+                    desserts: desserts.split(',').map(s => s.trim()).filter(Boolean),
+                };
+            }
+
+            await updateEvenement(id, updatedEvent);
+            await addLog(`Modification de l'événement : ${titre}`);
+
+            toast({
+                title: "Événement modifié",
+                description: `L'événement "${titre}" a été mis à jour.`,
+            });
+            
+            router.push(`/dashboard/events/${id}`);
+        } catch (error) {
+            console.error("Failed to update event:", error);
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de modifier l\'événement.' });
+            setIsSubmitting(false);
+        }
     };
 
     if (loading) {
-        return <p>Chargement...</p>; // Or a skeleton component
-    }
-
-    if (!event) {
-        return notFound();
+        return <EditEventSkeleton />;
     }
     
     return (
@@ -182,7 +245,10 @@ export default function EditEventPage() {
             </Card>
 
             <div className="flex justify-start">
-                <Button type="submit">Enregistrer les modifications</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Enregistrer les modifications
+                </Button>
             </div>
         </form>
     );

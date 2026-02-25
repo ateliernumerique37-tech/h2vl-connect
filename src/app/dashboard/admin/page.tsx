@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -11,8 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Pencil, Trash2 } from "lucide-react";
-import { administrateurs as mockAdmins, logsAdmin as mockLogs } from "@/lib/placeholder-data";
+import { PlusCircle, Pencil, Trash2, Loader2 } from "lucide-react";
 import type { Admin, LogAdmin } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -20,46 +19,135 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import AiEventForm from "@/components/admin/ai-event-form";
+import { getAdmins, addAdmin, deleteAdmin } from "@/services/adminsService";
+import { getLogs, addLog } from "@/services/logsService";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function AdminPageSkeleton() {
+    return (
+        <div className="space-y-6">
+            <header>
+                <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Tableau de bord Administrateur</h1>
+                <p className="text-muted-foreground">
+                    Gérez les accès, consultez l'historique des actions et utilisez les outils IA.
+                </p>
+            </header>
+            <AiEventForm />
+            <Card>
+                 <CardHeader className="flex flex-row items-center justify-between">
+                     <div>
+                        <CardTitle role="heading" aria-level={2}>Gestion des administrateurs</CardTitle>
+                        <CardDescription>Ajoutez, modifiez ou supprimez les administrateurs.</CardDescription>
+                    </div>
+                    <Skeleton className="h-10 w-36" />
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-2">
+                        {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle role="heading" aria-level={2}>Journal d'audit</CardTitle>
+                    <CardDescription>Historique des actions réalisées sur la plateforme.</CardDescription>
+                </CardHeader>
+                 <CardContent>
+                    <div className="space-y-2">
+                        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    )
+}
 
 export default function AdminPage() {
-  const [administrateurs, setAdministrateurs] = useState<Admin[]>(mockAdmins);
-  const [logsAdmin, setLogsAdmin] = useState<LogAdmin[]>(mockLogs);
+  const [administrateurs, setAdministrateurs] = useState<Admin[]>([]);
+  const [logsAdmin, setLogsAdmin] = useState<LogAdmin[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
   const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  
+  useEffect(() => {
+    async function fetchData() {
+        try {
+            const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
+            setAdministrateurs(adminsData);
+            setLogsAdmin(logsData);
+        } catch (error) {
+            console.error(error);
+            toast({ variant: 'destructive', title: "Erreur", description: "Impossible de charger les données administrateur." });
+        } finally {
+            setLoading(false);
+        }
+    }
+    fetchData();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
   };
 
-  const handleAddAdmin = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAddAdmin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const newAdmin: Admin = {
-      id: `admin-${new Date().getTime()}`,
-      prenom: newAdminData.prenom,
-      nom: newAdminData.nom,
-      email: newAdminData.email,
-      role: newAdminData.role,
-    };
-    setAdministrateurs(prev => [...prev, newAdmin]);
-    setIsAddAdminDialogOpen(false);
-    toast({
-      title: "Administrateur ajouté",
-      description: `Le compte pour ${newAdmin.prenom} ${newAdmin.nom} a été créé.`,
-    });
-    setNewAdminData({ prenom: '', nom: '', email: '', role: '', password: '' });
+    setIsSubmitting(true);
+    try {
+        const { password, ...adminInfo } = newAdminData;
+        await addAdmin(adminInfo, password);
+        await addLog(`Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
+        
+        // Refresh data
+        const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
+        setAdministrateurs(adminsData);
+        setLogsAdmin(logsData);
+
+        setIsAddAdminDialogOpen(false);
+        toast({
+            title: "Administrateur ajouté",
+            description: `Le compte pour ${adminInfo.prenom} ${adminInfo.nom} a été créé.`,
+        });
+        setNewAdminData({ prenom: '', nom: '', email: '', role: '', password: '' });
+    } catch (error: any) {
+        console.error(error);
+        toast({
+            variant: "destructive",
+            title: "Erreur",
+            description: error.message || "Impossible d'ajouter l'administrateur."
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   }
   
-  const handleDeleteAdmin = (adminId: string) => {
-    const adminToDelete = administrateurs.find(a => a.id === adminId);
-    setAdministrateurs(prev => prev.filter(admin => admin.id !== adminId));
-    if (adminToDelete) {
+  const handleDeleteAdmin = async (admin: Admin) => {
+    try {
+        await deleteAdmin(admin.id);
+        await addLog(`Suppression de l'administrateur : ${admin.prenom} ${admin.nom}`);
+        
+        // Refresh data
+        const [adminsData, logsData] = await Promise.all([getAdmins(), getLogs()]);
+        setAdministrateurs(adminsData);
+        setLogsAdmin(logsData);
+
         toast({
             title: "Administrateur supprimé",
-            description: `Le compte de ${adminToDelete.prenom} ${adminToDelete.nom} a été supprimé.`,
-            variant: 'destructive'
+            description: `Le compte de ${admin.prenom} ${admin.nom} a été supprimé.`,
+        });
+    } catch (error: any) {
+        console.error(error);
+        toast({
+            variant: 'destructive',
+            title: "Erreur de suppression",
+            description: error.message || "Impossible de supprimer l'administrateur."
         });
     }
+  }
+  
+  if (loading) {
+      return <AdminPageSkeleton />;
   }
 
   return (
@@ -117,7 +205,10 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit" aria-label={`Enregistrer le compte administrateur de ${newAdminData.prenom} ${newAdminData.nom}`}>Ajouter l'administrateur</Button>
+                  <Button type="submit" disabled={isSubmitting} aria-label={`Enregistrer le compte administrateur de ${newAdminData.prenom} ${newAdminData.nom}`}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Ajouter l'administrateur
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -156,12 +247,12 @@ export default function AdminPage() {
                                     <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                     Cette action est irréversible. Elle supprimera définitivement le compte administrateur de
-                                    <span className="font-semibold"> {admin.prenom} {admin.nom}</span>.
+                                    <span className="font-semibold"> {admin.prenom} {admin.nom}</span> de la base de données (mais pas de l'authentification Firebase).
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteAdmin(admin.id)}>Continuer</AlertDialogAction>
+                                    <AlertDialogAction onClick={() => handleDeleteAdmin(admin)}>Continuer</AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>

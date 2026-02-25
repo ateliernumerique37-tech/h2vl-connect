@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Adherent, Evenement, Inscription } from '@/lib/types';
-import { adherents, evenements, inscriptions } from '@/lib/placeholder-data';
+import { getAdherents } from '@/services/adherentsService';
+import { getEvenements } from '@/services/evenementsService';
+import { getInscriptions } from '@/services/inscriptionsService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -21,9 +24,67 @@ const getAge = (dateString: string) => {
 
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
 
+function StatsPageSkeleton() {
+    return (
+         <div className="space-y-6">
+            <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                 <div>
+                    <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Statistiques de l'Association</h1>
+                    <p className="text-muted-foreground">Analyse des données clés de l'association.</p>
+                </div>
+                <div className="w-full sm:w-auto">
+                    <Skeleton className="h-10 w-[180px]" />
+                </div>
+            </header>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(3)].map(i => <Card key={i}><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-8 w-1/3" /></CardContent></Card>)}
+            </div>
+            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+                <Card>
+                    <CardHeader><CardTitle>Répartition par genre</CardTitle></CardHeader>
+                    <CardContent><div className="h-[250px] w-full flex items-center justify-center"><Skeleton className="h-40 w-40 rounded-full" /></div></CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader><CardTitle>Bilan des événements</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        <div><Skeleton className="h-4 w-1/2 mb-2" /><Skeleton className="h-8 w-1/4" /></div>
+                        <div><Skeleton className="h-4 w-1/2 mb-2" /><Skeleton className="h-8 w-1/4" /></div>
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    )
+}
+
+
 export default function StatsPage() {
+    const [loading, setLoading] = useState(true);
+    const [adherents, setAdherents] = useState<Adherent[]>([]);
+    const [evenements, setEvenements] = useState<Evenement[]>([]);
+    const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
+    
     const currentYear = new Date().getFullYear().toString();
     const [selectedYear, setSelectedYear] = useState(currentYear);
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const [adherentsData, evenementsData, inscriptionsData] = await Promise.all([
+                    getAdherents(),
+                    getEvenements(),
+                    getInscriptions()
+                ]);
+                setAdherents(adherentsData);
+                setEvenements(evenementsData);
+                setInscriptions(inscriptionsData);
+            } catch (error) {
+                console.error("Failed to fetch stats data:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
 
     const years = useMemo(() => {
         const eventYears = evenements.map(e => new Date(e.date).getFullYear());
@@ -72,6 +133,10 @@ export default function StatsPage() {
         };
 
     }, [selectedYear, adherents, evenements, inscriptions]);
+
+    if (loading) {
+        return <StatsPageSkeleton />;
+    }
 
     return (
         <div className="space-y-6">
