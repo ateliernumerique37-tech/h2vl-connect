@@ -1,4 +1,4 @@
-import type { Adherent, Evenement, Inscription } from './types';
+import type { Adherent, Evenement, Inscription, Cotisation } from './types';
 
 export const adherents: Adherent[] = [
   {
@@ -11,6 +11,11 @@ export const adherents: Adherent[] = [
     dateNaissance: '1985-05-20T00:00:00.000Z',
     genre: 'H',
     dateInscription: '2023-01-15T10:00:00.000Z',
+    estMembreBureau: true,
+    estBenevole: true,
+    estMembreFaaf: false,
+    accordeDroitImage: true,
+    cotisationAJour: true,
   },
   {
     id: 'user-2',
@@ -22,6 +27,11 @@ export const adherents: Adherent[] = [
     dateNaissance: '1992-11-30T00:00:00.000Z',
     genre: 'F',
     dateInscription: '2023-02-20T14:30:00.000Z',
+    estMembreBureau: false,
+    estBenevole: true,
+    estMembreFaaf: true,
+    accordeDroitImage: true,
+    cotisationAJour: true,
   },
   {
     id: 'user-3',
@@ -33,7 +43,20 @@ export const adherents: Adherent[] = [
     dateNaissance: '1978-03-12T00:00:00.000Z',
     genre: 'H',
     dateInscription: '2023-03-10T09:00:00.000Z',
+    estMembreBureau: false,
+    estBenevole: false,
+    estMembreFaaf: false,
+    accordeDroitImage: false,
+    cotisationAJour: false,
   },
+];
+
+export const cotisations: Cotisation[] = [
+    { id: 'cot-1', adherentId: 'user-1', annee: 2023, datePaiement: '2023-01-15T00:00:00.000Z', montant: 50 },
+    { id: 'cot-2', adherentId: 'user-1', annee: 2024, datePaiement: '2024-01-20T00:00:00.000Z', montant: 50 },
+    { id: 'cot-3', adherentId: 'user-2', annee: 2023, datePaiement: '2023-02-20T00:00:00.000Z', montant: 50 },
+    { id: 'cot-4', adherentId: 'user-2', annee: 2024, datePaiement: '2024-02-18T00:00:00.000Z', montant: 50 },
+    { id: 'cot-5', adherentId: 'user-3', annee: 2023, datePaiement: '2023-03-10T00:00:00.000Z', montant: 50 },
 ];
 
 export const evenements: Evenement[] = [

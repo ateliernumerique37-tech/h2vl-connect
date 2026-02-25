@@ -8,6 +8,11 @@ export interface Adherent {
   dateNaissance: string; // ISO string
   genre: 'H' | 'F' | 'Autre';
   dateInscription: string; // ISO string
+  estMembreBureau: boolean;
+  estBenevole: boolean;
+  estMembreFaaf: boolean;
+  accordeDroitImage: boolean;
+  cotisationAJour: boolean;
 }
 
 export interface Evenement {
@@ -26,4 +31,12 @@ export interface Inscription {
   id_adherent: string;
   a_paye: boolean;
   date_inscription: string; // ISO string format
+}
+
+export interface Cotisation {
+  id: string;
+  adherentId: string;
+  annee: number | string;
+  datePaiement: string; // ISO string
+  montant: number;
 }
