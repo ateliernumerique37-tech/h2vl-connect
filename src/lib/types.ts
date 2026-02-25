@@ -23,6 +23,14 @@ export interface Evenement {
   lieu: string;
   prix: number;
   imageId: string;
+  necessiteMenu?: boolean;
+  optionsMenu?: {
+    aperitifs?: string[];
+    entrees?: string[];
+    plats?: string[];
+    fromages?: string[];
+    desserts?: string[];
+  };
 }
 
 export interface Inscription {
@@ -31,6 +39,13 @@ export interface Inscription {
   id_adherent: string;
   a_paye: boolean;
   date_inscription: string; // ISO string format
+  choixMenu?: {
+    aperitifChoisi?: string;
+    entreeChoisie?: string;
+    platChoisi?: string;
+    fromageChoisi?: string;
+    dessertChoisi?: string;
+  };
 }
 
 export interface Cotisation {

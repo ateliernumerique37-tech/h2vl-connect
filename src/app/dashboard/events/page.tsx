@@ -2,6 +2,7 @@ import { EventCard } from "@/components/event-card";
 import { evenements as allEvents } from "@/lib/placeholder-data";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
+import Link from "next/link";
 
 export default function EventsPage() {
   return (
@@ -13,12 +14,14 @@ export default function EventsPage() {
             Découvrez et inscrivez-vous à nos prochains événements.
           </p>
         </div>
-        <Button
-            aria-label="Créer un nouvel événement"
-        >
-          <PlusCircle className="mr-2 h-4 w-4" aria-hidden="true" />
-          Créer un événement
-        </Button>
+        <Link href="/dashboard/events/create" passHref>
+          <Button
+              aria-label="Créer un nouvel événement"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+            Créer un événement
+          </Button>
+        </Link>
       </div>
 
        {allEvents.length === 0 ? (

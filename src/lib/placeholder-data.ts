@@ -77,6 +77,14 @@ export const evenements: Evenement[] = [
     lieu: 'Espace Co-working, Paris',
     prix: 15,
     imageId: 'event-2',
+    necessiteMenu: true,
+    optionsMenu: {
+      aperitifs: ['Kir', 'Jus de fruit'],
+      entrees: ['Salade composée', 'Verrine de saison'],
+      plats: ['Poulet basquaise et son riz', 'Option végétarienne : Lasagnes aux légumes'],
+      fromages: ['Assiette de fromages locaux', 'Fromage blanc'],
+      desserts: ['Mousse au chocolat', 'Salade de fruits frais'],
+    },
   },
   {
     id: 'evt-3',
@@ -123,6 +131,13 @@ export const inscriptions: Inscription[] = [
     id_adherent: 'user-1',
     a_paye: true,
     date_inscription: '2024-09-01T11:00:00.000Z',
+    choixMenu: {
+      aperitifChoisi: 'Kir',
+      entreeChoisie: 'Salade composée',
+      platChoisi: 'Poulet basquaise et son riz',
+      fromageChoisi: 'Assiette de fromages locaux',
+      dessertChoisi: 'Mousse au chocolat',
+    }
   },
   {
     id: 'ins-2',
