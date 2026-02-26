@@ -1,65 +1,37 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // --- Helper Functions ---
 
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** 
-     * @description Vérifie si l'utilisateur est un administrateur.
-     * Un administrateur est un utilisateur dont l'UID existe dans la collection 'admins'.
-     */
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // --- Collection Rules ---
-
-    /**
-     * @description Profils Administrateurs.
-     * Un utilisateur doit pouvoir lire son propre document pour que l'AuthGuard fonctionne.
-     * L'existence d'un document ici octroie les privilèges d'administration.
-     */
     match /admins/{userId} {
-      allow get, create: if isSignedIn() && request.auth.uid == userId;
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId;
       allow list, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Adhérents. Accès réservé aux administrateurs.
-     */
     match /adherents/{adherentId} {
       allow read, write: if isAdmin();
     }
 
-    /**
-     * @description Événements. Lisibles par les administrateurs.
-     */
     match /evenements/{evenementId} {
       allow read, write: if isAdmin();
     }
 
-    /**
-     * @description Inscriptions. Gérées par les administrateurs.
-     */
     match /inscriptions/{inscriptionId} {
       allow read, write: if isAdmin();
     }
 
-    /**
-     * @description Cotisations. Gestion exclusive par les administrateurs.
-     */
     match /cotisations/{cotisationId} {
       allow read, write: if isAdmin();
     }
 
-    /**
-     * @description Logs d'audit.
-     */
     match /logs_admin/{logId} {
       allow read, write: if isAdmin();
     }

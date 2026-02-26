@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -14,27 +13,14 @@ function DashboardSkeleton() {
     return (
         <div className="flex h-screen w-full">
             <div className="hidden w-64 flex-col border-r bg-background p-4 md:flex">
-                <div className="mb-8 flex items-center gap-2">
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-6 w-32" />
-                </div>
+                <Skeleton className="h-8 w-32 mb-8" />
                 <div className="space-y-2">
                     {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
                 </div>
             </div>
-            <div className="flex flex-1 flex-col">
-                <header className="flex h-14 items-center justify-end gap-4 border-b bg-background px-6">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                </header>
-                <main className="flex-1 p-8">
-                     <Skeleton className="h-8 w-64 mb-4" />
-                     <Skeleton className="h-4 w-96 mb-8" />
-                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        <Skeleton className="h-28 w-full" />
-                        <Skeleton className="h-28 w-full" />
-                        <Skeleton className="h-28 w-full" />
-                     </div>
-                </main>
+            <div className="flex-1 p-8">
+                 <Skeleton className="h-8 w-64 mb-4" />
+                 <Skeleton className="h-[200px] w-full" />
             </div>
         </div>
     )
@@ -56,8 +42,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [user, isUserLoading, router]);
 
   useEffect(() => {
-    // Audit: Auto-réparation sécurisée du profil admin manquant
-    // On ne lance la réparation que si le chargement initial est fini et qu'aucun doc n'est trouvé
+    // Si l'utilisateur est authentifié mais que son profil n'existe pas en DB, on le crée.
     if (user && db && !isAdminDocLoading && !isHealing && !adminDoc && !adminError) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
@@ -67,35 +52,26 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         nom: '',
         email: user.email,
         role: 'Administrateur',
-      }).finally(() => {
-        // On reste en état "isHealing" jusqu'à ce que le listener useDoc détecte le nouveau document
+      }, { merge: true }).finally(() => {
+        // Le listener useDoc se chargera de mettre à jour adminDoc et donc d'arrêter isHealing
       });
     }
   }, [user, db, adminDoc, isAdminDocLoading, isHealing, adminError]);
 
-  // Fin de la réparation dès que le document admin apparaît
   useEffect(() => {
-    if (adminDoc && isHealing) {
-      setIsHealing(false);
-    }
+    if (adminDoc && isHealing) setIsHealing(false);
   }, [adminDoc, isHealing]);
 
-  // IMPORTANT: On attend que TOUT soit prêt avant d'afficher les enfants (qui font des requêtes Firestore)
-  if (isUserLoading || isAdminDocLoading || isHealing || (!adminDoc && !adminError)) {
+  // Si on a une erreur de permission sur son propre doc admins/UID, on est probablement en train d'initialiser
+  if (isUserLoading || isAdminDocLoading || isHealing || (adminError && !isHealing)) {
     return <DashboardSkeleton />;
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  // Si on a un document admin, on est autorisé
-  if (adminDoc) {
-    return <>{children}</>;
-  }
+  // Si on est reconnu comme admin, on affiche le contenu
+  if (adminDoc) return <>{children}</>;
 
-  // Si après chargement et tentative de réparation, on n'a toujours pas de doc (ex: erreur de permission)
-  // On affiche le skeleton pour éviter le crash en attendant une résolution
   return <DashboardSkeleton />;
 }
 

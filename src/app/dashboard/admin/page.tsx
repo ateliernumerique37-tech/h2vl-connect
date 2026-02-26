@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef } from "react";
@@ -12,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Pencil, Trash2, Loader2, Upload } from "lucide-react";
+import { PlusCircle, Trash2, Loader2, Upload, AlertTriangle } from "lucide-react";
 import type { Admin, LogAdmin, Adherent } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -21,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { addAdmin, deleteAdmin } from "@/services/adminsService";
 import { addLog } from "@/services/logsService";
-import { batchAddAdherents } from "@/services/adherentsService";
+import { batchAddAdherents, deleteAllAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, orderBy } from "firebase/firestore";
@@ -30,36 +29,11 @@ function AdminPageSkeleton() {
     return (
         <div className="space-y-6">
             <header>
-                <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Tableau de bord Administrateur</h1>
-                <p className="text-muted-foreground">
-                    Gérez les accès, consultez l'historique des actions et utilisez les outils IA.
-                </p>
+                <h1 className="text-3xl font-bold tracking-tight">Tableau de bord Administrateur</h1>
+                <p className="text-muted-foreground">Chargement des outils d'administration...</p>
             </header>
-            <Card>
-                 <CardHeader className="flex flex-row items-center justify-between">
-                     <div>
-                        <CardTitle role="heading" aria-level={2}>Gestion des administrateurs</CardTitle>
-                        <CardDescription>Ajoutez, modifiez ou supprimez les administrateurs.</CardDescription>
-                    </div>
-                    <Skeleton className="h-10 w-36" />
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-2">
-                        {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-                    </div>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle role="heading" aria-level={2}>Journal d'audit</CardTitle>
-                    <CardDescription>Historique des actions réalisées sur la plateforme.</CardDescription>
-                </CardHeader>
-                 <CardContent>
-                    <div className="space-y-2">
-                        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-                    </div>
-                </CardContent>
-            </Card>
+            <Skeleton className="h-[200px] w-full" />
+            <Skeleton className="h-[400px] w-full" />
         </div>
     )
 }
@@ -69,17 +43,16 @@ export default function AdminPage() {
   const db = useFirestore();
   const auth = useAuth();
   
-  // Écoute en temps réel des administrateurs
   const adminsQuery = useMemoFirebase(() => query(collection(db, 'admins')), [db]);
   const { data: administrateurs, isLoading: isLoadingAdmins } = useCollection<Admin>(adminsQuery);
 
-  // Écoute en temps réel des logs
   const logsQuery = useMemoFirebase(() => query(collection(db, 'logs_admin'), orderBy('dateAction', 'desc')), [db]);
   const { data: logsAdmin, isLoading: isLoadingLogs } = useCollection<LogAdmin>(logsQuery);
 
   const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
   const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -97,18 +70,10 @@ export default function AdminPage() {
         await addLog(db, auth, `Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
         
         setIsAddAdminDialogOpen(false);
-        toast({
-            title: "Administrateur ajouté",
-            description: `Le compte pour ${adminInfo.prenom} ${adminInfo.nom} a été créé.`,
-        });
+        toast({ title: "Administrateur ajouté", description: `Compte créé pour ${adminInfo.prenom}.` });
         setNewAdminData({ prenom: '', nom: '', email: '', role: '', password: '' });
     } catch (error: any) {
-        console.error(error);
-        toast({
-            variant: "destructive",
-            title: "Erreur",
-            description: error.message || "Impossible d'ajouter l'administrateur."
-        });
+        toast({ variant: "destructive", title: "Erreur", description: error.message });
     } finally {
         setIsSubmitting(false);
     }
@@ -118,295 +83,184 @@ export default function AdminPage() {
     try {
         await deleteAdmin(db, admin.id);
         await addLog(db, auth, `Suppression de l'administrateur : ${admin.prenom} ${admin.nom}`);
-        toast({
-            title: "Administrateur supprimé",
-            description: `Le compte de ${admin.prenom} ${admin.nom} a été supprimé.`,
-        });
+        toast({ title: "Succès", description: "Administrateur supprimé." });
     } catch (error: any) {
-        console.error(error);
-        toast({
-            variant: 'destructive',
-            title: "Erreur de suppression",
-            description: error.message || "Impossible de supprimer l'administrateur."
-        });
+        toast({ variant: 'destructive', title: "Erreur", description: error.message });
+    }
+  }
+
+  const handlePurgeAdherents = async () => {
+    setIsPurging(true);
+    try {
+        await deleteAllAdherents(db);
+        await addLog(db, auth, "Purge complète de la base des adhérents.");
+        toast({ title: "Base nettoyée", description: "Tous les adhérents ont été supprimés." });
+    } catch (error: any) {
+        toast({ variant: "destructive", title: "Erreur de purge", description: error.message });
+    } finally {
+        setIsPurging(false);
     }
   }
 
   const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-
     reader.onload = async (e) => {
       setIsImporting(true);
       const text = e.target?.result as string;
-      let adherentsCount = 0;
-
       try {
         const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
-        if (lines.length < 2) {
-          throw new Error("Le fichier CSV est vide ou ne contient que l'en-tête.");
-        }
-
+        if (lines.length < 2) throw new Error("Fichier vide.");
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
         const rows = lines.slice(1);
-        adherentsCount = rows.length;
-
-        toast({
-          title: "Importation en cours...",
-          description: `Importation de ${adherentsCount} adhérents en cours, veuillez patienter.`,
-        });
-
-        const toBoolean = (value: string | undefined) => (value || '').trim().toLowerCase() === 'oui';
-        
-        const requiredHeaders = ['Prenom', 'Nom', 'Email'];
-        for (const rh of requiredHeaders) {
-            if (!headers.includes(rh)) {
-                throw new Error(`Colonne manquante dans le fichier CSV : ${rh}`);
-            }
-        }
-
         const newAdherents: Omit<Adherent, 'id'>[] = rows.map(row => {
           const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
-          const adherentData: { [key: string]: any } = {};
-          headers.forEach((header, index) => {
-            adherentData[header] = values[index];
-          });
-          
+          const d: any = {};
+          headers.forEach((h, i) => d[h] = values[i]);
           return {
-            prenom: adherentData.Prenom || '',
-            nom: adherentData.Nom || '',
-            email: adherentData.Email || '',
-            telephone: adherentData.Telephone || '',
-            adresse: adherentData.Adresse || '',
-            dateNaissance: adherentData.DateNaissance ? new Date(adherentData.DateNaissance).toISOString() : '',
-            genre: ['H', 'F', 'Autre'].includes(adherentData.Genre) ? adherentData.Genre : 'Autre',
-            dateInscription: adherentData.DateInscription ? new Date(adherentData.DateInscription).toISOString() : new Date().toISOString(),
-            estMembreBureau: toBoolean(adherentData.MembreBureau),
-            estBenevole: toBoolean(adherentData.Benevole),
-            estMembreFaaf: toBoolean(adherentData.MembreFAAF),
-            accordeDroitImage: toBoolean(adherentData.DroitImage),
-            cotisationAJour: toBoolean(adherentData.CotisationAJour),
+            prenom: d.Prenom || '',
+            nom: d.Nom || '',
+            email: d.Email || '',
+            telephone: d.Telephone || '',
+            adresse: d.Adresse || '',
+            dateNaissance: d.DateNaissance ? new Date(d.DateNaissance).toISOString() : '',
+            genre: d.Genre || 'Autre',
+            dateInscription: new Date().toISOString(),
+            estMembreBureau: d.MembreBureau === 'oui',
+            estBenevole: d.Benevole === 'oui',
+            estMembreFaaf: d.MembreFAAF === 'oui',
+            accordeDroitImage: d.DroitImage === 'oui',
+            cotisationAJour: d.CotisationAJour === 'oui',
           };
         });
-
         await batchAddAdherents(db, newAdherents);
-        await addLog(db, auth, `Importation en masse de ${adherentsCount} adhérents via CSV.`);
-
-        toast({
-          title: "Succès",
-          description: `${adherentsCount} adhérents ont été importés avec succès.`,
-        });
-
-      } catch (error: any) {
-        console.error("CSV Import Error:", error);
-        toast({
-          variant: 'destructive',
-          title: "Erreur d'importation",
-          description: error.message || "Impossible d'importer le fichier CSV.",
-        });
+        await addLog(db, auth, `Import de ${newAdherents.length} adhérents.`);
+        toast({ title: "Succès", description: "Importation terminée." });
+      } catch (err: any) {
+        toast({ variant: 'destructive', title: "Erreur CSV", description: err.message });
       } finally {
         setIsImporting(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
       }
     };
-
-    reader.onerror = () => {
-      toast({
-        variant: 'destructive',
-        title: "Erreur de lecture",
-        description: "Impossible de lire le fichier.",
-      });
-      setIsImporting(false);
-    };
-
-    reader.readAsText(file, 'UTF-8');
+    reader.readAsText(file);
   };
   
-  if (isLoadingAdmins || isLoadingLogs) {
-      return <AdminPageSkeleton />;
-  }
+  if (isLoadingAdmins || isLoadingLogs) return <AdminPageSkeleton />;
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Tableau de bord Administrateur</h1>
-        <p className="text-muted-foreground">
-          Gérez les accès, consultez l'historique des actions et utilisez les outils IA.
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">Tableau de bord Administrateur</h1>
+        <p className="text-muted-foreground">Gestion des accès et maintenance de la base.</p>
       </header>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Importer des adhérents</CardTitle>
-          <CardDescription>
-            Ajoutez plusieurs adhérents en même temps à partir d'un fichier CSV.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isImporting}
-            aria-label="Importer une liste d'adhérents à partir d'un fichier CSV"
-          >
-            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            Importer des adhérents via CSV
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={handleFileImport}
-            disabled={isImporting}
-          />
-          <p className="text-sm text-muted-foreground mt-4">
-            Le fichier CSV doit contenir les colonnes : Prenom, Nom, Email, Telephone, Adresse, DateNaissance, Genre, DateInscription, MembreBureau, Benevole, MembreFAAF, DroitImage, CotisationAJour.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle role="heading" aria-level={2}>Gestion des administrateurs</CardTitle>
-            <CardDescription>Ajoutez, modifiez ou supprimez les administrateurs.</CardDescription>
-          </div>
-          <Dialog open={isAddAdminDialogOpen} onOpenChange={setIsAddAdminDialogOpen}>
-            <DialogTrigger asChild>
-              <Button aria-label="Ajouter un nouvel administrateur">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Ajouter un admin
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleAddAdmin}>
-                <DialogHeader>
-                  <DialogTitle>Ajouter un nouvel administrateur</DialogTitle>
-                  <DialogDescription>
-                    Remplissez les informations ci-dessous pour créer un nouvel administrateur.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="prenom">Prénom</Label>
-                    <Input id="prenom" name="prenom" value={newAdminData.prenom} onChange={handleInputChange} placeholder="Jean" aria-label="Saisir le prénom du nouvel administrateur" required />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="nom">Nom</Label>
-                    <Input id="nom" name="nom" value={newAdminData.nom} onChange={handleInputChange} placeholder="Dupont" aria-label="Saisir le nom de l'administrateur" required />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" name="email" type="email" value={newAdminData.email} onChange={handleInputChange} placeholder="jean.dupont@email.com" aria-label="Saisir l'email de l'administrateur" required />
-                  </div>
-                   <div className="grid gap-2">
-                    <Label htmlFor="password">Mot de passe</Label>
-                    <Input id="password" name="password" type="password" value={newAdminData.password} onChange={handleInputChange} aria-label="Saisir le mot de passe de l'administrateur, saisie masquée" required />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="role">Rôle / Poste</Label>
-                    <Input id="role" name="role" value={newAdminData.role} onChange={handleInputChange} placeholder="Président" aria-label="Saisir le rôle de l'administrateur" />
-                  </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+            <CardHeader>
+                <CardTitle>Maintenance</CardTitle>
+                <CardDescription>Outils de gestion de données.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex flex-col gap-2">
+                    <Button onClick={() => fileInputRef.current?.click()} disabled={isImporting} variant="outline">
+                        {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        Importer CSV
+                    </Button>
+                    <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileImport} />
                 </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={isSubmitting} aria-label={`Enregistrer le compte administrateur de ${newAdminData.prenom} ${newAdminData.nom}`}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Ajouter l'administrateur
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Rôle</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {administrateurs && administrateurs.length > 0 ? (
-                administrateurs.map((admin) => (
-                  <TableRow key={admin.id}>
-                    <TableCell className="font-medium">{admin.prenom} {admin.nom}</TableCell>
-                    <TableCell>{admin.email}</TableCell>
-                    <TableCell>{admin.role || 'N/A'}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm" aria-label={`Supprimer le compte administrateur de ${admin.prenom} ${admin.nom}`}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Supprimer
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                    Cette action est irréversible. Elle supprimera définitivement le compte administrateur de
-                                    <span className="font-semibold"> {admin.prenom} {admin.nom}</span> de la base de données.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteAdmin(admin)}>Continuer</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center">Aucun administrateur enregistré.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+                    <div className="flex items-center gap-2 text-destructive font-semibold mb-2">
+                        <AlertTriangle className="h-5 w-5" />
+                        Zone de Danger
+                    </div>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" className="w-full" disabled={isPurging}>
+                                {isPurging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Supprimer TOUS les adhérents
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Action irréversible</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Cette action supprimera définitivement tous les adhérents, cotisations et inscriptions. Êtes-vous sûr ?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction onClick={handlePurgeAdherents} className="bg-destructive text-destructive-foreground">Confirmer la suppression</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Administrateurs</CardTitle>
+                    <CardDescription>Gérer les comptes d'accès.</CardDescription>
+                </div>
+                <Dialog open={isAddAdminDialogOpen} onOpenChange={setIsAddAdminDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button size="icon" variant="ghost"><PlusCircle className="h-5 w-5" /></Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <form onSubmit={handleAddAdmin}>
+                            <DialogHeader><DialogTitle>Nouvel Admin</DialogTitle></DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <Input name="prenom" placeholder="Prénom" required onChange={handleInputChange} />
+                                <Input name="nom" placeholder="Nom" required onChange={handleInputChange} />
+                                <Input name="email" type="email" placeholder="Email" required onChange={handleInputChange} />
+                                <Input name="password" type="password" placeholder="Mot de passe" required onChange={handleInputChange} />
+                                <Input name="role" placeholder="Poste (ex: Président)" onChange={handleInputChange} />
+                            </div>
+                            <DialogFooter>
+                                <Button type="submit" disabled={isSubmitting}>Créer</Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Nom</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {administrateurs?.map(admin => (
+                            <TableRow key={admin.id}>
+                                <TableCell>{admin.prenom} {admin.nom}</TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteAdmin(admin)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+      </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>Journal d'audit</CardTitle>
-          <CardDescription>Historique des actions réalisées sur la plateforme.</CardDescription>
-        </CardHeader>
+        <CardHeader><CardTitle>Journal d'audit</CardTitle></CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Administrateur</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
             <TableBody>
-              {logsAdmin && logsAdmin.length > 0 ? (
-                logsAdmin.map((log) => {
-                 const formattedDate = new Date(log.dateAction).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-                 const accessibilityLabel = `Le ${formattedDate}, l'administrateur ${log.nomAdmin} a réalisé l'action suivante : ${log.actionRealisee}`;
-                 return (
-                    <TableRow key={log.id} aria-label={accessibilityLabel}>
-                        <TableCell>{formattedDate}</TableCell>
-                        <TableCell className="font-medium">{log.nomAdmin}</TableCell>
-                        <TableCell>{log.actionRealisee}</TableCell>
-                    </TableRow>
-                 )
-                })
-              ) : (
-                 <TableRow>
-                  <TableCell colSpan={3} className="text-center" role="text">Aucune action récente.</TableCell>
+              {logsAdmin?.map(log => (
+                <TableRow key={log.id}>
+                    <TableCell className="text-xs text-muted-foreground w-32">{new Date(log.dateAction).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-medium text-sm">{log.nomAdmin}</TableCell>
+                    <TableCell className="text-sm">{log.actionRealisee}</TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </CardContent>
