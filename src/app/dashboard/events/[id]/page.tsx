@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
@@ -139,7 +140,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un membre. Utilisez les flèches du clavier pour naviguer et sélectionner dynamiquement.
+                        Sélectionnez un membre dans la zone de liste. La sélection est dynamique avec les flèches du clavier.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-6 py-4 overflow-y-auto pr-2">
