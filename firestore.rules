@@ -9,52 +9,51 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Vérifie si l'utilisateur est le propriétaire du document
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    // Vérifie si l'utilisateur est un administrateur enregistré
+    // Vérifie si l'utilisateur est un administrateur enregistré dans la collection 'admins'
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // --- Règles des Collections ---
+    // Vérifie si l'utilisateur est le propriétaire du document (basé sur l'UID)
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- Règles par Collection ---
 
     // Collection des Administrateurs
     match /admins/{adminId} {
-      // Un utilisateur peut lire son propre profil ou le créer
+      // Un utilisateur peut lire ou créer son propre document d'admin (nécessaire pour l'auto-réparation)
+      // Les admins existants peuvent tout faire sur cette collection.
       allow get, create: if isOwner(adminId) || isAdmin();
-      // Seul un admin peut lister ou supprimer d'autres admins
       allow list, update, delete: if isAdmin();
     }
-    
-    // Journal d'audit (Logs)
-    match /logs_admin/{logId} {
-      // Les admins peuvent tout faire (lecture/écriture)
-      allow read, list, create: if isAdmin();
-      allow update, delete: if false;
-    }
 
-    // Événements (Publics en lecture, gérés par les admins)
-    match /evenements/{evenementId} {
-      allow get, list: if true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Adhérents (Gérés exclusivement par les admins)
+    // Adhérents (Lecture et écriture réservées aux administrateurs)
     match /adherents/{adherentId} {
-      allow read, list, create, update, delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // Inscriptions (Gérées exclusivement par les admins)
+    // Événements (Publics en lecture pour la découverte, gestion réservée aux admins)
+    match /evenements/{evenementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Inscriptions (Gestion réservée aux administrateurs)
     match /inscriptions/{inscriptionId} {
-      allow read, list, create, update, delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // Cotisations (Gérées exclusivement par les admins)
+    // Cotisations (Gestion réservée aux administrateurs)
     match /cotisations/{cotisationId} {
-      allow read, list, create, update, delete: if isAdmin();
+      allow read, write: if isAdmin();
+    }
+
+    // Journal d'audit (Lecture et création réservées aux administrateurs)
+    match /logs_admin/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
     }
   }
 }
