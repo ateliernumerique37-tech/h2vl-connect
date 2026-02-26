@@ -69,7 +69,8 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeIndex, setActiveIndex] = useState(0);
-    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const listboxId = "adherents-listbox";
+    const inputId = "adherent-search-input";
 
     const filteredAdherents = useMemo(() => {
         if (!adherentsList) return [];
@@ -138,28 +139,40 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un membre pour l'inscrire à cet événement.
+                        Sélectionnez un membre pour l'inscrire à cet événement (Navigation clavier supportée).
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-6 py-4 overflow-y-auto pr-2">
                     <div className="space-y-3">
-                        <Label htmlFor="adherent-search">Choisir l'adhérent</Label>
-                        <div className="relative">
+                        <Label htmlFor={inputId}>Choisir l'adhérent</Label>
+                        <div 
+                          className="relative"
+                          role="combobox"
+                          aria-expanded={isOpen}
+                          aria-haspopup="listbox"
+                          aria-controls={listboxId}
+                        >
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
-                                id="adherent-search"
+                                id={inputId}
                                 placeholder="Rechercher par nom..."
                                 className="pl-9"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                aria-label="Filtrer la liste des adhérents. Utilisez les flèches pour naviguer."
+                                aria-autocomplete="list"
+                                aria-activedescendant={filteredAdherents.length > 0 ? `adherent-option-${filteredAdherents[activeIndex]?.id}` : undefined}
                                 autoComplete="off"
                             />
                         </div>
                         
-                        <ScrollArea className="h-[200px] rounded-md border bg-muted/5" ref={scrollAreaRef}>
-                            <div className="p-2" role="listbox" aria-label="Liste des adhérents disponibles">
+                        <ScrollArea className="h-[200px] rounded-md border bg-muted/5">
+                            <div 
+                              id={listboxId}
+                              className="p-2" 
+                              role="listbox" 
+                              aria-label="Liste des adhérents disponibles"
+                            >
                                 {isLoading ? (
                                     <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement...
@@ -169,10 +182,11 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                                         {filteredAdherents.map((adherent, index) => {
                                             const isSelected = selectedAdherentId === adherent.id;
                                             const isHighlighted = activeIndex === index;
+                                            const optionId = `adherent-option-${adherent.id}`;
                                             return (
-                                                <button
+                                                <div
                                                     key={adherent.id}
-                                                    type="button"
+                                                    id={optionId}
                                                     role="option"
                                                     aria-selected={isSelected}
                                                     onClick={() => {
@@ -180,15 +194,16 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                                                         setActiveIndex(index);
                                                     }}
                                                     className={cn(
-                                                        "flex w-full items-center justify-between rounded-sm px-3 py-2 text-sm transition-colors focus:outline-none",
-                                                        isSelected && "bg-primary/10 text-primary font-medium",
-                                                        isHighlighted && !isSelected && "bg-muted",
-                                                        isHighlighted && isSelected && "bg-primary/20"
+                                                        "flex w-full items-center justify-between rounded-sm px-3 py-3 text-sm transition-colors cursor-pointer",
+                                                        "min-h-[44px]", // WCAG 2.2 Target Size
+                                                        isSelected && "bg-primary text-primary-foreground font-medium",
+                                                        isHighlighted && !isSelected && "bg-muted outline outline-2 outline-primary",
+                                                        isHighlighted && isSelected && "bg-primary/90 outline outline-2 outline-white"
                                                     )}
                                                 >
                                                     <span>{adherent.prenom} {adherent.nom}</span>
                                                     {isSelected && <Check className="h-4 w-4" />}
-                                                </button>
+                                                </div>
                                             );
                                         })}
                                     </div>
