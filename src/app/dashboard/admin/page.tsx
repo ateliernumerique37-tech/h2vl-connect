@@ -1,28 +1,22 @@
 'use client';
 
 import { useState, useRef } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Trash2, Loader2, Upload, AlertTriangle } from "lucide-react";
+import { PlusCircle, Loader2, Upload, AlertTriangle, ShieldCheck } from "lucide-react";
 import type { Admin, LogAdmin, Adherent } from "@/lib/types";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { addAdmin, deleteAdmin } from "@/services/adminsService";
+import { createAdminProfile, updateAdminProfile, deleteAdminProfile } from "@/services/adminsService";
 import { addLog } from "@/services/logsService";
 import { batchAddAdherents, deleteAllAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, orderBy } from "firebase/firestore";
+import { AdminTable } from "@/components/admin/admin-table";
+import { AdminForm } from "@/components/admin/admin-form";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 
 function AdminPageSkeleton() {
     return (
@@ -35,6 +29,7 @@ function AdminPageSkeleton() {
                 <Skeleton className="h-[300px]" />
                 <Skeleton className="h-[300px]" />
             </div>
+            <Skeleton className="h-[400px] w-full" />
         </div>
     )
 }
@@ -42,7 +37,7 @@ function AdminPageSkeleton() {
 export default function AdminPage() {
   const { toast } = useToast();
   const db = useFirestore();
-  const auth = useAuth();
+  const { user } = useUser();
   
   const adminsQuery = useMemoFirebase(() => query(collection(db, 'admins')), [db]);
   const { data: administrateurs, isLoading: isLoadingAdmins } = useCollection<Admin>(adminsQuery);
@@ -50,56 +45,65 @@ export default function AdminPage() {
   const logsQuery = useMemoFirebase(() => query(collection(db, 'logs_admin'), orderBy('dateAction', 'desc')), [db]);
   const { data: logsAdmin, isLoading: isLoadingLogs } = useCollection<LogAdmin>(logsQuery);
 
-  const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
-  const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
+  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+  const [editingAdmin, setEditingAdmin] = useState<Admin | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
+  const handleOpenCreate = () => {
+    setEditingAdmin(undefined);
+    setIsFormDialogOpen(true);
   };
 
-  const handleAddAdmin = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleOpenEdit = (admin: Admin) => {
+    setEditingAdmin(admin);
+    setIsFormDialogOpen(true);
+  };
+
+  const handleSubmitAdmin = async (formData: Omit<Admin, 'id' | 'dateCreation'>) => {
     setIsSubmitting(true);
     try {
-        const { password, ...adminInfo } = newAdminData;
-        await addAdmin(db, auth, adminInfo, password);
-        await addLog(db, auth, `Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
-        setIsAddAdminDialogOpen(false);
-        toast({ title: "Administrateur ajouté" });
-        setNewAdminData({ prenom: '', nom: '', email: '', role: '', password: '' });
+        if (editingAdmin) {
+            await updateAdminProfile(db, editingAdmin.id, formData);
+            await addLog(db, { currentUser: user } as any, `Modification de l'admin : ${formData.prenom} ${formData.nom}`);
+            toast({ title: "Modifications enregistrées" });
+        } else {
+            await createAdminProfile(db, formData);
+            await addLog(db, { currentUser: user } as any, `Création du profil admin : ${formData.prenom} ${formData.nom}`);
+            toast({ title: "Profil administrateur créé", description: "L'utilisateur peut maintenant s'inscrire avec cet email." });
+        }
+        setIsFormDialogOpen(false);
     } catch (error: any) {
         toast({ variant: "destructive", title: "Erreur", description: error.message });
     } finally {
         setIsSubmitting(false);
     }
-  }
-  
+  };
+
   const handleDeleteAdmin = async (admin: Admin) => {
     try {
-        await deleteAdmin(db, admin.id);
-        await addLog(db, auth, `Suppression de l'administrateur : ${admin.prenom} ${admin.nom}`);
-        toast({ title: "Succès", description: "Administrateur supprimé." });
+        await deleteAdminProfile(db, admin.id);
+        await addLog(db, { currentUser: user } as any, `Suppression de l'admin : ${admin.prenom} ${admin.nom}`);
+        toast({ title: "Administrateur supprimé" });
     } catch (error: any) {
         toast({ variant: 'destructive', title: "Erreur", description: error.message });
     }
-  }
+  };
 
   const handlePurgeAdherents = async () => {
     setIsPurging(true);
     try {
         await deleteAllAdherents(db);
-        await addLog(db, auth, "Purge complète de la base des adhérents.");
+        await addLog(db, { currentUser: user } as any, "Purge complète de la base des adhérents.");
         toast({ title: "Base nettoyée", description: "Tous les adhérents ont été supprimés." });
     } catch (error: any) {
         toast({ variant: "destructive", title: "Erreur de purge", description: error.message });
     } finally {
         setIsPurging(false);
     }
-  }
+  };
 
   const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -110,7 +114,7 @@ export default function AdminPage() {
       const text = e.target?.result as string;
       try {
         const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
-        if (lines.length < 2) throw new Error("Fichier vide.");
+        if (lines.length < 2) throw new Error("Fichier vide ou corrompu.");
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
         const rows = lines.slice(1);
         const newAdherents: Omit<Adherent, 'id'>[] = rows.map(row => {
@@ -134,8 +138,8 @@ export default function AdminPage() {
           };
         });
         await batchAddAdherents(db, newAdherents);
-        await addLog(db, auth, `Import de ${newAdherents.length} adhérents.`);
-        toast({ title: "Succès", description: "Importation terminée." });
+        await addLog(db, { currentUser: user } as any, `Import de ${newAdherents.length} adhérents.`);
+        toast({ title: "Importation terminée", description: `${newAdherents.length} adhérents ont été ajoutés.` });
       } catch (err: any) {
         toast({ variant: 'destructive', title: "Erreur CSV", description: err.message });
       } finally {
@@ -149,109 +153,136 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <header>
+      <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">Administration</h1>
-        <p className="text-muted-foreground">Outils de gestion et maintenance.</p>
+        <p className="text-muted-foreground">Gérez les accès, importez des données et consultez le journal d'audit.</p>
       </header>
       
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-            <CardHeader>
-                <CardTitle>Base de données</CardTitle>
-                <CardDescription>Outils de maintenance.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <Button onClick={() => fileInputRef.current?.click()} disabled={isImporting} variant="outline" className="w-full">
-                    {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                    Importer CSV
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-primary" />
+                        Comptes Administrateurs
+                    </CardTitle>
+                    <CardDescription>Liste des personnes autorisées à gérer l'association.</CardDescription>
+                </div>
+                <Button onClick={handleOpenCreate} size="sm">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Nouvel Admin
                 </Button>
-                <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileImport} />
-                
-                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-                    <div className="flex items-center gap-2 text-destructive font-semibold mb-4">
-                        <AlertTriangle className="h-5 w-5" />
-                        Zone de Danger
-                    </div>
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" className="w-full" disabled={isPurging}>
-                                {isPurging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Purger TOUS les adhérents
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Action Irréversible</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Cela supprimera tous les adhérents, cotisations et inscriptions.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction onClick={handlePurgeAdherents} className="bg-destructive">Confirmer la suppression</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                </div>
-            </CardContent>
-        </Card>
-
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>Administrateurs</CardTitle>
-                    <CardDescription>Gestion des accès.</CardDescription>
-                </div>
-                <Dialog open={isAddAdminDialogOpen} onOpenChange={setIsAddAdminDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button size="icon" variant="ghost"><PlusCircle className="h-5 w-5" /></Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <form onSubmit={handleAddAdmin} className="space-y-4 pt-4">
-                            <Input name="prenom" placeholder="Prénom" required onChange={handleInputChange} />
-                            <Input name="nom" placeholder="Nom" required onChange={handleInputChange} />
-                            <Input name="email" type="email" placeholder="Email" required onChange={handleInputChange} />
-                            <Input name="password" type="password" placeholder="Mot de passe" required onChange={handleInputChange} />
-                            <DialogFooter>
-                                <Button type="submit" disabled={isSubmitting}>Créer le compte</Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableBody>
-                        {administrateurs?.map(admin => (
-                            <TableRow key={admin.id}>
-                                <TableCell>{admin.prenom} {admin.nom}</TableCell>
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteAdmin(admin)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                {administrateurs && (
+                    <AdminTable
+                        admins={administrateurs}
+                        currentUserId={user?.uid}
+                        onEdit={handleOpenEdit}
+                        onDelete={handleDeleteAdmin}
+                    />
+                )}
             </CardContent>
         </Card>
+
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Base de données</CardTitle>
+                    <CardDescription>Maintenance et imports.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <Button onClick={() => fileInputRef.current?.click()} disabled={isImporting} variant="outline" className="w-full">
+                        {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        Importer CSV Adhérents
+                    </Button>
+                    <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileImport} />
+                    
+                    <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+                        <div className="flex items-center gap-2 text-destructive font-semibold mb-2">
+                            <AlertTriangle className="h-4 w-4" />
+                            Zone de Danger
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-4">La purge supprimera tous les adhérents, cotisations et inscriptions sans retour possible.</p>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm" className="w-full" disabled={isPurging}>
+                                    {isPurging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Purger tous les Adhérents
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmer la purge totale ?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Cette action est <strong>définitive</strong>. Toutes les données relatives aux adhérents (profils, cotisations, inscriptions aux événements) seront effacées.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handlePurgeAdherents} className="bg-destructive hover:bg-destructive/90">Confirmer la purge</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="h-fit">
+                <CardHeader>
+                    <CardTitle>Dernières Actions</CardTitle>
+                    <CardDescription>Audit en temps réel.</CardDescription>
+                </CardHeader>
+                <CardContent className="px-2">
+                    <div className="max-h-[300px] overflow-y-auto">
+                        <Table>
+                            <TableBody>
+                            {logsAdmin?.slice(0, 10).map(log => (
+                                <TableRow key={log.id} className="hover:bg-transparent">
+                                    <TableCell className="py-2">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-xs font-semibold">{log.nomAdmin}</span>
+                                            <span className="text-sm">{log.actionRealisee}</span>
+                                            <span className="text-[10px] text-muted-foreground">
+                                                {new Date(log.dateAction).toLocaleString('fr-FR')}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {(!logsAdmin || logsAdmin.length === 0) && (
+                                <TableRow>
+                                    <TableCell className="text-center text-muted-foreground py-4 italic text-sm">
+                                        Aucun log disponible.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Journal d'audit</CardTitle></CardHeader>
-        <CardContent>
-          <Table>
-            <TableBody>
-              {logsAdmin?.map(log => (
-                <TableRow key={log.id}>
-                    <TableCell className="text-xs text-muted-foreground w-24">{new Date(log.dateAction).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-medium text-sm">{log.nomAdmin}</TableCell>
-                    <TableCell className="text-sm">{log.actionRealisee}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{editingAdmin ? "Modifier l'Administrateur" : "Ajouter un Administrateur"}</DialogTitle>
+            <DialogDescription>
+                {editingAdmin 
+                    ? `Modifiez les informations de ${editingAdmin.prenom}.` 
+                    : "Créez un profil pour un nouvel administrateur. L'utilisateur devra s'inscrire avec cet email."}
+            </DialogDescription>
+          </DialogHeader>
+          <AdminForm
+            initialData={editingAdmin}
+            onSubmit={handleSubmitAdmin}
+            onCancel={() => setIsFormDialogOpen(false)}
+            isSubmitting={isSubmitting}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

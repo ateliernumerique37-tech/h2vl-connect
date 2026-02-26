@@ -1,16 +1,33 @@
 'use client';
-import { collection, doc, setDoc, deleteDoc, type Firestore } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, type Auth } from 'firebase/auth';
+import { collection, doc, setDoc, deleteDoc, updateDoc, type Firestore, addDoc } from 'firebase/firestore';
 import type { Admin } from '@/lib/types';
 
-export async function addAdmin(db: Firestore, auth: Auth, adminData: Omit<Admin, 'id'>, password: string): Promise<string> {
-    const userCredential = await createUserWithEmailAndPassword(auth, adminData.email, password);
-    const user = userCredential.user;
-    const adminDocRef = doc(db, 'admins', user.uid);
-    await setDoc(adminDocRef, adminData);
-    return user.uid;
+const ADMINS_COLLECTION = 'admins';
+
+/**
+ * Crée un profil administrateur dans Firestore.
+ * Note: L'inscription Auth est gérée séparément pour éviter la déconnexion de l'utilisateur actuel.
+ */
+export async function createAdminProfile(db: Firestore, adminData: Omit<Admin, 'id' | 'dateCreation'>): Promise<string> {
+    const adminRef = collection(db, ADMINS_COLLECTION);
+    const newDoc = await addDoc(adminRef, {
+        ...adminData,
+        dateCreation: new Date().toISOString()
+    });
+    return newDoc.id;
 }
 
-export async function deleteAdmin(db: Firestore, id: string): Promise<void> {
-    await deleteDoc(doc(db, 'admins', id));
+/**
+ * Met à jour un profil administrateur existant.
+ */
+export async function updateAdminProfile(db: Firestore, id: string, updates: Partial<Admin>): Promise<void> {
+    const adminDocRef = doc(db, ADMINS_COLLECTION, id);
+    await updateDoc(adminDocRef, updates);
+}
+
+/**
+ * Supprime un profil administrateur de Firestore.
+ */
+export async function deleteAdminProfile(db: Firestore, id: string): Promise<void> {
+    await deleteDoc(doc(db, ADMINS_COLLECTION, id));
 }

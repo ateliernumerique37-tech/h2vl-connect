@@ -61,7 +61,8 @@ export interface Admin {
   prenom: string;
   nom: string;
   email: string;
-  role?: string;
+  role: 'Administrateur' | 'Super Admin' | 'Éditeur';
+  dateCreation: string; // ISO string
 }
 
 export interface LogAdmin {
