@@ -1,39 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-
-    match /admins/{userId} {
-      allow get: if isSignedIn() && request.auth.uid == userId;
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow list, update, delete: if isAdmin();
-    }
-
-    match /adherents/{adherentId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /evenements/{evenementId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /inscriptions/{inscriptionId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /cotisations/{cotisationId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /logs_admin/{logId} {
-      allow read, write: if isAdmin();
+    // Règle globale simplifiée : tout utilisateur authentifié peut lire et écrire
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

@@ -1,22 +1,21 @@
-
 {
   "entities": {
     "Admin": {
       "title": "Admin",
       "type": "object",
-      "description": "Représente un compte administrateur de la plateforme.",
+      "description": "Profil administrateur.",
       "properties": {
         "prenom": { "type": "string" },
         "nom": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "description": "Titre ou poste (ex: Président)" }
+        "role": { "type": "string" }
       },
       "required": ["prenom", "email"]
     },
     "Adherent": {
       "title": "Adherent",
       "type": "object",
-      "description": "Membre de l'association H2vl.",
+      "description": "Membre de l'association.",
       "properties": {
         "nom": { "type": "string" },
         "prenom": { "type": "string" },
@@ -29,7 +28,7 @@
     "Evenement": {
       "title": "Evenement",
       "type": "object",
-      "description": "Événement organisé par l'association.",
+      "description": "Événement de l'association.",
       "properties": {
         "titre": { "type": "string" },
         "description": { "type": "string" },
@@ -50,6 +49,17 @@
         "date_inscription": { "type": "string", "format": "date-time" }
       },
       "required": ["id_evenement", "id_adherent", "a_paye", "date_inscription"]
+    },
+    "Cotisation": {
+        "title": "Cotisation",
+        "type": "object",
+        "description": "Paiement annuel.",
+        "properties": {
+          "adherentId": { "type": "string" },
+          "annee": { "type": "number" },
+          "datePaiement": { "type": "string", "format": "date-time" },
+          "montant": { "type": "number" }
+        }
     }
   },
   "auth": {
@@ -58,15 +68,15 @@
   "firestore": {
     "/admins/{userId}": {
       "schema": "#/backend/entities/Admin",
-      "description": "Profils des administrateurs. L'existence d'un doc ici donne les droits Admin."
+      "description": "Profils des administrateurs."
     },
     "/adherents/{adherentId}": {
       "schema": "#/backend/entities/Adherent",
-      "description": "Liste des membres gérée par les administrateurs."
+      "description": "Liste des membres."
     },
     "/evenements/{evenementId}": {
       "schema": "#/backend/entities/Evenement",
-      "description": "Événements de l'association."
+      "description": "Événements."
     },
     "/inscriptions/{inscriptionId}": {
       "schema": "#/backend/entities/Inscription",
@@ -74,11 +84,11 @@
     },
     "/cotisations/{cotisationId}": {
       "schema": "#/backend/entities/Cotisation",
-      "description": "Historique des paiements de cotisations."
+      "description": "Cotisations annuelles."
     },
     "/logs_admin/{logId}": {
       "schema": "#/backend/entities/LogAdmin",
-      "description": "Journal d'audit des actions administratives."
+      "description": "Audit des actions."
     }
   }
 }

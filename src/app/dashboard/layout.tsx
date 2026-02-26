@@ -32,18 +32,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const db = useFirestore();
   
   const adminRef = useMemoFirebase(() => user ? doc(db, 'admins', user.uid) : null, [db, user]);
-  const { data: adminDoc, isLoading: isAdminDocLoading, error: adminError } = useDoc(adminRef);
+  const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
 
+  // 1. Redirection si non connecté
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
     }
   }, [user, isUserLoading, router]);
 
+  // 2. Auto-réparation du profil admin si manquant
   useEffect(() => {
-    // Si l'utilisateur est authentifié mais que son profil n'existe pas en DB, on le crée.
-    if (user && db && !isAdminDocLoading && !isHealing && !adminDoc && !adminError) {
+    if (user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
       
@@ -53,26 +54,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         email: user.email,
         role: 'Administrateur',
       }, { merge: true }).finally(() => {
-        // Le listener useDoc se chargera de mettre à jour adminDoc et donc d'arrêter isHealing
+        setIsHealing(false);
       });
     }
-  }, [user, db, adminDoc, isAdminDocLoading, isHealing, adminError]);
+  }, [user, db, adminDoc, isAdminDocLoading, isHealing]);
 
-  useEffect(() => {
-    if (adminDoc && isHealing) setIsHealing(false);
-  }, [adminDoc, isHealing]);
-
-  // Si on a une erreur de permission sur son propre doc admins/UID, on est probablement en train d'initialiser
-  if (isUserLoading || isAdminDocLoading || isHealing || (adminError && !isHealing)) {
+  // Chargement
+  if (isUserLoading || isAdminDocLoading || isHealing) {
     return <DashboardSkeleton />;
   }
 
   if (!user) return null;
 
-  // Si on est reconnu comme admin, on affiche le contenu
-  if (adminDoc) return <>{children}</>;
-
-  return <DashboardSkeleton />;
+  return <>{children}</>;
 }
 
 export default function DashboardLayout({
