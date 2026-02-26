@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check } from 'lucide-react';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
@@ -89,10 +89,6 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
         }
     }, [isOpen]);
 
-    useEffect(() => {
-        setActiveIndex(0);
-    }, [searchTerm]);
-
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (filteredAdherents.length === 0) return;
 
@@ -139,7 +135,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un membre pour l'inscrire à cet événement (Navigation clavier supportée).
+                        Sélectionnez un membre pour l'inscrire à cet événement. Navigation au clavier (flèches + entrée) supportée.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-6 py-4 overflow-y-auto pr-2">
@@ -243,7 +239,12 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                     )}
                 </div>
                 <DialogFooter className="mt-auto pt-4 border-t">
-                    <Button onClick={handleRegister} disabled={!selectedAdherentId || isSubmitting} className="w-full">
+                    <Button 
+                      onClick={handleRegister} 
+                      disabled={!selectedAdherentId || isSubmitting} 
+                      className="w-full"
+                      aria-label="Confirmer et valider l'inscription de l'adhérent sélectionné"
+                    >
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Valider l'inscription
                     </Button>
@@ -336,6 +337,14 @@ export default function EventDetailPage() {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 
+    const menuDisplayOrder = [
+        { key: 'aperitifChoisi', label: 'Apéritif' },
+        { key: 'entreeChoisie', label: 'Entrée' },
+        { key: 'platChoisi', label: 'Plat principal' },
+        { key: 'fromageChoisi', label: 'Fromage' },
+        { key: 'dessertChoisi', label: 'Dessert' }
+    ];
+
     return (
         <div className="space-y-8">
             <header className="flex flex-col gap-2">
@@ -427,12 +436,17 @@ export default function EventDetailPage() {
                                                     </div>
                                                </div>
                                                 {inscription.choixMenu && Object.values(inscription.choixMenu).some(v => v) && (
-                                                    <div className="mt-1 flex flex-wrap gap-1 border-t pt-2">
-                                                        {Object.entries(inscription.choixMenu).map(([key, value]) => value && (
-                                                            <span key={key} className="inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-[8px] font-bold text-primary uppercase border border-primary/20">
-                                                                {value}
-                                                            </span>
-                                                        ))}
+                                                    <div className="mt-2 space-y-1 border-t pt-2">
+                                                        {menuDisplayOrder.map(item => {
+                                                            const value = inscription.choixMenu?.[item.key as keyof typeof inscription.choixMenu];
+                                                            if (!value) return null;
+                                                            return (
+                                                                <div key={item.key} className="flex items-baseline gap-2 text-[9px]">
+                                                                    <span className="font-bold text-primary uppercase w-20 shrink-0">{item.label} :</span>
+                                                                    <span className="text-muted-foreground truncate">{value}</span>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                            </div>
