@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Save } from "lucide-react";
+import { PlusCircle, Trash2, Save, Copy, CheckCircle2 } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where, orderBy } from 'firebase/firestore';
@@ -59,6 +59,7 @@ export default function AdherentDetailPage() {
 
   const [formData, setFormData] = useState<Partial<Adherent>>({});
   const [showAddCotisationDialog, setShowAddCotisationDialog] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   useEffect(() => {
     if (adherent) {
@@ -77,6 +78,17 @@ export default function AdherentDetailPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({...prev, [name]: value}));
+  };
+
+  const handleCopy = (text: string | undefined, fieldName: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    toast({
+        title: "Copié !",
+        description: `${fieldName} a été copié dans le presse-papiers.`,
+    });
+    setTimeout(() => setCopiedField(null), 2000);
   };
 
   const handleSwitchChange = async (field: keyof Adherent, checked: boolean) => {
@@ -140,7 +152,7 @@ export default function AdherentDetailPage() {
         <CardHeader>
           <CardTitle>Fiche de {adherent.prenom} {adherent.nom}</CardTitle>
           <CardDescription>
-            Informations mises à jour en temps réel.
+            Informations de contact et profil personnel.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -154,18 +166,55 @@ export default function AdherentDetailPage() {
               <Input id="nom" name="nom" value={formData.nom || ''} onChange={handleInputChange} aria-label={`Modifier le nom, actuellement ${adherent.nom}`} />
             </div>
           </div>
+          
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} aria-label={`Modifier l'email, actuellement ${adherent.email}`} />
+            <div className="flex gap-2">
+                <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="flex-1" aria-label={`Modifier l'email, actuellement ${adherent.email}`} />
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    type="button"
+                    onClick={() => handleCopy(formData.email, "L'email")}
+                    aria-label="Copier l'adresse email"
+                >
+                    {copiedField === "L'email" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+            </div>
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="telephone">Téléphone</Label>
-            <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} aria-label={`Modifier le téléphone, actuellement ${adherent.telephone}`} />
+            <div className="flex gap-2">
+                <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} className="flex-1" aria-label={`Modifier le téléphone, actuellement ${adherent.telephone}`} />
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    type="button"
+                    onClick={() => handleCopy(formData.telephone, "Le téléphone")}
+                    aria-label="Copier le numéro de téléphone"
+                >
+                    {copiedField === "Le téléphone" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+            </div>
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="adresse">Adresse</Label>
-            <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} aria-label={`Modifier l'adresse`} />
+            <div className="flex gap-2">
+                <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} className="flex-1" aria-label={`Modifier l'adresse, actuellement ${adherent.adresse || 'non renseignée'}`} />
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    type="button"
+                    onClick={() => handleCopy(formData.adresse, "L'adresse")}
+                    aria-label="Copier l'adresse postale"
+                >
+                    {copiedField === "L'adresse" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+            </div>
           </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
                 <Label htmlFor="dateNaissance">Date de naissance</Label>
@@ -177,28 +226,30 @@ export default function AdherentDetailPage() {
             </div>
           </div>
         </CardContent>
-        <CardFooter className="flex justify-start gap-4">
+        <CardFooter className="flex flex-wrap justify-start gap-4">
           <Button onClick={handleSaveChanges} aria-label={`Enregistrer les modifications pour ${adherent.prenom} ${adherent.nom}`}>
             <Save className="mr-2 h-4 w-4" />
-            Enregistrer
+            Enregistrer les modifications pour {adherent.prenom} {adherent.nom}
           </Button>
            <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" aria-label={`Supprimer définitivement l'adhérent ${adherent.prenom} ${adherent.nom}`}>
                 <Trash2 className="mr-2 h-4 w-4" />
-                Supprimer
+                Supprimer l'adhérent {adherent.prenom} {adherent.nom}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Cette action supprimera définitivement l'adhérent <strong>{adherent.prenom} {adherent.nom}</strong>.
+                  Cette action supprimera définitivement l'adhérent <strong>{adherent.prenom} {adherent.nom}</strong> de la base de données. Cette opération est irréversible.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete}>Confirmer la suppression</AlertDialogAction>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Confirmer la suppression de {adherent.prenom}
+                </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -208,6 +259,7 @@ export default function AdherentDetailPage() {
       <Card>
         <CardHeader>
             <CardTitle>Statuts et autorisations</CardTitle>
+            <CardDescription>Gérez les habilitations au sein de l'association.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
             {[
@@ -226,7 +278,7 @@ export default function AdherentDetailPage() {
                     id={`switch-${item.id}`} 
                     checked={adherent[item.id as keyof Adherent] as boolean}
                     onCheckedChange={(checked) => handleSwitchChange(item.id as keyof Adherent, checked)}
-                    aria-label={`Modifier le statut ${item.label}`}
+                    aria-label={`Modifier le statut ${item.label} pour ${adherent.prenom}`}
                 />
               </div>
             ))}
@@ -236,6 +288,7 @@ export default function AdherentDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Historique des Cotisations</CardTitle>
+          <CardDescription>Paiements annuels effectués.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -252,12 +305,14 @@ export default function AdherentDetailPage() {
                   <TableRow key={cotisation.id}>
                     <TableCell>{cotisation.annee}</TableCell>
                     <TableCell>{new Date(cotisation.datePaiement).toLocaleDateString('fr-FR')}</TableCell>
-                    <TableCell className="text-right">{cotisation.montant.toFixed(2)} €</TableCell>
+                    <TableCell className="text-right font-medium">{cotisation.montant.toFixed(2)} €</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center">Aucun historique de cotisation.</TableCell>
+                  <TableCell colSpan={3} className="text-center py-6 text-muted-foreground italic">
+                    Aucun historique de cotisation trouvé pour cet adhérent.
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -266,7 +321,7 @@ export default function AdherentDetailPage() {
          <CardFooter>
           <Dialog open={showAddCotisationDialog} onOpenChange={setShowAddCotisationDialog}>
             <DialogTrigger asChild>
-              <Button aria-label="Ajouter une nouvelle cotisation pour cet adhérent">
+              <Button aria-label={`Ajouter une nouvelle cotisation pour ${adherent.prenom}`}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Ajouter une cotisation
               </Button>
@@ -275,7 +330,7 @@ export default function AdherentDetailPage() {
               <DialogHeader>
                 <DialogTitle>Ajouter une cotisation</DialogTitle>
                 <DialogDescription>
-                  Confirmez l'ajout d'une cotisation de 15,00 € pour {adherent.prenom} {adherent.nom}.
+                  Confirmez l'ajout d'une cotisation forfaitaire de 15,00 € pour {adherent.prenom} {adherent.nom} au titre de l'année en cours.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
