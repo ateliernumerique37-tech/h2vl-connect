@@ -1,28 +1,12 @@
 'use client';
-import { getFirestore, collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, orderBy, query, writeBatch, where, Firestore } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, query, where, writeBatch, getDocs, type Firestore } from 'firebase/firestore';
 import type { Evenement } from '@/lib/types';
 
 const evenementsCollectionName = 'evenements';
 const inscriptionsCollectionName = 'inscriptions';
 
-export async function getEvenements(db: Firestore): Promise<Evenement[]> {
-  const evenementsCollection = collection(db, evenementsCollectionName);
-  const snapshot = await getDocs(query(evenementsCollection, orderBy('date', 'desc')));
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evenement));
-}
-
-export async function getEvenementById(db: Firestore, id: string): Promise<Evenement | undefined> {
-    const docRef = doc(db, evenementsCollectionName, id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as Evenement;
-    }
-    return undefined;
-}
-
 export async function addEvenement(db: Firestore, eventData: Omit<Evenement, 'id'>): Promise<string> {
-    const evenementsCollection = collection(db, evenementsCollectionName);
-    const docRef = await addDoc(evenementsCollection, eventData);
+    const docRef = await addDoc(collection(db, evenementsCollectionName), eventData);
     return docRef.id;
 }
 
@@ -33,17 +17,13 @@ export async function updateEvenement(db: Firestore, id: string, updates: Partia
 
 export async function deleteEvenement(db: Firestore, id: string): Promise<void> {
     const batch = writeBatch(db);
-    
-    // Delete the event
     const eventRef = doc(db, evenementsCollectionName, id);
     batch.delete(eventRef);
 
-    // Find and delete all inscriptions for this event
+    // Cascade: Suppression de toutes les inscriptions liées à cet événement
     const inscriptionsQuery = query(collection(db, inscriptionsCollectionName), where('id_evenement', '==', id));
-    const inscriptionsSnapshot = await getDocs(inscriptionsQuery);
-    inscriptionsSnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-    });
+    const inscriptionsSnap = await getDocs(inscriptionsQuery);
+    inscriptionsSnap.forEach((doc) => batch.delete(doc.ref));
 
     await batch.commit();
 }

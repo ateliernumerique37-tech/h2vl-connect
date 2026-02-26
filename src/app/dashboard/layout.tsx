@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -56,8 +55,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [user, isUserLoading, router]);
 
   useEffect(() => {
-    // Tentative d'auto-réparation si le document admin est manquant ou si on a une erreur de permission initiale
-    if (user && db && !isAdminDocLoading && !isHealing && (!adminDoc || adminError)) {
+    // Audit: Auto-réparation sécurisée du profil admin manquant
+    if (user && db && !isAdminDocLoading && !isHealing && !adminDoc && !adminError) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
       
@@ -66,28 +65,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         nom: '',
         email: user.email,
         role: 'Administrateur',
-      }).then(() => {
-        setIsHealing(false);
-      }).catch((error) => {
-        console.error("AuthGuard: Erreur lors de l'auto-réparation", error);
+      }).finally(() => {
         setIsHealing(false);
       });
     }
   }, [user, db, adminDoc, isAdminDocLoading, isHealing, adminError]);
 
-  // Si on charge ou qu'on répare, on montre le skeleton
-  // On ignore l'adminError temporairement car l'auto-réparation va la résoudre
-  if (isUserLoading || isAdminDocLoading || isHealing || (!adminDoc && !adminError)) {
+  if (isUserLoading || isAdminDocLoading || isHealing) {
     return <DashboardSkeleton />;
   }
 
-  // Si pas d'utilisateur, le useEffect redirigera vers /login
   if (!user) {
     return null;
   }
 
-  // Si on a toujours une erreur après la tentative de réparation, on affiche le skeleton 
-  // pour éviter un crash et laisser le useEffect retenter si besoin
+  // Si après réparation on a toujours une erreur d'accès au document admin, on bloque
   if (adminError && !adminDoc) {
     return <DashboardSkeleton />;
   }
@@ -95,13 +87,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-
   return (
       <AuthGuard>
         <SidebarProvider>
@@ -110,7 +100,7 @@ export default function DashboardLayout({
           </Sidebar>
           <SidebarInset className="flex flex-col">
             <DashboardHeader />
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8" role="main">
               {children}
             </main>
           </SidebarInset>
