@@ -20,7 +20,7 @@ import { deleteEvenement } from '@/services/evenementsService';
 import { addInscription, updateInscription, deleteInscription } from '@/services/inscriptionsService';
 import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { doc, collection, query } from 'firebase/firestore';
 
 function EventDetailSkeleton() {
     return (
@@ -60,14 +60,13 @@ const MenuChoiceSection = ({ category, options, selected, onSelect, eventId }: {
 };
 
 
-function RegisterMemberDialog({ event, adherentsList, onRegister, isLoadingAdherents }: { event: Evenement; adherentsList: Adherent[]; onRegister: (inscription: Omit<Inscription, 'id' | 'date_inscription'>) => Promise<void>; isLoadingAdherents: boolean }) {
+function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: { event: Evenement; adherentsList: Adherent[]; onRegister: (inscription: Omit<Inscription, 'id' | 'date_inscription'>) => Promise<void>; isLoading: boolean }) {
     const [selectedAdherentId, setSelectedAdherentId] = useState<string>("");
     const [isPaid, setIsPaid] = useState(false);
     const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Réinitialisation lors de l'ouverture
     useEffect(() => {
         if (isOpen) {
             setSelectedAdherentId("");
@@ -78,7 +77,6 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoadingAdher
 
     const handleRegister = async () => {
         if (!selectedAdherentId) return;
-
         setIsSubmitting(true);
         try {
             const newInscription: Omit<Inscription, 'id' | 'date_inscription'> = {
@@ -102,73 +100,61 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoadingAdher
                     Inscrire un adhérent
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]" role="dialog" aria-modal="true">
+            <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un adhérent parmi la liste des membres non encore inscrits.
+                        Sélectionnez un membre de l'association.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
                         <Label htmlFor="adherent-select">Choisir l'adhérent</Label>
                          <Select onValueChange={setSelectedAdherentId} value={selectedAdherentId}>
-                            <SelectTrigger id="adherent-select" className="w-full" aria-label="Zone de liste des adhérents disponibles">
-                                <SelectValue placeholder={isLoadingAdherents ? "Chargement..." : (adherentsList.length > 0 ? "Sélectionnez un adhérent" : "Aucun adhérent disponible")} />
+                            <SelectTrigger id="adherent-select" className="w-full">
+                                <SelectValue placeholder={isLoading ? "Chargement..." : "Sélectionnez un adhérent"} />
                             </SelectTrigger>
                             <SelectContent>
-                                {isLoadingAdherents ? (
-                                    <SelectItem value="loading" disabled>Chargement des données...</SelectItem>
-                                ) : (
-                                    <>
-                                        {adherentsList.length === 0 ? (
-                                            <SelectItem value="none" disabled>Tous les membres sont déjà inscrits</SelectItem>
-                                        ) : (
-                                            adherentsList.map(adherent => (
-                                                <SelectItem key={adherent.id} value={adherent.id}>
-                                                    {adherent.prenom} {adherent.nom}
-                                                </SelectItem>
-                                            ))
-                                        )}
-                                    </>
+                                {adherentsList.map(adherent => (
+                                    <SelectItem key={adherent.id} value={adherent.id}>
+                                        {adherent.prenom} {adherent.nom}
+                                    </SelectItem>
+                                ))}
+                                {adherentsList.length === 0 && !isLoading && (
+                                    <SelectItem value="none" disabled>Aucun adhérent disponible</SelectItem>
                                 )}
                             </SelectContent>
                         </Select>
                     </div>
 
                     <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/20">
-                        <Label htmlFor="paid-toggle-init" className="font-medium cursor-pointer">L'adhérent a déjà payé ?</Label>
-                        <Switch 
-                            id="paid-toggle-init" 
-                            checked={isPaid} 
-                            onCheckedChange={setIsPaid} 
-                            aria-label="Statut du paiement immédiat"
-                        />
+                        <Label htmlFor="paid-toggle" className="font-medium cursor-pointer">A payé ?</Label>
+                        <Switch id="paid-toggle" checked={isPaid} onCheckedChange={setIsPaid} />
                     </div>
 
                     {event.necessiteMenu && event.optionsMenu && (
                         <div className="space-y-4 border rounded-lg p-4 max-h-[300px] overflow-y-auto">
-                            <h4 className="font-semibold sticky top-0 bg-background pb-2 border-b">Choix du Menu</h4>
-                            {event.optionsMenu.aperitifs && event.optionsMenu.aperitifs.length > 0 && (
+                            <h4 className="font-semibold border-b pb-2">Choix du Menu</h4>
+                            {event.optionsMenu.aperitifs?.length ? (
                                 <MenuChoiceSection category="Apéritif" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />
-                            )}
-                            {event.optionsMenu.entrees && event.optionsMenu.entrees.length > 0 && (
+                            ) : null}
+                            {event.optionsMenu.entrees?.length ? (
                                 <MenuChoiceSection category="Entrée" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />
-                            )}
-                            {event.optionsMenu.plats && event.optionsMenu.plats.length > 0 && (
+                            ) : null}
+                            {event.optionsMenu.plats?.length ? (
                                 <MenuChoiceSection category="Plat principal" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />
-                            )}
-                            {event.optionsMenu.fromages && event.optionsMenu.fromages.length > 0 && (
+                            ) : null}
+                            {event.optionsMenu.fromages?.length ? (
                                 <MenuChoiceSection category="Fromage" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />
-                            )}
-                            {event.optionsMenu.desserts && event.optionsMenu.desserts.length > 0 && (
+                            ) : null}
+                            {event.optionsMenu.desserts?.length ? (
                                 <MenuChoiceSection category="Dessert" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />
-                            )}
+                            ) : null}
                         </div>
                     )}
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleRegister} disabled={!selectedAdherentId || selectedAdherentId === "loading" || selectedAdherentId === "none" || isSubmitting} className="w-full sm:w-auto">
+                    <Button onClick={handleRegister} disabled={!selectedAdherentId || isSubmitting} className="w-full">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Valider l'inscription
                     </Button>
@@ -186,24 +172,25 @@ export default function EventDetailPage() {
     const db = useFirestore();
     const auth = useAuth();
     
+    // Récupération de l'événement
     const eventRef = useMemoFirebase(() => id ? doc(db, 'evenements', id) : null, [db, id]);
     const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
-    // Récupération brute des adhérents
-    const adherentsColl = useMemoFirebase(() => collection(db, 'adherents'), [db]);
-    const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsColl);
+    // Récupération des adhérents (même logique que AdherentsPage)
+    const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
+    const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
 
-    // Récupération brute des inscriptions pour filtrage manuel côté client (plus fiable que where)
-    const inscriptionsColl = useMemoFirebase(() => collection(db, 'inscriptions'), [db]);
-    const { data: allInscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsColl);
+    // Récupération de TOUTES les inscriptions pour filtrage client (évite les index manquants)
+    const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions')), [db]);
+    const { data: allInscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
 
-    // Calcul des inscriptions spécifiques à cet événement
+    // Participants de cet événement spécifique
     const eventInscriptions = useMemo(() => {
-        if (!allInscriptions) return [];
+        if (!allInscriptions || !id) return [];
         return allInscriptions.filter(ins => ins.id_evenement === id);
     }, [allInscriptions, id]);
 
-    // Calcul fiable des adhérents non inscrits
+    // Adhérents non encore inscrits
     const nonRegisteredAdherents = useMemo(() => {
         if (!rawAdherents) return [];
         const registeredIds = new Set(eventInscriptions.map(ins => ins.id_adherent));
@@ -215,36 +202,22 @@ export default function EventDetailPage() {
     const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
         try {
             await updateInscription(db, inscriptionId, { a_paye: hasPaid });
-            toast({
-                title: "Paiement mis à jour",
-                description: `Le statut a été modifié avec succès.`,
-            });
+            toast({ title: "Paiement mis à jour" });
         } catch (error) {
-            console.error("Failed to update payment status:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de modifier le statut de paiement.' });
+            toast({ variant: 'destructive', title: 'Erreur' });
         }
     };
     
     const handleNewRegistration = async (inscriptionData: Omit<Inscription, 'id' | 'date_inscription'>) => {
         try {
-            const newInscriptionData = {
-                ...inscriptionData,
-                date_inscription: new Date().toISOString()
-            };
-            await addInscription(db, newInscriptionData);
-            
+            await addInscription(db, { ...inscriptionData, date_inscription: new Date().toISOString() });
             const adherent = rawAdherents?.find(a => a.id === inscriptionData.id_adherent);
             if (event && adherent) {
-                await addLog(db, auth, `Inscription de ${adherent.prenom} ${adherent.nom} à l'événement ${event.titre}`);
-                toast({
-                    title: "Adhérent inscrit",
-                    description: `${adherent.prenom} ${adherent.nom} a été ajouté à la liste des participants.`,
-                });
+                await addLog(db, auth, `Inscription de ${adherent.prenom} ${adherent.nom} à ${event.titre}`);
+                toast({ title: "Adhérent inscrit" });
             }
         } catch (error) {
-            console.error("Failed to register adherent:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue lors de l\'inscription.' });
-            throw error;
+            toast({ variant: 'destructive', title: 'Erreur' });
         }
     };
 
@@ -252,15 +225,11 @@ export default function EventDetailPage() {
         try {
             await deleteInscription(db, inscriptionId);
             if (event) {
-                await addLog(db, auth, `Désinscription de ${adherentName} de l'événement ${event.titre}`);
-                toast({
-                    title: "Désinscription réussie",
-                    description: `${adherentName} a été retiré de la liste des participants.`,
-                });
+                await addLog(db, auth, `Désinscription de ${adherentName} de ${event.titre}`);
+                toast({ title: "Désinscription réussie" });
             }
         } catch (error) {
-            console.error("Failed to unregister:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de désinscrire l\'adhérent.' });
+            toast({ variant: 'destructive', title: 'Erreur' });
         }
     };
     
@@ -269,24 +238,15 @@ export default function EventDetailPage() {
         try {
             await deleteEvenement(db, event.id);
             await addLog(db, auth, `Suppression de l'événement : ${event.titre}`);
-            toast({
-                title: "Événement supprimé",
-                description: `L'événement a été retiré avec succès.`,
-            });
+            toast({ title: "Événement supprimé" });
             router.push('/dashboard/events');
         } catch (error) {
-            console.error("Failed to delete event:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de supprimer l\'événement.' });
+            toast({ variant: 'destructive', title: 'Erreur' });
         }
     };
 
-    if (isLoadingEvent) {
-        return <EventDetailSkeleton />;
-    }
-
-    if (!event) {
-        return notFound();
-    }
+    if (isLoadingEvent) return <EventDetailSkeleton />;
+    if (!event) return notFound();
     
     const formattedDate = new Date(event.date).toLocaleDateString("fr-FR", {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -297,56 +257,23 @@ export default function EventDetailPage() {
             <header className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold tracking-tight">{event.titre}</h1>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                        <Calendar className="h-4 w-4" aria-hidden="true" />
-                        <span>{formattedDate}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4" aria-hidden="true" />
-                        <span>{event.lieu}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <Euro className="h-4 w-4" aria-hidden="true" />
-                        <span className="font-semibold text-foreground">{event.prix > 0 ? `${event.prix.toFixed(2)} €` : "Gratuit"}</span>
-                    </div>
+                    <div className="flex items-center gap-1.5"><Calendar className="h-4 w-4" /><span>{formattedDate}</span></div>
+                    <div className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /><span>{event.lieu}</span></div>
+                    <div className="flex items-center gap-1.5"><Euro className="h-4 w-4" /><span className="font-semibold text-foreground">{event.prix > 0 ? `${event.prix.toFixed(2)} €` : "Gratuit"}</span></div>
                 </div>
             </header>
 
             <div className="grid gap-6 lg:grid-cols-3">
                 <Card className="lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle>Description</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">
-                            {event.description}
-                        </p>
-                    </CardContent>
+                    <CardHeader><CardTitle>Description</CardTitle></CardHeader>
+                    <CardContent><p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{event.description}</p></CardContent>
                     <CardFooter className="flex flex-wrap gap-3 border-t pt-6">
-                        <Link href={`/dashboard/events/${event.id}/edit`} passHref>
-                            <Button variant="outline" size="sm" aria-label={`Modifier l'événement ${event.titre}`}>
-                                <Pencil className="mr-2 h-4 w-4" /> Modifier
-                            </Button>
-                        </Link>
+                        <Link href={`/dashboard/events/${event.id}/edit`} passHref><Button variant="outline" size="sm"><Pencil className="mr-2 h-4 w-4" /> Modifier</Button></Link>
                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm" aria-label={`Supprimer l'événement ${event.titre}`}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Supprimer
-                              </Button>
-                            </AlertDialogTrigger>
+                            <AlertDialogTrigger asChild><Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4" /> Supprimer</Button></AlertDialogTrigger>
                             <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Voulez-vous vraiment supprimer l'événement <strong>{event.titre}</strong> ? Toutes les inscriptions seront également supprimées.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                    Supprimer l'événement
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
+                              <AlertDialogHeader><AlertDialogTitle>Supprimer l'événement ?</AlertDialogTitle><AlertDialogDescription>Action irréversible pour <strong>{event.titre}</strong>.</AlertDialogDescription></AlertDialogHeader>
+                              <AlertDialogFooter><AlertDialogCancel>Annuler</AlertDialogCancel><AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction></AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
                     </CardFooter>
@@ -357,45 +284,37 @@ export default function EventDetailPage() {
                         event={event} 
                         adherentsList={nonRegisteredAdherents} 
                         onRegister={handleNewRegistration} 
-                        isLoadingAdherents={isLoadingAdherents}
+                        isLoading={isLoadingAdherents || isLoadingInscriptions}
                     />
 
                     <Card>
                         <CardHeader>
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Users className="h-5 w-5 text-primary" aria-hidden="true" />
-                                    <CardTitle className="text-lg">Inscrits</CardTitle>
-                                </div>
+                                <div className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /><CardTitle className="text-lg">Inscrits</CardTitle></div>
                                 <span className="text-2xl font-bold">{eventInscriptions.length}</span>
                             </div>
-                            <CardDescription>Liste actualisée des participants.</CardDescription>
                         </CardHeader>
                         <CardContent className="px-2">
                             {isLoadingInscriptions ? (
-                                <div className="space-y-3 p-2">
-                                    <Skeleton className="h-12 w-full" />
-                                    <Skeleton className="h-12 w-full" />
-                                </div>
+                                <div className="space-y-3 p-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
                             ) : eventInscriptions.length > 0 ? (
                                 <div className="space-y-1">
                                     {eventInscriptions.map((inscription) => {
                                         const adherent = rawAdherents?.find(a => a.id === inscription.id_adherent);
-                                        const adherentName = adherent ? `${adherent.prenom} ${adherent.nom}` : "Adhérent inconnu";
+                                        const adherentName = adherent ? `${adherent.prenom} ${adherent.nom}` : "Chargement...";
                                         
                                         return (
-                                           <div key={inscription.id} className="group flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50">
+                                           <div key={inscription.id} className="group flex flex-col gap-2 rounded-lg border p-3 hover:bg-muted/50 transition-colors">
                                                <div className="flex items-center justify-between gap-3">
                                                    <div className="flex items-center gap-3 min-w-0">
                                                         <Avatar className="h-8 w-8">
                                                             <AvatarImage src={`https://picsum.photos/seed/${inscription.id_adherent}/32/32`} alt={adherentName} data-ai-hint="avatar person" />
-                                                            <AvatarFallback className="text-[10px]">{adherent ? `${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase() : '??'}</AvatarFallback>
+                                                            <AvatarFallback className="text-[10px]">{adherentName.substring(0, 2).toUpperCase()}</AvatarFallback>
                                                         </Avatar>
                                                         <span className="text-sm font-medium truncate">{adherentName}</span>
                                                    </div>
                                                    <div className="flex items-center gap-2 shrink-0">
                                                         <Switch
-                                                            id={`payment-${inscription.id}`}
                                                             checked={inscription.a_paye}
                                                             onCheckedChange={(checked) => handlePaymentStatusChange(inscription.id, checked)}
                                                             className="scale-75"
@@ -403,23 +322,11 @@ export default function EventDetailPage() {
                                                         />
                                                         <AlertDialog>
                                                             <AlertDialogTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" aria-label={`Désinscrire ${adherentName}`}>
-                                                                    <UserMinus className="h-4 w-4" />
-                                                                </Button>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" aria-label={`Désinscrire ${adherentName}`}><UserMinus className="h-4 w-4" /></Button>
                                                             </AlertDialogTrigger>
                                                             <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>Désinscription</AlertDialogTitle>
-                                                                    <AlertDialogDescription>
-                                                                        Voulez-vous retirer <strong>{adherentName}</strong> de cet événement ?
-                                                                    </AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleUnregister(inscription.id, adherentName)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                                                        Désinscrire
-                                                                    </AlertDialogAction>
-                                                                </AlertDialogFooter>
+                                                                <AlertDialogHeader><AlertDialogTitle>Désinscription</AlertDialogTitle><AlertDialogDescription>Retirer <strong>{adherentName}</strong> ?</AlertDialogDescription></AlertDialogHeader>
+                                                                <AlertDialogFooter><AlertDialogCancel>Annuler</AlertDialogCancel><AlertDialogAction onClick={() => handleUnregister(inscription.id, adherentName)} className="bg-destructive hover:bg-destructive/90">Désinscrire</AlertDialogAction></AlertDialogFooter>
                                                             </AlertDialogContent>
                                                         </AlertDialog>
                                                     </div>
@@ -436,9 +343,7 @@ export default function EventDetailPage() {
                                     })}
                                 </div>
                             ) : (
-                                 <div className="p-8 text-center text-sm text-muted-foreground italic">
-                                    Aucun participant pour le moment.
-                                </div>
+                                 <div className="p-8 text-center text-sm text-muted-foreground italic">Aucun participant.</div>
                             )}
                         </CardContent>
                     </Card>
