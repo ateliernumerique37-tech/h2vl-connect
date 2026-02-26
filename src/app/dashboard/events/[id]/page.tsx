@@ -140,12 +140,12 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un membre dans la zone de liste. La sélection est dynamique avec les flèches du clavier.
+                        Sélectionnez un membre dans la liste ci-dessous.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-6 py-4 overflow-y-auto pr-2">
                     <div className="space-y-3">
-                        <Label htmlFor={inputId}>Choisir l'adhérent</Label>
+                        <Label htmlFor={inputId}>Rechercher l'adhérent</Label>
                         <div 
                           className="relative"
                           role="combobox"
@@ -157,8 +157,8 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 id={inputId}
-                                placeholder="Rechercher par nom..."
-                                className="pl-9 ring-offset-background focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                placeholder="Nom du membre..."
+                                className="pl-9"
                                 value={searchTerm}
                                 onChange={(e) => {
                                     setSearchTerm(e.target.value);
@@ -200,10 +200,9 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                                                         setActiveIndex(index);
                                                     }}
                                                     className={cn(
-                                                        "flex w-full items-center justify-between rounded-sm px-3 py-3 text-sm transition-colors cursor-pointer",
-                                                        "min-h-[44px]", // WCAG 2.2 Target Size
+                                                        "flex w-full items-center justify-between rounded-sm px-3 py-2 text-sm transition-colors cursor-pointer min-h-[44px]",
                                                         isSelected && "bg-primary text-primary-foreground font-medium",
-                                                        isHighlighted && !isSelected && "bg-muted outline outline-2 outline-primary",
+                                                        isHighlighted && !isSelected && "bg-muted",
                                                         !isHighlighted && !isSelected && "hover:bg-muted/50"
                                                     )}
                                                 >
@@ -215,7 +214,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                                     </div>
                                 ) : (
                                     <div className="p-8 text-center text-sm text-muted-foreground italic">
-                                        {adherentsList.length === 0 ? "Tous les adhérents sont déjà inscrits." : "Aucun résultat trouvé."}
+                                        {adherentsList.length === 0 ? "Tous les membres sont déjà inscrits." : "Aucun membre trouvé."}
                                     </div>
                                 )}
                             </div>
@@ -252,7 +251,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                     <Button 
                       onClick={handleRegister} 
                       disabled={!selectedAdherentId || isSubmitting} 
-                      className="w-full text-base py-6"
+                      className="w-full text-base py-4"
                       aria-label="Confirmer et valider l'inscription de l'adhérent sélectionné"
                     >
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
