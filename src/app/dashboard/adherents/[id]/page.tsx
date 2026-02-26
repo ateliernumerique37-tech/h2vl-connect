@@ -13,10 +13,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Save, Copy, CheckCircle2 } from "lucide-react";
+import { PlusCircle, Trash2, Save, Copy, CheckCircle2, ChevronLeft } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where, orderBy } from 'firebase/firestore';
+import Link from 'next/link';
 
 function AdherentDetailSkeleton() {
     return (
@@ -46,7 +47,7 @@ export default function AdherentDetailPage() {
   const db = useFirestore();
   const { toast } = useToast();
   
-  // Robust ID extraction
+  // Paramètre 'id' peut être undefined au premier rendu client
   const id = params?.id as string;
   
   const adherentRef = useMemoFirebase(() => id ? doc(db, 'adherents', id) : null, [db, id]);
@@ -69,10 +70,12 @@ export default function AdherentDetailPage() {
     }
   }, [adherent]);
 
-  if (isLoadingAdherent || isLoadingCotisations) {
+  // Si on n'a pas encore d'ID ou que les données chargent, on affiche le squelette
+  if (!id || isLoadingAdherent || isLoadingCotisations) {
       return <AdherentDetailSkeleton />;
   }
 
+  // On ne déclenche le 404 QUE si l'ID est là, que le chargement est fini, et qu'aucune donnée n'est revenue
   if (!adherent && !isLoadingAdherent) {
     return notFound();
   }
@@ -151,11 +154,20 @@ export default function AdherentDetailPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" asChild>
+          <Link href="/dashboard/adherents" aria-label="Retour à la liste des adhérents">
+            <ChevronLeft className="h-6 w-6" />
+          </Link>
+        </Button>
+        <h1 className="text-3xl font-bold tracking-tight">Fiche de {adherent.prenom} {adherent.nom}</h1>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Fiche de {adherent.prenom} {adherent.nom}</CardTitle>
+          <CardTitle>Informations Personnelles</CardTitle>
           <CardDescription>
-            Informations de contact et profil personnel détaillés.
+            Contact et profil personnel.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -261,16 +273,16 @@ export default function AdherentDetailPage() {
 
       <Card>
         <CardHeader>
-            <CardTitle>Statuts de l'Adhérent</CardTitle>
-            <CardDescription>Gérez les habilitations et autorisations.</CardDescription>
+            <CardTitle>Statuts et Habilitations</CardTitle>
+            <CardDescription>Gérez les autorisations spécifiques.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { id: 'estMembreBureau', label: 'Membre du bureau', desc: 'Fait partie de l\'administration.' },
-              { id: 'estBenevole', label: 'Bénévole actif', desc: 'S\'implique dans les activités.' },
+              { id: 'estMembreBureau', label: 'Membre du bureau', desc: 'Accès administratif.' },
+              { id: 'estBenevole', label: 'Bénévole actif', desc: 'Engagement terrain.' },
               { id: 'estMembreFaaf', label: 'Affiliation FAAF', desc: 'Membre de la fédération.' },
-              { id: 'accordeDroitImage', label: 'Droit à l\'image', desc: 'Autorise l\'utilisation de photos.' },
-              { id: 'cotisationAJour', label: 'Cotisation à jour', desc: 'Statut financier pour l\'année.' },
+              { id: 'accordeDroitImage', label: 'Droit à l\'image', desc: 'Utilisation des photos.' },
+              { id: 'cotisationAJour', label: 'Cotisation à jour', desc: 'Statut financier.' },
             ].map((item) => (
               <div key={item.id} className="flex items-center justify-between rounded-lg border p-4 bg-card">
                 <Label htmlFor={`switch-${item.id}`} className="flex flex-col space-y-1">
@@ -291,14 +303,14 @@ export default function AdherentDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Historique Financier</CardTitle>
-          <CardDescription>Cotisations annuelles enregistrées.</CardDescription>
+          <CardDescription>Suivi des cotisations.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Année</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>Date de paiement</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
               </TableRow>
             </TableHeader>
@@ -314,7 +326,7 @@ export default function AdherentDetailPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-6 text-muted-foreground italic">
-                    Aucune cotisation trouvée.
+                    Aucun historique de paiement.
                   </TableCell>
                 </TableRow>
               )}
@@ -331,9 +343,9 @@ export default function AdherentDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Valider la cotisation</DialogTitle>
+                <DialogTitle>Valider le paiement</DialogTitle>
                 <DialogDescription>
-                  Voulez-vous enregistrer le paiement de 15,00 € pour <strong>{adherent.prenom} {adherent.nom}</strong> pour l'année en cours ?
+                  Enregistrer le paiement de 15,00 € pour <strong>{adherent.prenom} {adherent.nom}</strong> pour l'année en cours ?
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
