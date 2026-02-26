@@ -13,8 +13,9 @@ export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'i
     const adherentsCollection = collection(db, adherentsCollectionName);
     const docRef = await addDoc(adherentsCollection, adherentData);
     
+    // Si la case est cochée à la création, on enregistre le paiement dans l'historique
     if (adherentData.cotisationAJour) {
-        await addCotisation(db, docRef.id);
+        await addCotisationRecord(db, docRef.id);
     }
     
     return docRef.id;
@@ -42,11 +43,24 @@ export async function batchAddAdherents(db: Firestore, adherents: Omit<Adherent,
 }
 
 /**
- * Mise à jour d'un adhérent.
+ * Mise à jour d'un adhérent. 
+ * Si 'cotisationAJour' est activé, on ajoute automatiquement une ligne à l'historique.
  */
 export async function updateAdherent(db: Firestore, id: string, updates: Partial<Adherent>): Promise<void> {
     const docRef = doc(db, adherentsCollectionName, id);
-    await updateDoc(docRef, updates);
+    
+    // Si on active manuellement la cotisation via le switch
+    if (updates.cotisationAJour === true) {
+        await addCotisation(db, id);
+        
+        // On traite les autres mises à jour si présentes
+        const { cotisationAJour, ...otherUpdates } = updates;
+        if (Object.keys(otherUpdates).length > 0) {
+            await updateDoc(docRef, otherUpdates);
+        }
+    } else {
+        await updateDoc(docRef, updates);
+    }
 }
 
 /**
@@ -98,18 +112,35 @@ export async function deleteAllAdherents(db: Firestore): Promise<void> {
 }
 
 /**
- * Ajoute une cotisation et met à jour le statut de l'adhérent.
+ * Fonction utilitaire interne pour ajouter uniquement le record de cotisation.
+ */
+async function addCotisationRecord(db: Firestore, adherentId: string): Promise<void> {
+    const cotisationRef = collection(db, cotisationsCollectionName);
+    await addDoc(cotisationRef, {
+        adherentId,
+        annee: new Date().getFullYear(),
+        datePaiement: new Date().toISOString(),
+        montant: 15,
+    });
+}
+
+/**
+ * Ajoute une cotisation (record) et force la mise à jour du statut de l'adhérent à true.
+ * Utilisé par le bouton d'encaissement et l'automatisation du switch.
  */
 export async function addCotisation(db: Firestore, adherentId: string): Promise<void> {
     const batch = writeBatch(db);
     const cotisationRef = doc(collection(db, cotisationsCollectionName));
+    
     batch.set(cotisationRef, {
         adherentId,
         annee: new Date().getFullYear(),
         datePaiement: new Date().toISOString(),
         montant: 15,
     });
+    
     const adherentRef = doc(db, adherentsCollectionName, adherentId);
     batch.update(adherentRef, { cotisationAJour: true });
+    
     await batch.commit();
 }
