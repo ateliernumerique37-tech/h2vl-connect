@@ -34,7 +34,8 @@ export function useCollection<T = any>(
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   const [data, setData] = useState<ResultItemType[] | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // On initialise isLoading à true si on a déjà une cible à charger
+  const [isLoading, setIsLoading] = useState<boolean>(!!memoizedTargetRefOrQuery);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {

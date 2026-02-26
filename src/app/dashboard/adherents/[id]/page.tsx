@@ -47,7 +47,6 @@ export default function AdherentDetailPage() {
   const db = useFirestore();
   const { toast } = useToast();
   
-  // Paramètre 'id' peut être undefined au premier rendu client
   const id = params?.id as string;
   
   const adherentRef = useMemoFirebase(() => id ? doc(db, 'adherents', id) : null, [db, id]);
@@ -70,12 +69,12 @@ export default function AdherentDetailPage() {
     }
   }, [adherent]);
 
-  // Si on n'a pas encore d'ID ou que les données chargent, on affiche le squelette
+  // On attend que l'ID soit là ET que le chargement Firebase soit terminé ou en cours
   if (!id || isLoadingAdherent || isLoadingCotisations) {
       return <AdherentDetailSkeleton />;
   }
 
-  // On ne déclenche le 404 QUE si l'ID est là, que le chargement est fini, et qu'aucune donnée n'est revenue
+  // Si le chargement est terminé et qu'aucune donnée n'est revenue, on affiche le 404
   if (!adherent && !isLoadingAdherent) {
     return notFound();
   }

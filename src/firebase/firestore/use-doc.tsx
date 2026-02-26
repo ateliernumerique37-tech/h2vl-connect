@@ -23,7 +23,8 @@ export function useDoc<T = any>(
   memoizedDocRef: DocumentReference<DocumentData> | null | undefined,
 ): UseDocResult<T> {
   const [data, setData] = useState<WithId<T> | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // On initialise isLoading à true si on a déjà une référence à charger
+  const [isLoading, setIsLoading] = useState<boolean>(!!memoizedDocRef);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
