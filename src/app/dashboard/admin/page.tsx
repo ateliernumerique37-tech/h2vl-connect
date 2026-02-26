@@ -13,9 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Trash2, Loader2, Upload, AlertTriangle } from "lucide-react";
 import type { Admin, LogAdmin, Adherent } from "@/lib/types";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { addAdmin, deleteAdmin } from "@/services/adminsService";
@@ -29,11 +28,13 @@ function AdminPageSkeleton() {
     return (
         <div className="space-y-6">
             <header>
-                <h1 className="text-3xl font-bold tracking-tight">Tableau de bord Administrateur</h1>
-                <p className="text-muted-foreground">Chargement des outils d'administration...</p>
+                <Skeleton className="h-9 w-64 mb-2" />
+                <Skeleton className="h-4 w-96" />
             </header>
-            <Skeleton className="h-[200px] w-full" />
-            <Skeleton className="h-[400px] w-full" />
+            <div className="grid gap-6 md:grid-cols-2">
+                <Skeleton className="h-[300px]" />
+                <Skeleton className="h-[300px]" />
+            </div>
         </div>
     )
 }
@@ -53,9 +54,8 @@ export default function AdminPage() {
   const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
@@ -68,9 +68,8 @@ export default function AdminPage() {
         const { password, ...adminInfo } = newAdminData;
         await addAdmin(db, auth, adminInfo, password);
         await addLog(db, auth, `Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
-        
         setIsAddAdminDialogOpen(false);
-        toast({ title: "Administrateur ajouté", description: `Compte créé pour ${adminInfo.prenom}.` });
+        toast({ title: "Administrateur ajouté" });
         setNewAdminData({ prenom: '', nom: '', email: '', role: '', password: '' });
     } catch (error: any) {
         toast({ variant: "destructive", title: "Erreur", description: error.message });
@@ -151,27 +150,25 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Tableau de bord Administrateur</h1>
-        <p className="text-muted-foreground">Gestion des accès et maintenance de la base.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Administration</h1>
+        <p className="text-muted-foreground">Outils de gestion et maintenance.</p>
       </header>
       
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
             <CardHeader>
-                <CardTitle>Maintenance</CardTitle>
-                <CardDescription>Outils de gestion de données.</CardDescription>
+                <CardTitle>Base de données</CardTitle>
+                <CardDescription>Outils de maintenance.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="flex flex-col gap-2">
-                    <Button onClick={() => fileInputRef.current?.click()} disabled={isImporting} variant="outline">
-                        {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        Importer CSV
-                    </Button>
-                    <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileImport} />
-                </div>
+                <Button onClick={() => fileInputRef.current?.click()} disabled={isImporting} variant="outline" className="w-full">
+                    {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                    Importer CSV
+                </Button>
+                <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileImport} />
                 
                 <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-                    <div className="flex items-center gap-2 text-destructive font-semibold mb-2">
+                    <div className="flex items-center gap-2 text-destructive font-semibold mb-4">
                         <AlertTriangle className="h-5 w-5" />
                         Zone de Danger
                     </div>
@@ -179,19 +176,19 @@ export default function AdminPage() {
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" className="w-full" disabled={isPurging}>
                                 {isPurging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Supprimer TOUS les adhérents
+                                Purger TOUS les adhérents
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader>
-                                <AlertDialogTitle>Action irréversible</AlertDialogTitle>
+                                <AlertDialogTitle>Action Irréversible</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Cette action supprimera définitivement tous les adhérents, cotisations et inscriptions. Êtes-vous sûr ?
+                                    Cela supprimera tous les adhérents, cotisations et inscriptions.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction onClick={handlePurgeAdherents} className="bg-destructive text-destructive-foreground">Confirmer la suppression</AlertDialogAction>
+                                <AlertDialogAction onClick={handlePurgeAdherents} className="bg-destructive">Confirmer la suppression</AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
@@ -203,24 +200,20 @@ export default function AdminPage() {
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                     <CardTitle>Administrateurs</CardTitle>
-                    <CardDescription>Gérer les comptes d'accès.</CardDescription>
+                    <CardDescription>Gestion des accès.</CardDescription>
                 </div>
                 <Dialog open={isAddAdminDialogOpen} onOpenChange={setIsAddAdminDialogOpen}>
                     <DialogTrigger asChild>
                         <Button size="icon" variant="ghost"><PlusCircle className="h-5 w-5" /></Button>
                     </DialogTrigger>
                     <DialogContent>
-                        <form onSubmit={handleAddAdmin}>
-                            <DialogHeader><DialogTitle>Nouvel Admin</DialogTitle></DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <Input name="prenom" placeholder="Prénom" required onChange={handleInputChange} />
-                                <Input name="nom" placeholder="Nom" required onChange={handleInputChange} />
-                                <Input name="email" type="email" placeholder="Email" required onChange={handleInputChange} />
-                                <Input name="password" type="password" placeholder="Mot de passe" required onChange={handleInputChange} />
-                                <Input name="role" placeholder="Poste (ex: Président)" onChange={handleInputChange} />
-                            </div>
+                        <form onSubmit={handleAddAdmin} className="space-y-4 pt-4">
+                            <Input name="prenom" placeholder="Prénom" required onChange={handleInputChange} />
+                            <Input name="nom" placeholder="Nom" required onChange={handleInputChange} />
+                            <Input name="email" type="email" placeholder="Email" required onChange={handleInputChange} />
+                            <Input name="password" type="password" placeholder="Mot de passe" required onChange={handleInputChange} />
                             <DialogFooter>
-                                <Button type="submit" disabled={isSubmitting}>Créer</Button>
+                                <Button type="submit" disabled={isSubmitting}>Créer le compte</Button>
                             </DialogFooter>
                         </form>
                     </DialogContent>
@@ -228,12 +221,6 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
                 <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Nom</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
                     <TableBody>
                         {administrateurs?.map(admin => (
                             <TableRow key={admin.id}>
@@ -256,7 +243,7 @@ export default function AdminPage() {
             <TableBody>
               {logsAdmin?.map(log => (
                 <TableRow key={log.id}>
-                    <TableCell className="text-xs text-muted-foreground w-32">{new Date(log.dateAction).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground w-24">{new Date(log.dateAction).toLocaleDateString()}</TableCell>
                     <TableCell className="font-medium text-sm">{log.nomAdmin}</TableCell>
                     <TableCell className="text-sm">{log.actionRealisee}</TableCell>
                 </TableRow>

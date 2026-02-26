@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -40,9 +40,6 @@ function AdherentsPageSkeleton() {
                 <CardHeader><CardTitle><Skeleton className="h-6 w-48" /></CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     <Skeleton className="h-10 w-full" />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                        {[...Array(7)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-                    </div>
                 </CardContent>
             </Card>
              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -59,10 +56,10 @@ function AdherentsPageSkeleton() {
 
 export default function AdherentsPage() {
   const db = useFirestore();
-  const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents'), orderBy('nom'), orderBy('prenom')), [db]);
+  // Simplified query without complex orderBy to avoid immediate index requirement
+  const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
   const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
 
-  // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [genreFilter, setGenreFilter] = useState('Tous');
   const [cotisationFilter, setCotisationFilter] = useState('Tous');
@@ -84,36 +81,15 @@ export default function AdherentsPage() {
           adherent.prenom.toLowerCase().includes(searchLower) ||
           adherent.nom.toLowerCase().includes(searchLower) ||
           adherent.email.toLowerCase().includes(searchLower) ||
-          adherent.telephone?.toLowerCase().includes(searchLower) ||
-          adherent.adresse?.toLowerCase().includes(searchLower)
+          adherent.telephone?.toLowerCase().includes(searchLower)
         );
       })
       .filter(adherent => genreFilter === 'Tous' ? true : adherent.genre === genreFilter)
-      .filter(adherent => {
-        if (cotisationFilter === 'Tous') return true;
-        const hasPaid = adherent.cotisationAJour;
-        return (cotisationFilter === 'À jour') ? hasPaid : !hasPaid;
-      })
-      .filter(adherent => {
-        if (benevoleFilter === 'Tous') return true;
-        const isBenevole = adherent.estBenevole;
-        return (benevoleFilter === 'Oui') ? isBenevole : !isBenevole;
-      })
-      .filter(adherent => {
-        if (faafFilter === 'Tous') return true;
-        const isFaaf = adherent.estMembreFaaf;
-        return (faafFilter === 'Oui') ? isFaaf : !isFaaf;
-      })
-      .filter(adherent => {
-        if (bureauFilter === 'Tous') return true;
-        const isBureau = adherent.estMembreBureau;
-        return (bureauFilter === 'Oui') ? isBureau : !isBureau;
-      })
-      .filter(adherent => {
-        if (droitImageFilter === 'Tous') return true;
-        const hasDroit = adherent.accordeDroitImage;
-        return (droitImageFilter === 'Accordé') ? hasDroit : !hasDroit;
-      })
+      .filter(adherent => cotisationFilter === 'Tous' ? true : (cotisationFilter === 'À jour' ? adherent.cotisationAJour : !adherent.cotisationAJour))
+      .filter(adherent => benevoleFilter === 'Tous' ? true : (benevoleFilter === 'Oui' ? adherent.estBenevole : !adherent.estBenevole))
+      .filter(adherent => faafFilter === 'Tous' ? true : (faafFilter === 'Oui' ? adherent.estMembreFaaf : !adherent.estMembreFaaf))
+      .filter(adherent => bureauFilter === 'Tous' ? true : (bureauFilter === 'Oui' ? adherent.estMembreBureau : !adherent.estMembreBureau))
+      .filter(adherent => droitImageFilter === 'Tous' ? true : (droitImageFilter === 'Accordé' ? adherent.accordeDroitImage : !adherent.accordeDroitImage))
       .filter(adherent => {
         if (ageFilter === 'Tous') return true;
         const age = getAge(adherent.dateNaissance);
@@ -124,24 +100,21 @@ export default function AdherentsPage() {
           case '50+': return age > 50;
           default: return true;
         }
-      });
+      })
+      .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [adherents, searchTerm, genreFilter, cotisationFilter, benevoleFilter, faafFilter, bureauFilter, droitImageFilter, ageFilter]);
   
-  if (isLoading) {
-      return <AdherentsPageSkeleton />;
-  }
+  if (isLoading) return <AdherentsPageSkeleton />;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Liste des Adhérents</h1>
-          <p className="text-muted-foreground">
-            Gérez les membres de votre association en temps réel.
-          </p>
+          <p className="text-muted-foreground">Gérez les membres de votre association.</p>
         </div>
         <Button asChild>
-            <Link href="/dashboard/adherents/create" aria-label="Ajouter un nouvel adhérent à l'association">
+            <Link href="/dashboard/adherents/create">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Ajouter un adhérent
             </Link>
@@ -149,130 +122,83 @@ export default function AdherentsPage() {
       </div>
 
       <Card>
-        <CardHeader>
-            <CardTitle>Filtres et Recherche</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Filtres et Recherche</CardTitle></CardHeader>
         <CardContent className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="search-adherent">Rechercher</Label>
                 <Input
                     id="search-adherent"
-                    type="search"
-                    role="search"
-                    placeholder="Rechercher par nom, email, téléphone ou adresse"
-                    aria-label="Rechercher un adhérent par nom, email, téléphone ou adresse"
+                    placeholder="Nom, email, téléphone..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                <div className="space-y-2">
-                    <Label htmlFor="filter-genre">Genre</Label>
-                    <Select onValueChange={setGenreFilter} defaultValue="Tous">
-                        <SelectTrigger id="filter-genre" aria-label="Filtrer par genre">
-                            <SelectValue placeholder="Genre" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Tous">Tous</SelectItem>
-                            <SelectItem value="H">H</SelectItem>
-                            <SelectItem value="F">F</SelectItem>
-                            <SelectItem value="Autre">Autre</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="filter-cotisation">Cotisation</Label>
-                    <Select onValueChange={setCotisationFilter} defaultValue="Tous">
-                        <SelectTrigger id="filter-cotisation" aria-label="Filtrer par statut de cotisation">
-                            <SelectValue placeholder="Cotisation" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Tous">Tous</SelectItem>
-                            <SelectItem value="À jour">À jour</SelectItem>
-                            <SelectItem value="En retard">En retard</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="filter-benevole">Bénévole</Label>
-                    <Select onValueChange={setBenevoleFilter} defaultValue="Tous">
-                        <SelectTrigger id="filter-benevole" aria-label="Filtrer par statut de bénévole">
-                            <SelectValue placeholder="Bénévole" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Tous">Tous</SelectItem>
-                            <SelectItem value="Oui">Oui</SelectItem>
-                            <SelectItem value="Non">Non</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="filter-faaf">Membre FAAF</Label>
-                    <Select onValueChange={setFaafFilter} defaultValue="Tous">
-                        <SelectTrigger id="filter-faaf" aria-label="Filtrer par statut de membre FAAF">
-                            <SelectValue placeholder="Membre FAAF" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Tous">Tous</SelectItem>
-                            <SelectItem value="Oui">Oui</SelectItem>
-                            <SelectItem value="Non">Non</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="filter-bureau">Bureau</Label>
-                    <Select onValueChange={setBureauFilter} defaultValue="Tous">
-                        <SelectTrigger id="filter-bureau" aria-label="Filtrer par statut de membre du bureau">
-                            <SelectValue placeholder="Bureau" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Tous">Tous</SelectItem>
-                            <SelectItem value="Oui">Oui</SelectItem>
-                            <SelectItem value="Non">Non</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="filter-droit-image">Droit à l'image</Label>
-                    <Select onValueChange={setDroitImageFilter} defaultValue="Tous">
-                        <SelectTrigger id="filter-droit-image" aria-label="Filtrer par droit à l'image">
-                            <SelectValue placeholder="Droit à l'image" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Tous">Tous</SelectItem>
-                            <SelectItem value="Accordé">Accordé</SelectItem>
-                            <SelectItem value="Refusé">Refusé</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="filter-age">Tranche d'âge</Label>
-                    <Select onValueChange={setAgeFilter} defaultValue="Tous">
-                        <SelectTrigger id="filter-age" aria-label="Filtrer par tranche d'âge">
-                            <SelectValue placeholder="Tranche d'âge" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Tous">Tous</SelectItem>
-                            <SelectItem value="-18">-18 ans</SelectItem>
-                            <SelectItem value="18-30">18-30 ans</SelectItem>
-                            <SelectItem value="31-50">31-50 ans</SelectItem>
-                            <SelectItem value="50+">50+ ans</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
+                <Select onValueChange={setGenreFilter} defaultValue="Tous">
+                    <SelectTrigger aria-label="Genre"><SelectValue placeholder="Genre" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Tous">Tous</SelectItem>
+                        <SelectItem value="H">H</SelectItem>
+                        <SelectItem value="F">F</SelectItem>
+                    </SelectContent>
+                </Select>
+                 <Select onValueChange={setCotisationFilter} defaultValue="Tous">
+                    <SelectTrigger aria-label="Cotisation"><SelectValue placeholder="Cotisation" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Tous">Tous</SelectItem>
+                        <SelectItem value="À jour">À jour</SelectItem>
+                        <SelectItem value="En retard">En retard</SelectItem>
+                    </SelectContent>
+                </Select>
+                 <Select onValueChange={setBenevoleFilter} defaultValue="Tous">
+                    <SelectTrigger aria-label="Bénévole"><SelectValue placeholder="Bénévole" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Tous">Tous</SelectItem>
+                        <SelectItem value="Oui">Oui</SelectItem>
+                        <SelectItem value="Non">Non</SelectItem>
+                    </SelectContent>
+                </Select>
+                 <Select onValueChange={setFaafFilter} defaultValue="Tous">
+                    <SelectTrigger aria-label="FAAF"><SelectValue placeholder="FAAF" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Tous">Tous</SelectItem>
+                        <SelectItem value="Oui">Oui</SelectItem>
+                        <SelectItem value="Non">Non</SelectItem>
+                    </SelectContent>
+                </Select>
+                 <Select onValueChange={setBureauFilter} defaultValue="Tous">
+                    <SelectTrigger aria-label="Bureau"><SelectValue placeholder="Bureau" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Tous">Tous</SelectItem>
+                        <SelectItem value="Oui">Oui</SelectItem>
+                        <SelectItem value="Non">Non</SelectItem>
+                    </SelectContent>
+                </Select>
+                 <Select onValueChange={setDroitImageFilter} defaultValue="Tous">
+                    <SelectTrigger aria-label="Droit image"><SelectValue placeholder="Droit image" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Tous">Tous</SelectItem>
+                        <SelectItem value="Accordé">Accordé</SelectItem>
+                        <SelectItem value="Refusé">Refusé</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select onValueChange={setAgeFilter} defaultValue="Tous">
+                    <SelectTrigger aria-label="Âge"><SelectValue placeholder="Âge" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Tous">Tous</SelectItem>
+                        <SelectItem value="-18">-18 ans</SelectItem>
+                        <SelectItem value="18-30">18-30 ans</SelectItem>
+                        <SelectItem value="31-50">31-50 ans</SelectItem>
+                        <SelectItem value="50+">50+ ans</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
         </CardContent>
       </Card>
 
-
       {filteredAdherents.length === 0 ? (
         <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
-            <p className="text-muted-foreground">
-              {hasActiveFilters
-                ? 'Aucun adhérent ne correspond à vos critères de recherche.'
-                : 'Aucun adhérent enregistré pour le moment.'
-              }
-            </p>
+            <p className="text-muted-foreground">Aucun adhérent trouvé.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
