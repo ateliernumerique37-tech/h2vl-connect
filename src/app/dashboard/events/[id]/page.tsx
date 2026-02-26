@@ -68,7 +68,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
-    const [activeIndex, setActiveIndex] = useState(0);
+    const [activeIndex, setActiveIndex] = useState(-1);
     const listboxId = "adherents-listbox";
     const inputId = "adherent-search-input";
 
@@ -85,7 +85,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
             setIsPaid(false);
             setMenuChoices({});
             setSearchTerm("");
-            setActiveIndex(0);
+            setActiveIndex(-1);
         }
     }, [isOpen]);
 
@@ -94,14 +94,18 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
 
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setActiveIndex(prev => (prev + 1) % filteredAdherents.length);
+            const nextIndex = (activeIndex + 1) % filteredAdherents.length;
+            setActiveIndex(nextIndex);
+            setSelectedAdherentId(filteredAdherents[nextIndex].id);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            setActiveIndex(prev => (prev - 1 + filteredAdherents.length) % filteredAdherents.length);
+            const prevIndex = (activeIndex - 1 + filteredAdherents.length) % filteredAdherents.length;
+            setActiveIndex(prevIndex);
+            setSelectedAdherentId(filteredAdherents[prevIndex].id);
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (filteredAdherents[activeIndex]) {
-                setSelectedAdherentId(filteredAdherents[activeIndex].id);
+            if (selectedAdherentId) {
+                handleRegister();
             }
         }
     };
@@ -135,7 +139,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un membre pour l'inscrire à cet événement. Navigation au clavier (flèches + entrée) supportée.
+                        Sélectionnez un membre. Utilisez les flèches du clavier pour naviguer et sélectionner dynamiquement.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-6 py-4 overflow-y-auto pr-2">
@@ -147,17 +151,22 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                           aria-expanded={isOpen}
                           aria-haspopup="listbox"
                           aria-controls={listboxId}
+                          aria-owns={listboxId}
                         >
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 id={inputId}
                                 placeholder="Rechercher par nom..."
-                                className="pl-9"
+                                className="pl-9 ring-offset-background focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value);
+                                    setActiveIndex(-1);
+                                    setSelectedAdherentId("");
+                                }}
                                 onKeyDown={handleKeyDown}
                                 aria-autocomplete="list"
-                                aria-activedescendant={filteredAdherents.length > 0 ? `adherent-option-${filteredAdherents[activeIndex]?.id}` : undefined}
+                                aria-activedescendant={activeIndex >= 0 ? `adherent-option-${filteredAdherents[activeIndex]?.id}` : undefined}
                                 autoComplete="off"
                             />
                         </div>
@@ -194,7 +203,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                                                         "min-h-[44px]", // WCAG 2.2 Target Size
                                                         isSelected && "bg-primary text-primary-foreground font-medium",
                                                         isHighlighted && !isSelected && "bg-muted outline outline-2 outline-primary",
-                                                        isHighlighted && isSelected && "bg-primary/90 outline outline-2 outline-white"
+                                                        !isHighlighted && !isSelected && "hover:bg-muted/50"
                                                     )}
                                                 >
                                                     <span>{adherent.prenom} {adherent.nom}</span>
@@ -242,7 +251,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                     <Button 
                       onClick={handleRegister} 
                       disabled={!selectedAdherentId || isSubmitting} 
-                      className="w-full"
+                      className="w-full text-base py-6"
                       aria-label="Confirmer et valider l'inscription de l'adhérent sélectionné"
                     >
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -441,9 +450,9 @@ export default function EventDetailPage() {
                                                             const value = inscription.choixMenu?.[item.key as keyof typeof inscription.choixMenu];
                                                             if (!value) return null;
                                                             return (
-                                                                <div key={item.key} className="flex items-baseline gap-2 text-[9px]">
-                                                                    <span className="font-bold text-primary uppercase w-20 shrink-0">{item.label} :</span>
-                                                                    <span className="text-muted-foreground truncate">{value}</span>
+                                                                <div key={item.key} className="flex flex-col gap-0.5 mb-1 last:mb-0">
+                                                                    <span className="text-[9px] font-bold text-primary uppercase tracking-wider">{item.label}</span>
+                                                                    <span className="text-[11px] text-muted-foreground pl-1 border-l-2 border-primary/20">{value}</span>
                                                                 </div>
                                                             );
                                                         })}
