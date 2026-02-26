@@ -14,15 +14,13 @@ import { doc, setDoc } from 'firebase/firestore';
  */
 function DashboardSkeleton() {
   return (
-    <div className="flex h-screen w-full bg-background">
+    <div className="flex h-screen w-full bg-background" aria-hidden="true">
       <div className="hidden w-64 flex-col border-r bg-card p-4 md:flex">
         <div className="mb-8 h-8 w-32 animate-pulse rounded-md bg-muted" />
         <div className="space-y-4">
-          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-10 w-full animate-pulse rounded-md bg-muted" />
+          ))}
         </div>
       </div>
       <div className="flex-1 p-4 md:p-8">
@@ -39,29 +37,29 @@ function DashboardSkeleton() {
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   
   // Montage initial du client pour synchronisation SSR/Client
   useEffect(() => {
-    setMounted(true);
+    setIsMounted(true);
   }, []);
 
   const adminRef = useMemoFirebase(() => user ? doc(db, 'admins', user.uid) : null, [db, user]);
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
 
-  // 1. Redirection si non connecté (uniquement après montage et fin du chargement initial)
+  // 1. Redirection si non connecté
   useEffect(() => {
-    if (mounted && !isUserLoading && !user) {
+    if (isMounted && !isUserLoading && !user) {
       router.replace('/login');
     }
-  }, [user, isUserLoading, router, mounted]);
+  }, [user, isUserLoading, router, isMounted]);
 
   // 2. Auto-réparation du profil admin si manquant
   useEffect(() => {
-    if (mounted && user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
+    if (isMounted && user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
       
@@ -71,22 +69,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         email: user.email,
         role: 'Administrateur',
       }, { merge: true })
-      .catch((error) => {
-        console.error("Auto-repair failed:", error);
-      })
+      .catch(() => {})
       .finally(() => {
         setIsHealing(false);
       });
     }
-  }, [user, db, adminDoc, isAdminDocLoading, isHealing, mounted]);
+  }, [user, db, adminDoc, isAdminDocLoading, isHealing, isMounted]);
 
-  // Règle d'or anti-hydratation : retourner null tant que le client n'est pas monté.
-  // Cela garantit que le rendu initial (SSR) et l'hydratation (Client) correspondent (vide).
-  if (!mounted) {
+  // Règle d'or : Ne RIEN rendre sur le serveur pour ce fragment asynchrone
+  if (!isMounted) {
     return null;
   }
 
-  // Après le montage, on affiche le squelette pendant que Firebase récupère l'auth et le profil
+  // Ensuite seulement, gérer la logique de chargement de Firebase Auth
   if (isUserLoading || isAdminDocLoading || isHealing) {
     return <DashboardSkeleton />;
   }
