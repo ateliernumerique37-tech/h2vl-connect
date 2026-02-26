@@ -44,17 +44,19 @@ export default function AdherentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const db = useFirestore();
-  const id = params.id as string;
   const { toast } = useToast();
   
-  const adherentRef = useMemoFirebase(() => doc(db, 'adherents', id), [db, id]);
+  // Robust ID extraction
+  const id = params?.id as string;
+  
+  const adherentRef = useMemoFirebase(() => id ? doc(db, 'adherents', id) : null, [db, id]);
   const { data: adherent, isLoading: isLoadingAdherent } = useDoc<Adherent>(adherentRef);
 
-  const cotisationsQuery = useMemoFirebase(() => query(
+  const cotisationsQuery = useMemoFirebase(() => id ? query(
     collection(db, 'cotisations'), 
     where('adherentId', '==', id),
     orderBy('datePaiement', 'desc')
-  ), [db, id]);
+  ) : null, [db, id]);
   const { data: adherentCotisations, isLoading: isLoadingCotisations } = useCollection<Cotisation>(cotisationsQuery);
 
   const [formData, setFormData] = useState<Partial<Adherent>>({});
@@ -71,7 +73,7 @@ export default function AdherentDetailPage() {
       return <AdherentDetailSkeleton />;
   }
 
-  if (!adherent) {
+  if (!adherent && !isLoadingAdherent) {
     return notFound();
   }
   
@@ -96,7 +98,7 @@ export default function AdherentDetailPage() {
         await updateAdherent(db, id, { [field]: checked });
         toast({
             title: "Statut mis à jour",
-            description: `Le statut a été modifié avec succès.`,
+            description: `Le statut pour ${adherent?.prenom} a été modifié.`,
         });
     } catch (error) {
         console.error(`Failed to update ${field}:`, error);
@@ -109,12 +111,12 @@ export default function AdherentDetailPage() {
         await deleteAdherent(db, id);
         toast({
             title: "Adhérent supprimé",
-            description: `${adherent.prenom} ${adherent.nom} a été supprimé.`,
+            description: `${adherent?.prenom} ${adherent?.nom} a été supprimé définitivement.`,
         });
         router.push('/dashboard/adherents');
     } catch (error) {
         console.error("Failed to delete adherent:", error);
-        toast({ variant: 'destructive', title: 'Erreur de suppression', description: "Impossible de supprimer l'adhérent." });
+        toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de supprimer l'adhérent." });
     }
   };
 
@@ -124,7 +126,7 @@ export default function AdherentDetailPage() {
         setShowAddCotisationDialog(false);
         toast({
             title: "Cotisation ajoutée",
-            description: `Une cotisation de 15,00 € a été ajoutée pour ${adherent.prenom} ${adherent.nom}.`,
+            description: `Cotisation de 15,00 € validée pour ${adherent?.prenom}.`,
         });
     } catch (error) {
         console.error("Failed to add cotisation:", error);
@@ -137,7 +139,7 @@ export default function AdherentDetailPage() {
         await updateAdherent(db, id, formData);
         toast({
             title: "Modifications enregistrées",
-            description: `Les informations de ${adherent.prenom} ${adherent.nom} ont été mises à jour.`,
+            description: `Les informations de ${adherent?.prenom} ${adherent?.nom} sont à jour.`,
         });
     } catch (error) {
         console.error("Failed to save changes:", error);
@@ -145,6 +147,7 @@ export default function AdherentDetailPage() {
     }
   };
 
+  if (!adherent) return null;
 
   return (
     <div className="space-y-6">
@@ -152,31 +155,31 @@ export default function AdherentDetailPage() {
         <CardHeader>
           <CardTitle>Fiche de {adherent.prenom} {adherent.nom}</CardTitle>
           <CardDescription>
-            Informations de contact et profil personnel.
+            Informations de contact et profil personnel détaillés.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="prenom">Prénom</Label>
-              <Input id="prenom" name="prenom" value={formData.prenom || ''} onChange={handleInputChange} aria-label={`Modifier le prénom, actuellement ${adherent.prenom}`} />
+              <Input id="prenom" name="prenom" value={formData.prenom || ''} onChange={handleInputChange} aria-label={`Modifier le prénom de ${adherent.prenom}`} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="nom">Nom</Label>
-              <Input id="nom" name="nom" value={formData.nom || ''} onChange={handleInputChange} aria-label={`Modifier le nom, actuellement ${adherent.nom}`} />
+              <Input id="nom" name="nom" value={formData.nom || ''} onChange={handleInputChange} aria-label={`Modifier le nom de ${adherent.nom}`} />
             </div>
           </div>
           
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <div className="flex gap-2">
-                <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="flex-1" aria-label={`Modifier l'email, actuellement ${adherent.email}`} />
+                <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="flex-1" />
                 <Button 
                     variant="outline" 
                     size="icon" 
                     type="button"
                     onClick={() => handleCopy(formData.email, "L'email")}
-                    aria-label="Copier l'adresse email"
+                    aria-label={`Copier l'email de ${adherent.prenom}`}
                 >
                     {copiedField === "L'email" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
@@ -186,13 +189,13 @@ export default function AdherentDetailPage() {
           <div className="space-y-2">
             <Label htmlFor="telephone">Téléphone</Label>
             <div className="flex gap-2">
-                <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} className="flex-1" aria-label={`Modifier le téléphone, actuellement ${adherent.telephone}`} />
+                <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} className="flex-1" />
                 <Button 
                     variant="outline" 
                     size="icon" 
                     type="button"
                     onClick={() => handleCopy(formData.telephone, "Le téléphone")}
-                    aria-label="Copier le numéro de téléphone"
+                    aria-label={`Copier le téléphone de ${adherent.prenom}`}
                 >
                     {copiedField === "Le téléphone" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
@@ -202,13 +205,13 @@ export default function AdherentDetailPage() {
           <div className="space-y-2">
             <Label htmlFor="adresse">Adresse</Label>
             <div className="flex gap-2">
-                <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} className="flex-1" aria-label={`Modifier l'adresse, actuellement ${adherent.adresse || 'non renseignée'}`} />
+                <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} className="flex-1" />
                 <Button 
                     variant="outline" 
                     size="icon" 
                     type="button"
                     onClick={() => handleCopy(formData.adresse, "L'adresse")}
-                    aria-label="Copier l'adresse postale"
+                    aria-label={`Copier l'adresse de ${adherent.prenom}`}
                 >
                     {copiedField === "L'adresse" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
@@ -218,37 +221,37 @@ export default function AdherentDetailPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
                 <Label htmlFor="dateNaissance">Date de naissance</Label>
-                <Input id="dateNaissance" name="dateNaissance" type="date" value={formData.dateNaissance ? formData.dateNaissance.split('T')[0] : ''} onChange={handleInputChange} aria-label={`Modifier la date de naissance`} />
+                <Input id="dateNaissance" name="dateNaissance" type="date" value={formData.dateNaissance ? formData.dateNaissance.split('T')[0] : ''} onChange={handleInputChange} />
             </div>
              <div className="space-y-2">
-                <Label htmlFor="inscription-date">Date d'inscription</Label>
+                <Label htmlFor="inscription-date">Membre depuis le</Label>
                 <Input id="inscription-date" value={new Date(adherent.dateInscription).toLocaleDateString('fr-FR')} readOnly disabled />
             </div>
           </div>
         </CardContent>
-        <CardFooter className="flex flex-wrap justify-start gap-4">
-          <Button onClick={handleSaveChanges} aria-label={`Enregistrer les modifications pour ${adherent.prenom} ${adherent.nom}`}>
+        <CardFooter className="flex flex-wrap justify-start gap-4 border-t pt-6 bg-muted/5">
+          <Button onClick={handleSaveChanges} aria-label={`Enregistrer les modifications de ${adherent.prenom}`}>
             <Save className="mr-2 h-4 w-4" />
-            Enregistrer les modifications pour {adherent.prenom} {adherent.nom}
+            Enregistrer les modifications pour {adherent.prenom}
           </Button>
            <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" aria-label={`Supprimer définitivement l'adhérent ${adherent.prenom} ${adherent.nom}`}>
+              <Button variant="destructive" aria-label={`Supprimer l'adhérent ${adherent.prenom} ${adherent.nom}`}>
                 <Trash2 className="mr-2 h-4 w-4" />
-                Supprimer l'adhérent {adherent.prenom} {adherent.nom}
+                Supprimer {adherent.prenom}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Cette action supprimera définitivement l'adhérent <strong>{adherent.prenom} {adherent.nom}</strong> de la base de données. Cette opération est irréversible.
+                  Cette action supprimera définitivement l'adhérent <strong>{adherent.prenom} {adherent.nom}</strong>. Cette opération est irréversible.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Confirmer la suppression de {adherent.prenom}
+                    Confirmer la suppression
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -258,27 +261,27 @@ export default function AdherentDetailPage() {
 
       <Card>
         <CardHeader>
-            <CardTitle>Statuts et autorisations</CardTitle>
-            <CardDescription>Gérez les habilitations au sein de l'association.</CardDescription>
+            <CardTitle>Statuts de l'Adhérent</CardTitle>
+            <CardDescription>Gérez les habilitations et autorisations.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { id: 'estMembreBureau', label: 'Membre du bureau', desc: 'Indique si l\'adhérent fait partie du bureau.' },
-              { id: 'estBenevole', label: 'Bénévole', desc: 'Indique si l\'adhérent est actif comme bénévole.' },
-              { id: 'estMembreFaaf', label: 'Membre FAAF', desc: 'Affiliation à la FAAF.' },
-              { id: 'accordeDroitImage', label: 'Droit à l\'image', desc: 'Autorisation d\'utilisation de l\'image.' },
-              { id: 'cotisationAJour', label: 'Cotisation à jour', desc: 'Statut de paiement pour l\'année en cours.' },
+              { id: 'estMembreBureau', label: 'Membre du bureau', desc: 'Fait partie de l\'administration.' },
+              { id: 'estBenevole', label: 'Bénévole actif', desc: 'S\'implique dans les activités.' },
+              { id: 'estMembreFaaf', label: 'Affiliation FAAF', desc: 'Membre de la fédération.' },
+              { id: 'accordeDroitImage', label: 'Droit à l\'image', desc: 'Autorise l\'utilisation de photos.' },
+              { id: 'cotisationAJour', label: 'Cotisation à jour', desc: 'Statut financier pour l\'année.' },
             ].map((item) => (
-              <div key={item.id} className="flex items-center justify-between rounded-lg border p-4">
+              <div key={item.id} className="flex items-center justify-between rounded-lg border p-4 bg-card">
                 <Label htmlFor={`switch-${item.id}`} className="flex flex-col space-y-1">
-                    <span>{item.label}</span>
-                    <span className="font-normal leading-snug text-muted-foreground">{item.desc}</span>
+                    <span className="font-bold">{item.label}</span>
+                    <span className="font-normal text-xs text-muted-foreground">{item.desc}</span>
                 </Label>
                 <Switch 
                     id={`switch-${item.id}`} 
                     checked={adherent[item.id as keyof Adherent] as boolean}
                     onCheckedChange={(checked) => handleSwitchChange(item.id as keyof Adherent, checked)}
-                    aria-label={`Modifier le statut ${item.label} pour ${adherent.prenom}`}
+                    aria-label={`Changer statut ${item.label} pour ${adherent.prenom}`}
                 />
               </div>
             ))}
@@ -287,15 +290,15 @@ export default function AdherentDetailPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle>Historique des Cotisations</CardTitle>
-          <CardDescription>Paiements annuels effectués.</CardDescription>
+          <CardTitle>Historique Financier</CardTitle>
+          <CardDescription>Cotisations annuelles enregistrées.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Année</TableHead>
-                <TableHead>Date de paiement</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
               </TableRow>
             </TableHeader>
@@ -303,39 +306,39 @@ export default function AdherentDetailPage() {
               {adherentCotisations && adherentCotisations.length > 0 ? (
                 adherentCotisations.map((cotisation) => (
                   <TableRow key={cotisation.id}>
-                    <TableCell>{cotisation.annee}</TableCell>
+                    <TableCell className="font-medium">{cotisation.annee}</TableCell>
                     <TableCell>{new Date(cotisation.datePaiement).toLocaleDateString('fr-FR')}</TableCell>
-                    <TableCell className="text-right font-medium">{cotisation.montant.toFixed(2)} €</TableCell>
+                    <TableCell className="text-right font-bold">{cotisation.montant.toFixed(2)} €</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-6 text-muted-foreground italic">
-                    Aucun historique de cotisation trouvé pour cet adhérent.
+                    Aucune cotisation trouvée.
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
-         <CardFooter>
+         <CardFooter className="border-t pt-6">
           <Dialog open={showAddCotisationDialog} onOpenChange={setShowAddCotisationDialog}>
             <DialogTrigger asChild>
-              <Button aria-label={`Ajouter une nouvelle cotisation pour ${adherent.prenom}`}>
+              <Button aria-label={`Encaisser une cotisation pour ${adherent.prenom}`}>
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Ajouter une cotisation
+                Valider une cotisation (15 €)
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Ajouter une cotisation</DialogTitle>
+                <DialogTitle>Valider la cotisation</DialogTitle>
                 <DialogDescription>
-                  Confirmez l'ajout d'une cotisation forfaitaire de 15,00 € pour {adherent.prenom} {adherent.nom} au titre de l'année en cours.
+                  Voulez-vous enregistrer le paiement de 15,00 € pour <strong>{adherent.prenom} {adherent.nom}</strong> pour l'année en cours ?
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowAddCotisationDialog(false)}>Annuler</Button>
-                <Button onClick={handleAddCotisation}>Confirmer et ajouter</Button>
+                <Button onClick={handleAddCotisation}>Confirmer le paiement</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
