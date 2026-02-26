@@ -62,6 +62,7 @@ const MenuChoiceSection = ({ category, options, selected, onSelect, eventId }: {
 
 function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Evenement; adherentsList: Adherent[]; onRegister: (inscription: Omit<Inscription, 'id' | 'date_inscription'>) => void }) {
     const [selectedAdherentId, setSelectedAdherentId] = useState<string>();
+    const [isPaid, setIsPaid] = useState(false);
     const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
     const [isOpen, setIsOpen] = useState(false);
 
@@ -71,12 +72,13 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
         const newInscription: Omit<Inscription, 'id' | 'date_inscription'> = {
             id_evenement: event.id,
             id_adherent: selectedAdherentId,
-            a_paye: false,
+            a_paye: isPaid,
             ...(event.necessiteMenu && { choixMenu: menuChoices })
         };
         onRegister(newInscription);
         setIsOpen(false);
         setSelectedAdherentId(undefined);
+        setIsPaid(false);
         setMenuChoices({});
     };
     
@@ -112,14 +114,29 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                         </Select>
                     </div>
 
+                    <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/20">
+                        <Label htmlFor="paid-toggle" className="font-medium">A déjà payé ?</Label>
+                        <Switch id="paid-toggle" checked={isPaid} onCheckedChange={setIsPaid} />
+                    </div>
+
                     {event.necessiteMenu && event.optionsMenu && (
-                        <div className="space-y-4 border rounded-lg p-4">
-                            <h4 className="font-semibold">Choix du Menu</h4>
-                            {event.optionsMenu.aperitifs && <MenuChoiceSection category="Apéritifs" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />}
-                            {event.optionsMenu.entrees && <MenuChoiceSection category="Entrées" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />}
-                            {event.optionsMenu.plats && <MenuChoiceSection category="Plats" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />}
-                            {event.optionsMenu.fromages && <MenuChoiceSection category="Fromages" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />}
-                            {event.optionsMenu.desserts && <MenuChoiceSection category="Desserts" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />}
+                        <div className="space-y-4 border rounded-lg p-4 max-h-[300px] overflow-y-auto">
+                            <h4 className="font-semibold sticky top-0 bg-background pb-2 border-b">Choix du Menu</h4>
+                            {event.optionsMenu.aperitifs && event.optionsMenu.aperitifs.length > 0 && (
+                                <MenuChoiceSection category="Apéritif" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />
+                            )}
+                            {event.optionsMenu.entrees && event.optionsMenu.entrees.length > 0 && (
+                                <MenuChoiceSection category="Entrée" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />
+                            )}
+                            {event.optionsMenu.plats && event.optionsMenu.plats.length > 0 && (
+                                <MenuChoiceSection category="Plat principal" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />
+                            )}
+                            {event.optionsMenu.fromages && event.optionsMenu.fromages.length > 0 && (
+                                <MenuChoiceSection category="Fromage" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />
+                            )}
+                            {event.optionsMenu.desserts && event.optionsMenu.desserts.length > 0 && (
+                                <MenuChoiceSection category="Dessert" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />
+                            )}
                         </div>
                     )}
                 </div>
@@ -357,9 +374,11 @@ export default function EventDetailPage() {
                                             <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
                                                 <h4 className="font-medium text-foreground mb-1">Menu choisi :</h4>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-                                                    {Object.entries(inscription.choixMenu).map(([k, v]) => v && (
-                                                        <p key={k}><strong>{k.replace('Choisi', '').replace('Choisie', '')} :</strong> {v}</p>
-                                                    ))}
+                                                    {inscription.choixMenu.aperitifChoisi && <p><strong>Apéritif :</strong> {inscription.choixMenu.aperitifChoisi}</p>}
+                                                    {inscription.choixMenu.entreeChoisie && <p><strong>Entrée :</strong> {inscription.choixMenu.entreeChoisie}</p>}
+                                                    {inscription.choixMenu.platChoisi && <p><strong>Plat principal :</strong> {inscription.choixMenu.platChoisi}</p>}
+                                                    {inscription.choixMenu.fromageChoisi && <p><strong>Fromage :</strong> {inscription.choixMenu.fromageChoisi}</p>}
+                                                    {inscription.choixMenu.dessertChoisi && <p><strong>Dessert :</strong> {inscription.choixMenu.dessertChoisi}</p>}
                                                 </div>
                                             </div>
                                         )}
