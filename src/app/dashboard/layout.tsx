@@ -5,23 +5,24 @@ import { useEffect, useState } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/header';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 /**
- * Composant de chargement statique pour le rendu initial (Serveur et Client).
- * Structure HTML 100% stable pour éviter les erreurs d'hydratation.
+ * Composant de chargement statique pour le rendu initial.
+ * Structure HTML simplifiée et stable pour éviter les erreurs d'hydratation.
  */
 function DashboardSkeleton() {
   return (
-    <div className="flex h-screen w-full bg-background" aria-hidden="true">
+    <div className="flex h-screen w-full bg-background">
       <div className="hidden w-64 flex-col border-r bg-card p-4 md:flex">
         <div className="mb-8 h-8 w-32 animate-pulse rounded-md bg-muted" />
         <div className="space-y-4">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-10 w-full animate-pulse rounded-md bg-muted" />
-          ))}
+          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
         </div>
       </div>
       <div className="flex-1 p-4 md:p-8">
@@ -42,7 +43,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   
-  // Montage initial du client
+  // Montage initial du client pour synchronisation SSR/Client
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -51,7 +52,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
 
-  // 1. Redirection si non connecté
+  // 1. Redirection si non connecté (uniquement après montage et fin du chargement initial)
   useEffect(() => {
     if (mounted && !isUserLoading && !user) {
       router.replace('/login');
@@ -79,14 +80,18 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [user, db, adminDoc, isAdminDocLoading, isHealing, mounted]);
 
-  // Étape critique pour l'hydratation :
-  // On retourne le Skeleton tant que le composant n'est pas monté sur le client
-  // OU si les données nécessaires sont en cours de chargement.
-  if (!mounted || isUserLoading || isAdminDocLoading || isHealing) {
+  // Règle d'or anti-hydratation : retourner null tant que le client n'est pas monté.
+  // Cela garantit que le rendu initial (SSR) et l'hydratation (Client) correspondent (vide).
+  if (!mounted) {
+    return null;
+  }
+
+  // Après le montage, on affiche le squelette pendant que Firebase récupère l'auth et le profil
+  if (isUserLoading || isAdminDocLoading || isHealing) {
     return <DashboardSkeleton />;
   }
 
-  // Sécurité : si l'utilisateur n'est pas authentifié, on ne rend rien (le useEffect gère la redirection)
+  // Sécurité finale : si l'utilisateur n'est pas authentifié, on ne rend rien (le useEffect redirige)
   if (!user) return null;
 
   return <>{children}</>;
