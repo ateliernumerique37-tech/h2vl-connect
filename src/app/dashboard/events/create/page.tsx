@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import AiEventForm from '@/components/admin/ai-event-form';
 import { addEvenement } from '@/services/evenementsService';
 import { addLog } from '@/services/logsService';
 import type { Evenement } from '@/lib/types';
@@ -68,7 +67,7 @@ export default function CreateEventPage() {
 
         } catch (error) {
             console.error("Failed to create event:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de créer l'événement." });
+            toast({ variant: "destructive", title: "Erreur", description: "Impossible de créer l'événement." });
             setIsSubmitting(false);
         }
     };
@@ -77,21 +76,8 @@ export default function CreateEventPage() {
         <div className="space-y-6">
              <header>
                  <h1 className="text-3xl font-bold tracking-tight">Créer un nouvel événement</h1>
-                 <p className="text-muted-foreground">Remplissez les détails ci-dessous ou utilisez l'assistant IA pour générer une description.</p>
+                 <p className="text-muted-foreground">Remplissez les détails ci-dessous pour organiser une nouvelle activité.</p>
             </header>
-            
-            <AiEventForm />
-            
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Ou remplir manuellement
-                </span>
-              </div>
-            </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <Card>
