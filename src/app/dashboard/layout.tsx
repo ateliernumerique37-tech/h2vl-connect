@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -37,36 +36,31 @@ function DashboardSkeleton() {
  * Gère la redirection, l'auto-réparation du profil et prévient les erreurs d'hydratation.
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
+  // TOUS LES HOOKS DOIVENT ÊTRE DÉCLARÉS ICI, AVANT TOUT RETURN
   const [isMounted, setIsMounted] = useState(false);
-  
-  // Montage initial du client pour synchronisation SSR/Client
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   const router = useRouter();
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
+  
   const adminRef = useMemoFirebase(() => user ? doc(db, 'admins', user.uid) : null, [db, user]);
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
 
-  // Règle d'or : Ne RIEN rendre sur le serveur pour ce fragment asynchrone
-  // Cela évite les mismatches d'hydratation car l'état Auth est inconnu au serveur.
-  if (!isMounted) {
-    return null;
-  }
+  // Montage initial du client
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 1. Redirection si non connecté
   useEffect(() => {
-    if (!isUserLoading && !user) {
+    if (isMounted && !isUserLoading && !user) {
       router.replace('/login');
     }
-  }, [user, isUserLoading, router]);
+  }, [isMounted, user, isUserLoading, router]);
 
   // 2. Auto-réparation du profil admin si manquant
   useEffect(() => {
-    if (user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
+    if (isMounted && user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
       
@@ -81,7 +75,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         setIsHealing(false);
       });
     }
-  }, [user, db, adminDoc, isAdminDocLoading, isHealing]);
+  }, [isMounted, user, db, adminDoc, isAdminDocLoading, isHealing]);
+
+  // RETOURS ANTICIPÉS UNIQUEMENT APRÈS TOUS LES HOOKS
+  
+  // Règle d'or : Ne RIEN rendre sur le serveur pour ce fragment asynchrone
+  if (!isMounted) {
+    return null;
+  }
 
   // Ensuite seulement, gérer la logique de chargement de Firebase Auth
   if (isUserLoading || isAdminDocLoading || isHealing) {
