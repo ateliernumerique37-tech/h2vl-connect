@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -45,7 +44,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   
-  // Écoute en temps réel du document admin de l'utilisateur
   const adminRef = useMemoFirebase(() => user ? doc(db, 'admins', user.uid) : null, [db, user]);
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
@@ -58,6 +56,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Si l'utilisateur est connecté mais n'a pas de document admin, on le crée (auto-réparation)
+    // On ne le fait que si on a fini de charger et que le doc est vraiment absent
     if (user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
@@ -70,19 +69,31 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       }).then(() => {
         setIsHealing(false);
       }).catch((error) => {
-        console.error("AuthGuard: Erreur lors de l'auto-réparation de l'admin", error);
+        console.error("AuthGuard: Erreur lors de l'auto-réparation", error);
         setIsHealing(false);
       });
     }
   }, [user, db, adminDoc, isAdminDocLoading, isHealing]);
 
-  if (isUserLoading || isAdminDocLoading || isHealing) {
+  // Si on charge l'utilisateur ou le document admin, on montre le skeleton
+  if (isUserLoading || isAdminDocLoading) {
     return <DashboardSkeleton />;
   }
 
-  if (!user || !adminDoc) {
-    // Si pas d'user ou pas encore de doc admin (malgré la tentative de healing), on ne rend rien
-    return null; 
+  // Si pas d'utilisateur, le useEffect redirigera vers /login
+  if (!user) {
+    return null;
+  }
+
+  // Si on est en train de créer le document manquant, on attend
+  if (isHealing) {
+    return <DashboardSkeleton />;
+  }
+
+  // Si le document admin n'est pas encore là et qu'on n'est pas en train de le soigner,
+  // on attend que l'auto-réparation se déclenche ou que Firestore réagisse
+  if (!adminDoc) {
+    return <DashboardSkeleton />;
   }
 
   return <>{children}</>;

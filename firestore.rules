@@ -2,12 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * CORE PHILOSOPHY:
-     * Robust, role-based security model for H2vl.
-     * Admin status is verified by the existence of a document in the 'admins' collection.
-     */
-
     // --- Helper Functions ---
 
     function isSignedIn() {
@@ -15,8 +9,8 @@ service cloud.firestore {
     }
 
     /** 
-     * @description Checks if the user is an administrator.
-     * Uses the 'admins' collection as the source of truth.
+     * @description Vérifie si l'utilisateur est un administrateur.
+     * Utilise la collection 'admins' comme source de vérité.
      */
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
@@ -29,28 +23,25 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     /**
-     * @description Administrator profiles.
-     * Users can read/create their own profile. Admins can manage all.
+     * @description Profils Administrateurs.
+     * Un utilisateur doit pouvoir lire son propre document pour que le système l'identifie.
      */
     match /admins/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow get, create: if isOwner(userId);
+      allow list, update, delete: if isAdmin();
     }
 
     /**
-     * @description Association members (Adherents).
-     * Only admins can manage the database of members.
+     * @description Adhérents de l'association.
+     * Seuls les admins peuvent gérer les membres.
      */
     match /adherents/{adherentId} {
       allow read, write: if isAdmin();
     }
 
     /**
-     * @description Association events.
-     * Readable by any member, manageable only by admins.
+     * @description Événements.
+     * Lisibles par tous les connectés, gérés par les admins.
      */
     match /evenements/{evenementId} {
       allow read: if isSignedIn();
@@ -58,34 +49,32 @@ service cloud.firestore {
     }
 
     /**
-     * @description Event registrations.
-     * Members can see their own, admins see all.
+     * @description Inscriptions aux événements.
+     * Les membres voient les leurs, les admins voient tout.
      */
     match /inscriptions/{inscriptionId} {
-      allow get, list: if isSignedIn() && (isAdmin() || resource.data.adherentId == request.auth.uid);
+      allow read: if isSignedIn() && (isAdmin() || resource.data.id_adherent == request.auth.uid);
       allow create: if isSignedIn();
-      allow update: if isAdmin() || (resource.data.adherentId == request.auth.uid && request.resource.data.adherentId == resource.data.adherentId);
-      allow delete: if isAdmin() || resource.data.adherentId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.id_adherent == request.auth.uid);
     }
 
     /**
-     * @description Membership fees (Cotisations).
-     * Managed exclusively by administrators.
+     * @description Cotisations.
+     * Gestion exclusive par les administrateurs.
      */
     match /cotisations/{cotisationId} {
       allow read, write: if isAdmin();
     }
 
     /**
-     * @description Audit logs.
-     * Readable and writable only by administrators.
+     * @description Journal d'audit.
      */
     match /logs_admin/{logId} {
       allow read, write: if isAdmin();
     }
-    
+
     /**
-     * @description Legacy/System paths.
+     * @description Compatibilité legacy.
      */
     match /roles_admin/{adminUid} {
       allow get: if isOwner(adminUid) || isAdmin();
