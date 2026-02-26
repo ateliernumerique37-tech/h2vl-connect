@@ -20,7 +20,7 @@ import { deleteEvenement } from '@/services/evenementsService';
 import { addInscription, updateInscription, deleteInscription } from '@/services/inscriptionsService';
 import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection, query, where } from 'firebase/firestore';
+import { doc, collection } from 'firebase/firestore';
 
 function EventDetailSkeleton() {
     return (
@@ -113,20 +113,24 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoadingAdher
                     <div className="space-y-2">
                         <Label htmlFor="adherent-select">Choisir l'adhérent</Label>
                          <Select onValueChange={setSelectedAdherentId} value={selectedAdherentId}>
-                            <SelectTrigger id="adherent-select" className="w-full" aria-label="Liste des adhérents disponibles">
-                                <SelectValue placeholder={isLoadingAdherents ? "Chargement des adhérents..." : (adherentsList.length > 0 ? "Sélectionnez un adhérent" : "Aucun adhérent disponible")} />
+                            <SelectTrigger id="adherent-select" className="w-full" aria-label="Zone de liste des adhérents disponibles">
+                                <SelectValue placeholder={isLoadingAdherents ? "Chargement..." : (adherentsList.length > 0 ? "Sélectionnez un adhérent" : "Aucun adhérent disponible")} />
                             </SelectTrigger>
                             <SelectContent>
-                                {adherentsList.length > 0 ? (
-                                    adherentsList.map(adherent => (
-                                        <SelectItem key={adherent.id} value={adherent.id}>
-                                            {adherent.prenom} {adherent.nom}
-                                        </SelectItem>
-                                    ))
+                                {isLoadingAdherents ? (
+                                    <SelectItem value="loading" disabled>Chargement des données...</SelectItem>
                                 ) : (
-                                    <div className="p-4 text-center text-sm text-muted-foreground italic">
-                                        {isLoadingAdherents ? "Chargement..." : "Tous les membres sont déjà inscrits."}
-                                    </div>
+                                    <>
+                                        {adherentsList.length === 0 ? (
+                                            <SelectItem value="none" disabled>Tous les membres sont déjà inscrits</SelectItem>
+                                        ) : (
+                                            adherentsList.map(adherent => (
+                                                <SelectItem key={adherent.id} value={adherent.id}>
+                                                    {adherent.prenom} {adherent.nom}
+                                                </SelectItem>
+                                            ))
+                                        )}
+                                    </>
                                 )}
                             </SelectContent>
                         </Select>
@@ -164,7 +168,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoadingAdher
                     )}
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleRegister} disabled={!selectedAdherentId || isSubmitting} className="w-full sm:w-auto">
+                    <Button onClick={handleRegister} disabled={!selectedAdherentId || selectedAdherentId === "loading" || selectedAdherentId === "none" || isSubmitting} className="w-full sm:w-auto">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Valider l'inscription
                     </Button>
@@ -185,20 +189,28 @@ export default function EventDetailPage() {
     const eventRef = useMemoFirebase(() => id ? doc(db, 'evenements', id) : null, [db, id]);
     const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
+    // Récupération brute des adhérents
     const adherentsColl = useMemoFirebase(() => collection(db, 'adherents'), [db]);
     const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsColl);
 
-    const inscriptionsQuery = useMemoFirebase(() => id ? query(collection(db, 'inscriptions'), where('id_evenement', '==', id)) : null, [db, id]);
-    const { data: inscriptionsData, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
+    // Récupération brute des inscriptions pour filtrage manuel côté client (plus fiable que where)
+    const inscriptionsColl = useMemoFirebase(() => collection(db, 'inscriptions'), [db]);
+    const { data: allInscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsColl);
+
+    // Calcul des inscriptions spécifiques à cet événement
+    const eventInscriptions = useMemo(() => {
+        if (!allInscriptions) return [];
+        return allInscriptions.filter(ins => ins.id_evenement === id);
+    }, [allInscriptions, id]);
 
     // Calcul fiable des adhérents non inscrits
     const nonRegisteredAdherents = useMemo(() => {
         if (!rawAdherents) return [];
-        const registeredIds = new Set((inscriptionsData || []).map(ins => ins.id_adherent));
+        const registeredIds = new Set(eventInscriptions.map(ins => ins.id_adherent));
         return rawAdherents
             .filter(adherent => !registeredIds.has(adherent.id))
             .sort((a, b) => a.nom.localeCompare(b.nom));
-    }, [rawAdherents, inscriptionsData]);
+    }, [rawAdherents, eventInscriptions]);
 
     const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
         try {
@@ -232,7 +244,7 @@ export default function EventDetailPage() {
         } catch (error) {
             console.error("Failed to register adherent:", error);
             toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue lors de l\'inscription.' });
-            throw error; // Pour permettre au dialogue de gérer l'état
+            throw error;
         }
     };
 
@@ -355,7 +367,7 @@ export default function EventDetailPage() {
                                     <Users className="h-5 w-5 text-primary" aria-hidden="true" />
                                     <CardTitle className="text-lg">Inscrits</CardTitle>
                                 </div>
-                                <span className="text-2xl font-bold">{inscriptionsData?.length || 0}</span>
+                                <span className="text-2xl font-bold">{eventInscriptions.length}</span>
                             </div>
                             <CardDescription>Liste actualisée des participants.</CardDescription>
                         </CardHeader>
@@ -365,9 +377,9 @@ export default function EventDetailPage() {
                                     <Skeleton className="h-12 w-full" />
                                     <Skeleton className="h-12 w-full" />
                                 </div>
-                            ) : inscriptionsData && inscriptionsData.length > 0 ? (
+                            ) : eventInscriptions.length > 0 ? (
                                 <div className="space-y-1">
-                                    {inscriptionsData.map((inscription) => {
+                                    {eventInscriptions.map((inscription) => {
                                         const adherent = rawAdherents?.find(a => a.id === inscription.id_adherent);
                                         const adherentName = adherent ? `${adherent.prenom} ${adherent.nom}` : "Adhérent inconnu";
                                         
@@ -435,4 +447,3 @@ export default function EventDetailPage() {
         </div>
     );
 }
-
