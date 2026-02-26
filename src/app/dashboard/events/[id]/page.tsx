@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
@@ -68,6 +68,8 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [activeIndex, setActiveIndex] = useState(0);
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
 
     const filteredAdherents = useMemo(() => {
         if (!adherentsList) return [];
@@ -82,8 +84,30 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
             setIsPaid(false);
             setMenuChoices({});
             setSearchTerm("");
+            setActiveIndex(0);
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        setActiveIndex(0);
+    }, [searchTerm]);
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (filteredAdherents.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveIndex(prev => (prev + 1) % filteredAdherents.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveIndex(prev => (prev - 1 + filteredAdherents.length) % filteredAdherents.length);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (filteredAdherents[activeIndex]) {
+                setSelectedAdherentId(filteredAdherents[activeIndex].id);
+            }
+        }
+    };
 
     const handleRegister = async () => {
         if (!selectedAdherentId) return;
@@ -128,11 +152,13 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                                 className="pl-9"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                aria-label="Filtrer la liste des adhérents"
+                                onKeyDown={handleKeyDown}
+                                aria-label="Filtrer la liste des adhérents. Utilisez les flèches pour naviguer."
+                                autoComplete="off"
                             />
                         </div>
                         
-                        <ScrollArea className="h-[200px] rounded-md border bg-muted/5">
+                        <ScrollArea className="h-[200px] rounded-md border bg-muted/5" ref={scrollAreaRef}>
                             <div className="p-2" role="listbox" aria-label="Liste des adhérents disponibles">
                                 {isLoading ? (
                                     <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
@@ -140,18 +166,24 @@ function RegisterMemberDialog({ event, adherentsList, onRegister, isLoading }: {
                                     </div>
                                 ) : filteredAdherents.length > 0 ? (
                                     <div className="space-y-1">
-                                        {filteredAdherents.map(adherent => {
+                                        {filteredAdherents.map((adherent, index) => {
                                             const isSelected = selectedAdherentId === adherent.id;
+                                            const isHighlighted = activeIndex === index;
                                             return (
                                                 <button
                                                     key={adherent.id}
                                                     type="button"
                                                     role="option"
                                                     aria-selected={isSelected}
-                                                    onClick={() => setSelectedAdherentId(adherent.id)}
+                                                    onClick={() => {
+                                                        setSelectedAdherentId(adherent.id);
+                                                        setActiveIndex(index);
+                                                    }}
                                                     className={cn(
-                                                        "flex w-full items-center justify-between rounded-sm px-3 py-2 text-sm transition-colors hover:bg-muted focus:bg-muted focus:outline-none",
-                                                        isSelected && "bg-primary/10 text-primary font-medium"
+                                                        "flex w-full items-center justify-between rounded-sm px-3 py-2 text-sm transition-colors focus:outline-none",
+                                                        isSelected && "bg-primary/10 text-primary font-medium",
+                                                        isHighlighted && !isSelected && "bg-muted",
+                                                        isHighlighted && isSelected && "bg-primary/20"
                                                     )}
                                                 >
                                                     <span>{adherent.prenom} {adherent.nom}</span>
