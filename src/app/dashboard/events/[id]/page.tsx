@@ -6,8 +6,8 @@ import type { Evenement, Adherent, Inscription } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus } from 'lucide-react';
-import { useState } from 'react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
@@ -60,33 +60,44 @@ const MenuChoiceSection = ({ category, options, selected, onSelect, eventId }: {
 };
 
 
-function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Evenement; adherentsList: Adherent[]; onRegister: (inscription: Omit<Inscription, 'id' | 'date_inscription'>) => void }) {
-    const [selectedAdherentId, setSelectedAdherentId] = useState<string>();
+function RegisterMemberDialog({ event, adherentsList, onRegister, isLoadingAdherents }: { event: Evenement; adherentsList: Adherent[]; onRegister: (inscription: Omit<Inscription, 'id' | 'date_inscription'>) => Promise<void>; isLoadingAdherents: boolean }) {
+    const [selectedAdherentId, setSelectedAdherentId] = useState<string>("");
     const [isPaid, setIsPaid] = useState(false);
     const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
     const [isOpen, setIsOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleRegister = () => {
+    // Réinitialisation lors de l'ouverture
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedAdherentId("");
+            setIsPaid(false);
+            setMenuChoices({});
+        }
+    }, [isOpen]);
+
+    const handleRegister = async () => {
         if (!selectedAdherentId) return;
 
-        const newInscription: Omit<Inscription, 'id' | 'date_inscription'> = {
-            id_evenement: event.id,
-            id_adherent: selectedAdherentId,
-            a_paye: isPaid,
-            ...(event.necessiteMenu && { choixMenu: menuChoices })
-        };
-        onRegister(newInscription);
-        setIsOpen(false);
-        // Reset state
-        setSelectedAdherentId(undefined);
-        setIsPaid(false);
-        setMenuChoices({});
+        setIsSubmitting(true);
+        try {
+            const newInscription: Omit<Inscription, 'id' | 'date_inscription'> = {
+                id_evenement: event.id,
+                id_adherent: selectedAdherentId,
+                a_paye: isPaid,
+                ...(event.necessiteMenu && { choixMenu: menuChoices })
+            };
+            await onRegister(newInscription);
+            setIsOpen(false);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
     
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                 <Button size="lg" aria-label={`Inscrire un adhérent à l'événement ${event.titre}`}>
+                 <Button size="lg" className="w-full sm:w-auto" aria-label={`Inscrire un adhérent à l'événement ${event.titre}`}>
                     <PlusCircle className="mr-2 h-5 w-5" />
                     Inscrire un adhérent
                 </Button>
@@ -95,15 +106,15 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un adhérent et configurez son inscription.
+                        Sélectionnez un adhérent parmi la liste des membres non encore inscrits.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
                         <Label htmlFor="adherent-select">Choisir l'adhérent</Label>
                          <Select onValueChange={setSelectedAdherentId} value={selectedAdherentId}>
-                            <SelectTrigger id="adherent-select" className="w-full" aria-label="Zone de liste : Sélectionner l'adhérent à inscrire">
-                                <SelectValue placeholder={adherentsList.length > 0 ? "Sélectionnez un adhérent" : "Aucun adhérent disponible"} />
+                            <SelectTrigger id="adherent-select" className="w-full" aria-label="Liste des adhérents disponibles">
+                                <SelectValue placeholder={isLoadingAdherents ? "Chargement des adhérents..." : (adherentsList.length > 0 ? "Sélectionnez un adhérent" : "Aucun adhérent disponible")} />
                             </SelectTrigger>
                             <SelectContent>
                                 {adherentsList.length > 0 ? (
@@ -113,8 +124,8 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                                         </SelectItem>
                                     ))
                                 ) : (
-                                    <div className="p-4 text-center text-sm text-muted-foreground">
-                                        Tous les adhérents sont déjà inscrits.
+                                    <div className="p-4 text-center text-sm text-muted-foreground italic">
+                                        {isLoadingAdherents ? "Chargement..." : "Tous les membres sont déjà inscrits."}
                                     </div>
                                 )}
                             </SelectContent>
@@ -127,7 +138,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                             id="paid-toggle-init" 
                             checked={isPaid} 
                             onCheckedChange={setIsPaid} 
-                            aria-label="Cocher si le paiement est effectué dès l'inscription"
+                            aria-label="Statut du paiement immédiat"
                         />
                     </div>
 
@@ -153,7 +164,8 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                     )}
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleRegister} disabled={!selectedAdherentId} className="w-full sm:w-auto">
+                    <Button onClick={handleRegister} disabled={!selectedAdherentId || isSubmitting} className="w-full sm:w-auto">
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Valider l'inscription
                     </Button>
                 </DialogFooter>
@@ -170,29 +182,34 @@ export default function EventDetailPage() {
     const db = useFirestore();
     const auth = useAuth();
     
-    const eventRef = useMemoFirebase(() => doc(db, 'evenements', id), [db, id]);
+    const eventRef = useMemoFirebase(() => id ? doc(db, 'evenements', id) : null, [db, id]);
     const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
     const adherentsColl = useMemoFirebase(() => collection(db, 'adherents'), [db]);
     const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsColl);
 
-    const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions'), where('id_evenement', '==', id)), [db, id]);
+    const inscriptionsQuery = useMemoFirebase(() => id ? query(collection(db, 'inscriptions'), where('id_evenement', '==', id)) : null, [db, id]);
     const { data: inscriptionsData, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
 
-    const nonRegisteredAdherents = (rawAdherents || []).filter(adherent => 
-        !(inscriptionsData || []).some(ins => ins.id_adherent === adherent.id)
-    ).sort((a, b) => a.nom.localeCompare(b.nom));
+    // Calcul fiable des adhérents non inscrits
+    const nonRegisteredAdherents = useMemo(() => {
+        if (!rawAdherents) return [];
+        const registeredIds = new Set((inscriptionsData || []).map(ins => ins.id_adherent));
+        return rawAdherents
+            .filter(adherent => !registeredIds.has(adherent.id))
+            .sort((a, b) => a.nom.localeCompare(b.nom));
+    }, [rawAdherents, inscriptionsData]);
 
     const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
         try {
             await updateInscription(db, inscriptionId, { a_paye: hasPaid });
             toast({
                 title: "Paiement mis à jour",
-                description: `Le statut a été modifié.`,
+                description: `Le statut a été modifié avec succès.`,
             });
         } catch (error) {
             console.error("Failed to update payment status:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de modifier le statut.' });
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de modifier le statut de paiement.' });
         }
     };
     
@@ -209,12 +226,13 @@ export default function EventDetailPage() {
                 await addLog(db, auth, `Inscription de ${adherent.prenom} ${adherent.nom} à l'événement ${event.titre}`);
                 toast({
                     title: "Adhérent inscrit",
-                    description: `${adherent.prenom} ${adherent.nom} a été ajouté à la liste.`,
+                    description: `${adherent.prenom} ${adherent.nom} a été ajouté à la liste des participants.`,
                 });
             }
         } catch (error) {
             console.error("Failed to register adherent:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible d\'inscrire l\'adhérent.' });
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue lors de l\'inscription.' });
+            throw error; // Pour permettre au dialogue de gérer l'état
         }
     };
 
@@ -225,7 +243,7 @@ export default function EventDetailPage() {
                 await addLog(db, auth, `Désinscription de ${adherentName} de l'événement ${event.titre}`);
                 toast({
                     title: "Désinscription réussie",
-                    description: `${adherentName} a été retiré de la liste.`,
+                    description: `${adherentName} a été retiré de la liste des participants.`,
                 });
             }
         } catch (error) {
@@ -250,7 +268,7 @@ export default function EventDetailPage() {
         }
     };
 
-    if (isLoadingEvent || isLoadingInscriptions || isLoadingAdherents) {
+    if (isLoadingEvent) {
         return <EventDetailSkeleton />;
     }
 
@@ -264,149 +282,157 @@ export default function EventDetailPage() {
 
     return (
         <div className="space-y-8">
-            <header>
+            <header className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold tracking-tight">{event.titre}</h1>
-            </header>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Détails de l'événement</CardTitle>
-                    <CardDescription>{event.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-3">
-                     <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="h-5 w-5" aria-hidden="true" />
+                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4" aria-hidden="true" />
                         <span>{formattedDate}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <MapPin className="h-5 w-5" aria-hidden="true" />
+                    <div className="flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4" aria-hidden="true" />
                         <span>{event.lieu}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <Euro className="h-5 w-5" aria-hidden="true" />
-                        <span>{event.prix > 0 ? `${event.prix.toFixed(2)} €` : "Gratuit"}</span>
+                    <div className="flex items-center gap-1.5">
+                        <Euro className="h-4 w-4" aria-hidden="true" />
+                        <span className="font-semibold text-foreground">{event.prix > 0 ? `${event.prix.toFixed(2)} €` : "Gratuit"}</span>
                     </div>
-                </CardContent>
-                <CardFooter className="flex justify-start gap-4">
-                    <Link href={`/dashboard/events/${event.id}/edit`} passHref>
-                        <Button variant="outline" aria-label={`Modifier les détails de l'événement ${event.titre}`}>
-                            <Pencil className="mr-2 h-4 w-4" /> Modifier
-                        </Button>
-                    </Link>
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" aria-label={`Supprimer définitivement l'événement ${event.titre}`}>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Supprimer
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Cette action supprimera l'événement <strong>{event.titre}</strong> et toutes les inscriptions liées.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Annuler</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirmer la suppression</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                </CardFooter>
-            </Card>
+                </div>
+            </header>
 
-            <div className="flex justify-center">
-                 <RegisterMemberDialog event={event} adherentsList={nonRegisteredAdherents} onRegister={handleNewRegistration} />
-            </div>
+            <div className="grid gap-6 lg:grid-cols-3">
+                <Card className="lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle>Description</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">
+                            {event.description}
+                        </p>
+                    </CardContent>
+                    <CardFooter className="flex flex-wrap gap-3 border-t pt-6">
+                        <Link href={`/dashboard/events/${event.id}/edit`} passHref>
+                            <Button variant="outline" size="sm" aria-label={`Modifier l'événement ${event.titre}`}>
+                                <Pencil className="mr-2 h-4 w-4" /> Modifier
+                            </Button>
+                        </Link>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" aria-label={`Supprimer l'événement ${event.titre}`}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Voulez-vous vraiment supprimer l'événement <strong>{event.titre}</strong> ? Toutes les inscriptions seront également supprimées.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                    Supprimer l'événement
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                    </CardFooter>
+                </Card>
 
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-2">
-                        <Users className="h-6 w-6" aria-hidden="true" />
-                        <CardTitle>Liste des Inscrits ({inscriptionsData?.length || 0})</CardTitle>
-                    </div>
-                    <CardDescription>Mise à jour instantanée des participants et de leurs statuts.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {inscriptionsData && inscriptionsData.length > 0 ? (
-                        <div className="space-y-4">
-                            {inscriptionsData.map((inscription) => {
-                                const adherent = rawAdherents?.find(a => a.id === inscription.id_adherent);
-                                const adherentName = adherent ? `${adherent.prenom} ${adherent.nom}` : "Adhérent supprimé";
-                                
-                                return (
-                                   <div key={inscription.id} className="rounded-lg border p-4 transition-all hover:shadow-sm">
-                                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                           <div className="flex items-center gap-4">
-                                                <Avatar>
-                                                    <AvatarImage src={`https://picsum.photos/seed/${inscription.id_adherent}/40/40`} alt={`Avatar de ${adherentName}`} data-ai-hint="avatar person" />
-                                                    <AvatarFallback>{adherent ? `${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase() : '??'}</AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="font-medium">{adherentName}</p>
-                                                    {!adherent && <p className="text-xs text-destructive">Profil supprimé de la base</p>}
-                                                </div>
+                <div className="space-y-6">
+                    <RegisterMemberDialog 
+                        event={event} 
+                        adherentsList={nonRegisteredAdherents} 
+                        onRegister={handleNewRegistration} 
+                        isLoadingAdherents={isLoadingAdherents}
+                    />
+
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Users className="h-5 w-5 text-primary" aria-hidden="true" />
+                                    <CardTitle className="text-lg">Inscrits</CardTitle>
+                                </div>
+                                <span className="text-2xl font-bold">{inscriptionsData?.length || 0}</span>
+                            </div>
+                            <CardDescription>Liste actualisée des participants.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-2">
+                            {isLoadingInscriptions ? (
+                                <div className="space-y-3 p-2">
+                                    <Skeleton className="h-12 w-full" />
+                                    <Skeleton className="h-12 w-full" />
+                                </div>
+                            ) : inscriptionsData && inscriptionsData.length > 0 ? (
+                                <div className="space-y-1">
+                                    {inscriptionsData.map((inscription) => {
+                                        const adherent = rawAdherents?.find(a => a.id === inscription.id_adherent);
+                                        const adherentName = adherent ? `${adherent.prenom} ${adherent.nom}` : "Adhérent inconnu";
+                                        
+                                        return (
+                                           <div key={inscription.id} className="group flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50">
+                                               <div className="flex items-center justify-between gap-3">
+                                                   <div className="flex items-center gap-3 min-w-0">
+                                                        <Avatar className="h-8 w-8">
+                                                            <AvatarImage src={`https://picsum.photos/seed/${inscription.id_adherent}/32/32`} alt={adherentName} data-ai-hint="avatar person" />
+                                                            <AvatarFallback className="text-[10px]">{adherent ? `${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase() : '??'}</AvatarFallback>
+                                                        </Avatar>
+                                                        <span className="text-sm font-medium truncate">{adherentName}</span>
+                                                   </div>
+                                                   <div className="flex items-center gap-2 shrink-0">
+                                                        <Switch
+                                                            id={`payment-${inscription.id}`}
+                                                            checked={inscription.a_paye}
+                                                            onCheckedChange={(checked) => handlePaymentStatusChange(inscription.id, checked)}
+                                                            className="scale-75"
+                                                            aria-label={`Paiement pour ${adherentName}`}
+                                                        />
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" aria-label={`Désinscrire ${adherentName}`}>
+                                                                    <UserMinus className="h-4 w-4" />
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Désinscription</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        Voulez-vous retirer <strong>{adherentName}</strong> de cet événement ?
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleUnregister(inscription.id, adherentName)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                                                        Désinscrire
+                                                                    </AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </div>
+                                               </div>
+                                                {inscription.choixMenu && (
+                                                    <div className="mt-1 flex flex-wrap gap-1 border-t pt-2 text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                        {Object.entries(inscription.choixMenu).map(([key, value]) => value && (
+                                                            <span key={key} className="bg-muted px-1.5 py-0.5 rounded">{value}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                            </div>
-                                           <div className="flex w-full sm:w-auto items-center justify-end gap-4 sm:ml-auto">
-                                                <div className="flex items-center gap-2 mr-4">
-                                                    <Label htmlFor={`payment-${inscription.id}`} className="text-sm cursor-pointer">
-                                                         A payé
-                                                    </Label>
-                                                     <Switch
-                                                         id={`payment-${inscription.id}`}
-                                                         checked={inscription.a_paye}
-                                                         onCheckedChange={(checked) => handlePaymentStatusChange(inscription.id, checked)}
-                                                         aria-label={`Statut de paiement pour ${adherentName}`}
-                                                     />
-                                                </div>
-                                                
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" aria-label={`Désinscrire ${adherentName}`}>
-                                                            <UserMinus className="h-4 w-4" />
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirmer la désinscription</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Voulez-vous retirer <strong>{adherentName}</strong> de la liste des participants pour cet événement ?
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleUnregister(inscription.id, adherentName)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                                                Désinscrire
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
-                                       </div>
-                                        {inscription.choixMenu && (
-                                            <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
-                                                <h4 className="font-medium text-foreground mb-1">Menu choisi :</h4>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-                                                    {inscription.choixMenu.aperitifChoisi && <p><strong>Apéritif :</strong> {inscription.choixMenu.aperitifChoisi}</p>}
-                                                    {inscription.choixMenu.entreeChoisie && <p><strong>Entrée :</strong> {inscription.choixMenu.entreeChoisie}</p>}
-                                                    {inscription.choixMenu.platChoisi && <p><strong>Plat principal :</strong> {inscription.choixMenu.platChoisi}</p>}
-                                                    {inscription.choixMenu.fromageChoisi && <p><strong>Fromage :</strong> {inscription.choixMenu.fromageChoisi}</p>}
-                                                    {inscription.choixMenu.dessertChoisi && <p><strong>Dessert :</strong> {inscription.choixMenu.dessertChoisi}</p>}
-                                                </div>
-                                            </div>
-                                        )}
-                                   </div>
-                                )
-                            })}
-                        </div>
-                    ) : (
-                         <div className="flex h-40 items-center justify-center rounded-lg border-2 border-dashed">
-                            <p className="text-muted-foreground">Aucun inscrit pour le moment.</p>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                        )
+                                    })}
+                                </div>
+                            ) : (
+                                 <div className="p-8 text-center text-sm text-muted-foreground italic">
+                                    Aucun participant pour le moment.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
         </div>
     );
 }
+
