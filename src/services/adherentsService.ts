@@ -6,6 +6,9 @@ const adherentsCollectionName = 'adherents';
 const cotisationsCollectionName = 'cotisations';
 const inscriptionsCollectionName = 'inscriptions';
 
+/**
+ * Ajoute un adhérent et crée sa cotisation initiale si nécessaire.
+ */
 export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'id'>): Promise<string> {
     const adherentsCollection = collection(db, adherentsCollectionName);
     const docRef = await addDoc(adherentsCollection, adherentData);
@@ -17,6 +20,9 @@ export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'i
     return docRef.id;
 }
 
+/**
+ * Importation massive d'adhérents avec gestion des cotisations.
+ */
 export async function batchAddAdherents(db: Firestore, adherents: Omit<Adherent, 'id'>[]): Promise<void> {
     const batch = writeBatch(db);
     adherents.forEach(adherent => {
@@ -35,21 +41,30 @@ export async function batchAddAdherents(db: Firestore, adherents: Omit<Adherent,
     await batch.commit();
 }
 
+/**
+ * Mise à jour d'un adhérent.
+ */
 export async function updateAdherent(db: Firestore, id: string, updates: Partial<Adherent>): Promise<void> {
     const docRef = doc(db, adherentsCollectionName, id);
     await updateDoc(docRef, updates);
 }
 
+/**
+ * Suppression d'un adhérent avec cascade logicielle (RGPD).
+ */
 export async function deleteAdherent(db: Firestore, id: string): Promise<void> {
     const batch = writeBatch(db);
     
+    // 1. Suppression de l'adhérent
     const adherentRef = doc(db, adherentsCollectionName, id);
     batch.delete(adherentRef);
     
+    // 2. Cascade : Cotisations
     const cotisationsQuery = query(collection(db, cotisationsCollectionName), where('adherentId', '==', id));
     const cotisationsSnap = await getDocs(cotisationsQuery);
     cotisationsSnap.forEach((doc) => batch.delete(doc.ref));
 
+    // 3. Cascade : Inscriptions
     const inscriptionsQuery = query(collection(db, inscriptionsCollectionName), where('id_adherent', '==', id));
     const inscriptionsSnap = await getDocs(inscriptionsQuery);
     inscriptionsSnap.forEach((doc) => batch.delete(doc.ref));
@@ -58,21 +73,33 @@ export async function deleteAdherent(db: Firestore, id: string): Promise<void> {
 }
 
 /**
- * Supprime TOUS les adhérents et leurs données liées (RGPD Cascade).
+ * Purge complète de la base des adhérents (Cascade RGPD).
  */
 export async function deleteAllAdherents(db: Firestore): Promise<void> {
+    const batchSize = 500; // Limite de batch Firestore
+    
     const adherentsSnap = await getDocs(collection(db, adherentsCollectionName));
     const cotisationsSnap = await getDocs(collection(db, cotisationsCollectionName));
     const inscriptionsSnap = await getDocs(collection(db, inscriptionsCollectionName));
 
-    const batch = writeBatch(db);
-    adherentsSnap.forEach(d => batch.delete(d.ref));
-    cotisationsSnap.forEach(d => batch.delete(d.ref));
-    inscriptionsSnap.forEach(d => batch.delete(d.ref));
+    const allDocs = [
+        ...adherentsSnap.docs,
+        ...cotisationsSnap.docs,
+        ...inscriptionsSnap.docs
+    ];
 
-    await batch.commit();
+    // Exécution par tranches de 500 documents
+    for (let i = 0; i < allDocs.length; i += batchSize) {
+        const batch = writeBatch(db);
+        const chunk = allDocs.slice(i, i + batchSize);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+    }
 }
 
+/**
+ * Ajoute une cotisation et met à jour le statut de l'adhérent.
+ */
 export async function addCotisation(db: Firestore, adherentId: string): Promise<void> {
     const batch = writeBatch(db);
     const cotisationRef = doc(collection(db, cotisationsCollectionName));

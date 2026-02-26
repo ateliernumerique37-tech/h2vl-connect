@@ -1,12 +1,16 @@
 'use client';
+
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Users, BadgeCheck, Cake } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Adherent } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 
+/**
+ * Vérifie si c'est l'anniversaire d'un adhérent aujourd'hui.
+ */
 const isBirthdayToday = (dateString: string) => {
     if (!dateString) return false;
     try {
@@ -20,44 +24,30 @@ const isBirthdayToday = (dateString: string) => {
 
 function DashboardSkeleton() {
     return (
-        <div className="space-y-6">
+        <div className="space-y-6" aria-hidden="true">
             <header>
-                <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Tableau de Bord</h1>
-                <p className="text-muted-foreground">
-                    Vue d'ensemble de l'activité de votre association.
-                </p>
+                <Skeleton className="h-9 w-64 mb-2" />
+                <Skeleton className="h-4 w-96" />
             </header>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium" role="heading" aria-level={2}>Total des adhérents</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    </CardHeader>
-                    <CardContent>
-                        <Skeleton className="h-8 w-1/4" />
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium" role="heading" aria-level={2}>Adhérents à jour de cotisation</CardTitle>
-                        <BadgeCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    </CardHeader>
-                    <CardContent>
-                        <Skeleton className="h-8 w-1/4" />
-                    </CardContent>
-                </Card>
+                {[...Array(2)].map((_, i) => (
+                    <Card key={i}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-4 w-4 rounded-full" />
+                        </CardHeader>
+                        <CardContent>
+                            <Skeleton className="h-8 w-16" />
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
              <Card>
                 <CardHeader>
-                    <CardTitle role="heading" aria-level={2} className="flex items-center gap-2">
-                        <Cake className="h-6 w-6 text-primary" aria-hidden="true" />
-                        Anniversaires du jour
-                    </CardTitle>
+                    <Skeleton className="h-6 w-48" />
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-2">
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
+                    <Skeleton className="h-4 w-full" />
                 </CardContent>
             </Card>
         </div>
@@ -69,11 +59,18 @@ export default function DashboardHomePage() {
     const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
     const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
 
+    const [birthdayAdherents, setBirthdayAdherents] = useState<Adherent[]>([]);
+
+    // Calcul des statistiques
     const totalAdherents = adherents?.length || 0;
     const adherentsAJour = adherents?.filter(a => a.cotisationAJour).length || 0;
 
-    const birthdayAdherents = useMemo(() => {
-        return (adherents || []).filter(adherent => isBirthdayToday(adherent.dateNaissance));
+    // Gestion des anniversaires différée pour éviter les erreurs d'hydratation (new Date mismatch)
+    useEffect(() => {
+        if (adherents) {
+            const todayBirthdays = adherents.filter(adherent => isBirthdayToday(adherent.dateNaissance));
+            setBirthdayAdherents(todayBirthdays);
+        }
     }, [adherents]);
     
     if (isLoading) {
@@ -123,9 +120,9 @@ export default function DashboardHomePage() {
                 </CardHeader>
                 <CardContent>
                     {birthdayAdherents.length > 0 ? (
-                        <ul className="space-y-2">
+                        <ul className="space-y-2" aria-live="polite">
                             {birthdayAdherents.map(adherent => (
-                                <li key={adherent.id} className="text-base" aria-label={`C'est l'anniversaire de ${adherent.prenom} ${adherent.nom} aujourd'hui.`}>
+                                <li key={adherent.id} className="text-base">
                                     🎂 C'est l'anniversaire de <span className="font-semibold">{adherent.prenom} {adherent.nom}</span> aujourd'hui !
                                 </li>
                             ))}
