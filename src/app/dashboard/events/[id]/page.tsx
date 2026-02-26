@@ -6,7 +6,7 @@ import type { Evenement, Adherent, Inscription } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2 } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -103,11 +103,17 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                                 <SelectValue placeholder="Sélectionnez un adhérent" />
                             </SelectTrigger>
                             <SelectContent>
-                                {adherentsList.map(adherent => (
-                                    <SelectItem key={adherent.id} value={adherent.id}>
-                                        {adherent.prenom} {adherent.nom}
-                                    </SelectItem>
-                                ))}
+                                {adherentsList.length > 0 ? (
+                                    adherentsList.map(adherent => (
+                                        <SelectItem key={adherent.id} value={adherent.id}>
+                                            {adherent.prenom} {adherent.nom}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <div className="p-2 text-sm text-muted-foreground text-center">
+                                        Aucun adhérent trouvé
+                                    </div>
+                                )}
                             </SelectContent>
                         </Select>
                     </div>
@@ -142,8 +148,9 @@ export default function EventDetailPage() {
     const eventRef = useMemoFirebase(() => doc(db, 'evenements', id), [db, id]);
     const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
-    const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
-    const { data: adherentsList } = useCollection<Adherent>(adherentsQuery);
+    // Utilisation d'une requête explicite pour les adhérents
+    const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
+    const { data: adherentsList, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
 
     const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions'), where('id_evenement', '==', id)), [db, id]);
     const { data: inscriptionsData, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
@@ -266,7 +273,18 @@ export default function EventDetailPage() {
             </Card>
 
             <div className="flex justify-center">
-                 {adherentsList && <RegisterMemberDialog event={event} adherentsList={adherentsList} onRegister={handleNewRegistration} />}
+                 {isLoadingAdherents ? (
+                    <Button disabled size="lg">
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Chargement des adhérents...
+                    </Button>
+                 ) : adherentsList ? (
+                    <RegisterMemberDialog event={event} adherentsList={adherentsList} onRegister={handleNewRegistration} />
+                 ) : (
+                    <div className="text-muted-foreground italic">
+                        Impossible de charger la liste des adhérents.
+                    </div>
+                 )}
             </div>
 
             <Card>
