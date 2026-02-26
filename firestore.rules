@@ -1,147 +1,67 @@
 /**
- * This ruleset governs the H2vl association's Firestore database.
- *
- * Core Philosophy:
- * This security model employs a hybrid approach. It enforces strict user ownership for
- * personal data while enabling public discovery of common resources like events.
- * Administrative privileges are managed through a dedicated role-based collection,
- * providing a clear separation of concerns.
- *
- * Data Structure:
- * - /adherents/{userId}: Contains a user's private profile information. Access is
- *   restricted to the document owner and administrators. The {userId} is the
- *   user's Firebase Authentication UID.
- * - /adherents/{userId}/inscriptions/{inscriptionId}: A subcollection storing a
- *   user's registrations for events, accessible only by that user and admins.
- * - /evenements/{eventId}: A top-level collection of all association events,
- *   which are publicly readable by anyone.
- * - /admins/{adminId}: A special collection where the existence of a document
- *   grants a user administrative rights across the database.
- * - /logs_admin/{logId}: Contains audit logs of administrative actions.
- *
- * Key Security Decisions:
- * - Admin Access: A user is considered an administrator if a document with their
- *   UID exists in the `/admins` collection. This allows for simple and
- *   performant role checks using `exists()`.
- * - No User Listing: It is not possible for a non-admin user to list or discover
- *   other users in the `/adherents` collection.
- * - User Data Segregation: All of a user's private data, including their profile
- *   and event inscriptions, is nested under their unique UID (`/adherents/{userId}`),
- *   enforcing security through the data structure itself.
- * - Public vs. Private Content: Publicly discoverable data (events) is stored in a
- *   separate top-level collection from private user data, which is a more secure
- *   and performant pattern than filtering a single collection.
- *
- * Denormalization for Authorization:
- * To ensure fast and simple authorization checks, key identifying fields are
- * denormalized and validated within documents:
- * - Each `Adherent` document under `/adherents/{adherentId}` contains an `id` field
- *   that must match the `adherentId` from the path.
- * - Each `Inscription` document under `/adherents/{adherentId}/inscriptions` contains
- *   an `adherentId` field that must match the parent document's `adherentId`.
- * This approach avoids costly `get()` calls in rules and enforces relational integrity.
+ * Configuration des règles de sécurité Firestore pour H2vl Connect.
+ * 
+ * Ce modèle repose sur une distinction claire entre :
+ * 1. Les Administrateurs : qui ont un accès total pour gérer l'association.
+ * 2. Les Adhérents : qui sont des entités de données gérées par les admins.
+ * 
+ * Un utilisateur est admin si son UID existe dans la collection /admins.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --------------------------------------------------------------------
-    // Helper Functions
-    // --------------------------------------------------------------------
+    // --- Fonctions d'aide ---
 
-    /**
-     * Checks if the user is authenticated.
-     */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * Checks if the requesting user's UID matches the provided userId.
-     */
+    // Vérifie si l'utilisateur est le propriétaire du document (utilisé pour les profils admins)
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /**
-     * Checks if the document being accessed already exists in Firestore.
-     * This is critical for secure update and delete operations.
-     */
-    function isExistingDoc() {
-      return resource != null;
+    // Vérifie si l'utilisateur a un profil administrateur enregistré
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // --------------------------------------------------------------------
-    // Collection Rules
-    // --------------------------------------------------------------------
+    // --- Règles des Collections ---
 
-    /**
-     * @description Manages administrator roles.
-     * @path /admins/{adminId}
-     * @allow (create) A new user can create their own admin profile during signup. An existing admin can also create one.
-     * @deny (update) A non-admin user tries to elevate their own privileges.
-     * @principle Allows self-signup for the first admin, and admin-managed creation thereafter.
-     */
+    // Collection des Administrateurs
     match /admins/{adminId} {
-      allow get: if isOwner(adminId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow list: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow create: if isOwner(adminId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow update: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow delete: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      // Un utilisateur peut lire son propre profil ou le créer lors de l'inscription.
+      // Un admin existant peut tout faire.
+      allow get, create: if isOwner(adminId) || isAdmin();
+      allow list, update, delete: if isAdmin();
     }
     
-    /**
-     * @description Audit trail for admin actions. Only admins can create and read logs.
-     * @path /logs_admin/{logId}
-     * @allow (read, list, create) Any administrator can read and create logs.
-     * @deny (update, delete) Logs are immutable.
-     * @principle Secures the audit trail to be append-only and readable only by authorized personnel.
-     */
+    // Journal d'audit (Logs)
     match /logs_admin/{logId} {
-        allow read, list, create: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-        allow update, delete: if false;
+      allow read, list, create: if isAdmin();
+      allow update, delete: if false;
     }
 
-    /**
-     * @description Publicly readable event information. Writes are restricted to admins.
-     * @path /evenements/{evenementId}
-     * @allow (get) Any user, signed in or not, can read event details.
-     * @deny (create) A regular authenticated user tries to create a new event.
-     * @principle Enforces public read access for discovery but centralizes content management with administrators.
-     */
+    // Événements (Publics en lecture, gérés par les admins)
     match /evenements/{evenementId} {
       allow get, list: if true;
-      allow create, update, delete: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      allow create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Manages Adherent (member) profiles. A user can only access their own profile.
-     * @path /adherents/{adherentId}
-     * @allow (create) A new user creates their own profile document (`adherentId` matches their auth UID).
-     * @deny (get) A user tries to read another user's profile document.
-     * @principle Restricts access to a user's own data tree, enforcing strict data privacy.
-     */
+    // Adhérents (Gérés exclusivement par les admins)
     match /adherents/{adherentId} {
-      allow get: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow list: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow create: if exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow update: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc();
-      allow delete: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc();
+      allow read, list, create, update, delete: if isAdmin();
+    }
 
-      /**
-       * @description A user's event registrations. Inherits ownership from the parent Adherent document.
-       * @path /adherents/{adherentId}/inscriptions/{inscriptionId}
-       * @allow (create) An authenticated user registers for an event under their own profile.
-       * @deny (list) A user tries to list the event registrations of another user.
-       * @principle Enforces document ownership via path hierarchy. All data in this subcollection belongs to the parent document owner.
-       */
-      match /inscriptions/{inscriptionId} {
-        allow get: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-        allow list: if isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-        allow create: if isOwner(adherentId) && request.resource.data.adherentId == adherentId;
-        allow update: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc() && request.resource.data.adherentId == resource.data.adherentId;
-        allow delete: if (isOwner(adherentId) || exists(/databases/$(database)/documents/admins/$(request.auth.uid))) && isExistingDoc();
-      }
+    // Inscriptions (Gérées exclusivement par les admins)
+    match /inscriptions/{inscriptionId} {
+      allow read, list, create, update, delete: if isAdmin();
+    }
+
+    // Cotisations (Gérées exclusivement par les admins)
+    match /cotisations/{cotisationId} {
+      allow read, list, create, update, delete: if isAdmin();
     }
   }
 }
