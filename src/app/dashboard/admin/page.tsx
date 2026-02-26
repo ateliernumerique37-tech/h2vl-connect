@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -18,11 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getAdmins, addAdmin, deleteAdmin } from "@/services/adminsService";
-import { getLogs, addLog } from "@/services/logsService";
+import { addAdmin, deleteAdmin } from "@/services/adminsService";
+import { addLog } from "@/services/logsService";
 import { batchAddAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth, useFirestore } from "@/firebase";
+import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { collection, query, orderBy } from "firebase/firestore";
 
 function AdminPageSkeleton() {
     return (
@@ -63,35 +65,24 @@ function AdminPageSkeleton() {
 }
 
 export default function AdminPage() {
-  const [administrateurs, setAdministrateurs] = useState<Admin[]>([]);
-  const [logsAdmin, setLogsAdmin] = useState<LogAdmin[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
-  const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const db = useFirestore();
   const auth = useAuth();
   
+  // Écoute en temps réel des administrateurs
+  const adminsQuery = useMemoFirebase(() => query(collection(db, 'admins')), [db]);
+  const { data: administrateurs, isLoading: isLoadingAdmins } = useCollection<Admin>(adminsQuery);
+
+  // Écoute en temps réel des logs
+  const logsQuery = useMemoFirebase(() => query(collection(db, 'logs_admin'), orderBy('dateAction', 'desc')), [db]);
+  const { data: logsAdmin, isLoading: isLoadingLogs } = useCollection<LogAdmin>(logsQuery);
+
+  const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
+  const [newAdminData, setNewAdminData] = useState({ prenom: '', nom: '', email: '', role: '', password: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
-  
-  useEffect(() => {
-    if (!db) return;
-    async function fetchData() {
-        try {
-            const [adminsData, logsData] = await Promise.all([getAdmins(db), getLogs(db)]);
-            setAdministrateurs(adminsData);
-            setLogsAdmin(logsData);
-        } catch (error) {
-            console.error(error);
-            toast({ variant: 'destructive', title: "Erreur", description: "Impossible de charger les données administrateur." });
-        } finally {
-            setLoading(false);
-        }
-    }
-    fetchData();
-  }, [db, toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewAdminData({ ...newAdminData, [e.target.name]: e.target.value });
@@ -105,10 +96,6 @@ export default function AdminPage() {
         await addAdmin(db, auth, adminInfo, password);
         await addLog(db, auth, `Création de l'administrateur : ${adminInfo.prenom} ${adminInfo.nom}`);
         
-        const [adminsData, logsData] = await Promise.all([getAdmins(db), getLogs(db)]);
-        setAdministrateurs(adminsData);
-        setLogsAdmin(logsData);
-
         setIsAddAdminDialogOpen(false);
         toast({
             title: "Administrateur ajouté",
@@ -131,11 +118,6 @@ export default function AdminPage() {
     try {
         await deleteAdmin(db, admin.id);
         await addLog(db, auth, `Suppression de l'administrateur : ${admin.prenom} ${admin.nom}`);
-        
-        const [adminsData, logsData] = await Promise.all([getAdmins(db), getLogs(db)]);
-        setAdministrateurs(adminsData);
-        setLogsAdmin(logsData);
-
         toast({
             title: "Administrateur supprimé",
             description: `Le compte de ${admin.prenom} ${admin.nom} a été supprimé.`,
@@ -212,9 +194,6 @@ export default function AdminPage() {
         await batchAddAdherents(db, newAdherents);
         await addLog(db, auth, `Importation en masse de ${adherentsCount} adhérents via CSV.`);
 
-        const logsData = await getLogs(db);
-        setLogsAdmin(logsData);
-
         toast({
           title: "Succès",
           description: `${adherentsCount} adhérents ont été importés avec succès.`,
@@ -247,7 +226,7 @@ export default function AdminPage() {
     reader.readAsText(file, 'UTF-8');
   };
   
-  if (loading) {
+  if (isLoadingAdmins || isLoadingLogs) {
       return <AdminPageSkeleton />;
   }
 
@@ -354,7 +333,7 @@ export default function AdminPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {administrateurs.length > 0 ? (
+              {administrateurs && administrateurs.length > 0 ? (
                 administrateurs.map((admin) => (
                   <TableRow key={admin.id}>
                     <TableCell className="font-medium">{admin.prenom} {admin.nom}</TableCell>
@@ -362,9 +341,6 @@ export default function AdminPage() {
                     <TableCell>{admin.role || 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" aria-label={`Modifier le compte administrateur de ${admin.prenom} ${admin.nom}`} onClick={() => toast({ title: "Action non disponible", description: "La modification n'est pas encore implémentée."})}>
-                           <Pencil className="mr-2 h-4 w-4" /> Modifier
-                          </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="destructive" size="sm" aria-label={`Supprimer le compte administrateur de ${admin.prenom} ${admin.nom}`}>
@@ -376,7 +352,7 @@ export default function AdminPage() {
                                     <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                     Cette action est irréversible. Elle supprimera définitivement le compte administrateur de
-                                    <span className="font-semibold"> {admin.prenom} {admin.nom}</span> de la base de données (mais pas de l'authentification Firebase).
+                                    <span className="font-semibold"> {admin.prenom} {admin.nom}</span> de la base de données.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -414,7 +390,7 @@ export default function AdminPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logsAdmin.length > 0 ? (
+              {logsAdmin && logsAdmin.length > 0 ? (
                 logsAdmin.map((log) => {
                  const formattedDate = new Date(log.dateAction).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
                  const accessibilityLabel = `Le ${formattedDate}, l'administrateur ${log.nomAdmin} a réalisé l'action suivante : ${log.actionRealisee}`;

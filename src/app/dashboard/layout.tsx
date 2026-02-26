@@ -1,13 +1,14 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useUser, useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 function DashboardSkeleton() {
     return (
@@ -43,39 +44,44 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
+  
+  // Écoute en temps réel du document admin de l'utilisateur
+  const adminRef = useMemoFirebase(() => user ? doc(db, 'admins', user.uid) : null, [db, user]);
+  const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
+  const [isHealing, setIsHealing] = useState(false);
 
   useEffect(() => {
-    if (user && db) {
-      const healPhantomAdmin = async () => {
-        const adminRef = doc(db, 'admins', user.uid);
-        try {
-          const adminSnap = await getDoc(adminRef);
-          if (!adminSnap.exists()) {
-            // This is a phantom user, their auth account exists but not their DB record.
-            // Let's create it. The security rules should allow this (isOwner).
-            const emailName = user.email ? user.email.split('@')[0] : 'Admin';
-            await setDoc(adminRef, {
-              prenom: emailName,
-              nom: '',
-              email: user.email,
-              role: 'Administrateur',
-            });
-          }
-        } catch (error) {
-          console.error("AuthGuard: Failed to check/heal phantom admin user.", error);
-        }
-      };
-
-      healPhantomAdmin();
+    if (!isUserLoading && !user) {
+      router.replace('/login');
     }
-  }, [user, db]);
+  }, [user, isUserLoading, router]);
 
-  if (isUserLoading) {
+  useEffect(() => {
+    // Si l'utilisateur est connecté mais n'a pas de document admin, on le crée (auto-réparation)
+    if (user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
+      setIsHealing(true);
+      const emailName = user.email ? user.email.split('@')[0] : 'Admin';
+      
+      setDoc(doc(db, 'admins', user.uid), {
+        prenom: emailName,
+        nom: '',
+        email: user.email,
+        role: 'Administrateur',
+      }).then(() => {
+        setIsHealing(false);
+      }).catch((error) => {
+        console.error("AuthGuard: Erreur lors de l'auto-réparation de l'admin", error);
+        setIsHealing(false);
+      });
+    }
+  }, [user, db, adminDoc, isAdminDocLoading, isHealing]);
+
+  if (isUserLoading || isAdminDocLoading || isHealing) {
     return <DashboardSkeleton />;
   }
 
-  if (!user) {
-    router.replace('/login');
+  if (!user || !adminDoc) {
+    // Si pas d'user ou pas encore de doc admin (malgré la tentative de healing), on ne rend rien
     return null; 
   }
 
