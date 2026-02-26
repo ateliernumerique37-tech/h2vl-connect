@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
@@ -100,22 +101,21 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                         <Label htmlFor="adherent-select">Choisir l'adhérent</Label>
                          <Select onValueChange={setSelectedAdherentId} value={selectedAdherentId}>
                             <SelectTrigger id="adherent-select" aria-label="Sélectionner l'adhérent dans la liste">
-                                <SelectValue placeholder="Sélectionnez un adhérent" />
+                                <SelectValue placeholder={adherentsList.length > 0 ? "Sélectionnez un adhérent" : "Aucun adhérent disponible"} />
                             </SelectTrigger>
                             <SelectContent>
-                                {adherentsList.length > 0 ? (
-                                    adherentsList.map(adherent => (
-                                        <SelectItem key={adherent.id} value={adherent.id}>
-                                            {adherent.prenom} {adherent.nom}
-                                        </SelectItem>
-                                    ))
-                                ) : (
-                                    <div className="p-2 text-sm text-muted-foreground text-center">
-                                        Aucun adhérent trouvé
-                                    </div>
-                                )}
+                                {adherentsList.map(adherent => (
+                                    <SelectItem key={adherent.id} value={adherent.id}>
+                                        {adherent.prenom} {adherent.nom}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
+                        {adherentsList.length === 0 && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">
+                                Note : Tous les adhérents sont déjà inscrits ou aucun n'est enregistré.
+                            </p>
+                        )}
                     </div>
 
                     {event.necessiteMenu && event.optionsMenu && (
@@ -148,12 +148,17 @@ export default function EventDetailPage() {
     const eventRef = useMemoFirebase(() => doc(db, 'evenements', id), [db, id]);
     const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
-    // Utilisation d'une requête explicite pour les adhérents
-    const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
-    const { data: adherentsList, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
+    // Récupération de tous les adhérents
+    const adherentsColl = useMemoFirebase(() => collection(db, 'adherents'), [db]);
+    const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsColl);
 
     const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions'), where('id_evenement', '==', id)), [db, id]);
     const { data: inscriptionsData, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
+
+    // Filtrer les adhérents non inscrits
+    const nonRegisteredAdherents = (rawAdherents || []).filter(adherent => 
+        !(inscriptionsData || []).some(ins => ins.id_adherent === adherent.id)
+    );
 
     const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
         try {
@@ -176,7 +181,7 @@ export default function EventDetailPage() {
             };
             await addInscription(db, newInscriptionData);
             
-            const adherent = adherentsList?.find(a => a.id === inscriptionData.id_adherent);
+            const adherent = rawAdherents?.find(a => a.id === inscriptionData.id_adherent);
             if (event && adherent) {
                 await addLog(db, auth, `Inscription de ${adherent.prenom} ${adherent.nom} à l'événement ${event.titre}`);
                 toast({
@@ -206,7 +211,7 @@ export default function EventDetailPage() {
         }
     };
 
-    if (isLoadingEvent || isLoadingInscriptions) {
+    if (isLoadingEvent || isLoadingInscriptions || isLoadingAdherents) {
         return <EventDetailSkeleton />;
     }
 
@@ -273,18 +278,7 @@ export default function EventDetailPage() {
             </Card>
 
             <div className="flex justify-center">
-                 {isLoadingAdherents ? (
-                    <Button disabled size="lg">
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Chargement des adhérents...
-                    </Button>
-                 ) : adherentsList ? (
-                    <RegisterMemberDialog event={event} adherentsList={adherentsList} onRegister={handleNewRegistration} />
-                 ) : (
-                    <div className="text-muted-foreground italic">
-                        Impossible de charger la liste des adhérents.
-                    </div>
-                 )}
+                 <RegisterMemberDialog event={event} adherentsList={nonRegisteredAdherents} onRegister={handleNewRegistration} />
             </div>
 
             <Card>
@@ -299,7 +293,7 @@ export default function EventDetailPage() {
                     {inscriptionsData && inscriptionsData.length > 0 ? (
                         <div className="space-y-4">
                             {inscriptionsData.map((inscription) => {
-                                const adherent = adherentsList?.find(a => a.id === inscription.id_adherent);
+                                const adherent = rawAdherents?.find(a => a.id === inscription.id_adherent);
                                 return (
                                    <div key={inscription.id} className="rounded-lg border p-4">
                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
