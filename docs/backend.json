@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Admin": {
@@ -70,6 +71,14 @@
     "/inscriptions/{inscriptionId}": {
       "schema": "#/backend/entities/Inscription",
       "description": "Inscriptions aux événements."
+    },
+    "/cotisations/{cotisationId}": {
+      "schema": "#/backend/entities/Cotisation",
+      "description": "Historique des paiements de cotisations."
+    },
+    "/logs_admin/{logId}": {
+      "schema": "#/backend/entities/LogAdmin",
+      "description": "Journal d'audit des actions administratives."
     }
   }
 }

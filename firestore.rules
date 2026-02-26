@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,32 +17,27 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
     // --- Collection Rules ---
 
     /**
      * @description Profils Administrateurs.
-     * Un utilisateur doit pouvoir lire son propre document pour que le système l'identifie.
+     * Un utilisateur peut lire et créer son propre profil.
+     * Seul un administrateur peut lister ou supprimer d'autres administrateurs.
      */
     match /admins/{userId} {
-      allow get, create: if isOwner(userId);
+      allow get, create: if isSignedIn() && request.auth.uid == userId;
       allow list, update, delete: if isAdmin();
     }
 
     /**
-     * @description Adhérents de l'association.
-     * Seuls les admins peuvent gérer les membres.
+     * @description Adhérents. Accès réservé aux administrateurs.
      */
     match /adherents/{adherentId} {
       allow read, write: if isAdmin();
     }
 
     /**
-     * @description Événements.
-     * Lisibles par tous les connectés, gérés par les admins.
+     * @description Événements. Lisibles par tous, gérés par les admins.
      */
     match /evenements/{evenementId} {
       allow read: if isSignedIn();
@@ -49,35 +45,22 @@ service cloud.firestore {
     }
 
     /**
-     * @description Inscriptions aux événements.
-     * Les membres voient les leurs, les admins voient tout.
+     * @description Inscriptions. Lisibles par tous (pour les listes d'événements), gérées par les admins ou l'intéressé.
      */
     match /inscriptions/{inscriptionId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.id_adherent == request.auth.uid);
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.id_adherent == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
     /**
-     * @description Cotisations.
-     * Gestion exclusive par les administrateurs.
+     * @description Cotisations et Logs. Gestion exclusive par les administrateurs.
      */
     match /cotisations/{cotisationId} {
       allow read, write: if isAdmin();
     }
 
-    /**
-     * @description Journal d'audit.
-     */
     match /logs_admin/{logId} {
-      allow read, write: if isAdmin();
-    }
-
-    /**
-     * @description Compatibilité legacy.
-     */
-    match /roles_admin/{adminUid} {
-      allow get: if isOwner(adminUid) || isAdmin();
       allow read, write: if isAdmin();
     }
   }
