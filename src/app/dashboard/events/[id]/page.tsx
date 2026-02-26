@@ -6,7 +6,7 @@ import type { Evenement, Adherent, Inscription } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, Loader2, UserMinus } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -77,6 +77,7 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
         };
         onRegister(newInscription);
         setIsOpen(false);
+        // Reset state
         setSelectedAdherentId(undefined);
         setIsPaid(false);
         setMenuChoices({});
@@ -90,33 +91,44 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                     Inscrire un adhérent
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px]" role="dialog" aria-modal="true">
                 <DialogHeader>
                     <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un adhérent pour cet événement.
+                        Sélectionnez un adhérent et configurez son inscription.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
                         <Label htmlFor="adherent-select">Choisir l'adhérent</Label>
                          <Select onValueChange={setSelectedAdherentId} value={selectedAdherentId}>
-                            <SelectTrigger id="adherent-select" aria-label="Sélectionner l'adhérent dans la liste">
+                            <SelectTrigger id="adherent-select" className="w-full" aria-label="Zone de liste : Sélectionner l'adhérent à inscrire">
                                 <SelectValue placeholder={adherentsList.length > 0 ? "Sélectionnez un adhérent" : "Aucun adhérent disponible"} />
                             </SelectTrigger>
                             <SelectContent>
-                                {adherentsList.map(adherent => (
-                                    <SelectItem key={adherent.id} value={adherent.id}>
-                                        {adherent.prenom} {adherent.nom}
-                                    </SelectItem>
-                                ))}
+                                {adherentsList.length > 0 ? (
+                                    adherentsList.map(adherent => (
+                                        <SelectItem key={adherent.id} value={adherent.id}>
+                                            {adherent.prenom} {adherent.nom}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <div className="p-4 text-center text-sm text-muted-foreground">
+                                        Tous les adhérents sont déjà inscrits.
+                                    </div>
+                                )}
                             </SelectContent>
                         </Select>
                     </div>
 
                     <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/20">
-                        <Label htmlFor="paid-toggle" className="font-medium">A déjà payé ?</Label>
-                        <Switch id="paid-toggle" checked={isPaid} onCheckedChange={setIsPaid} />
+                        <Label htmlFor="paid-toggle-init" className="font-medium cursor-pointer">L'adhérent a déjà payé ?</Label>
+                        <Switch 
+                            id="paid-toggle-init" 
+                            checked={isPaid} 
+                            onCheckedChange={setIsPaid} 
+                            aria-label="Cocher si le paiement est effectué dès l'inscription"
+                        />
                     </div>
 
                     {event.necessiteMenu && event.optionsMenu && (
@@ -141,7 +153,9 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                     )}
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleRegister} disabled={!selectedAdherentId}>Valider l'inscription</Button>
+                    <Button onClick={handleRegister} disabled={!selectedAdherentId} className="w-full sm:w-auto">
+                        Valider l'inscription
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -167,7 +181,7 @@ export default function EventDetailPage() {
 
     const nonRegisteredAdherents = (rawAdherents || []).filter(adherent => 
         !(inscriptionsData || []).some(ins => ins.id_adherent === adherent.id)
-    );
+    ).sort((a, b) => a.nom.localeCompare(b.nom));
 
     const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
         try {
@@ -295,7 +309,7 @@ export default function EventDetailPage() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Annuler</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDeleteEvent}>Confirmer la suppression</AlertDialogAction>
+                            <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirmer la suppression</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -312,7 +326,7 @@ export default function EventDetailPage() {
                         <Users className="h-6 w-6" aria-hidden="true" />
                         <CardTitle>Liste des Inscrits ({inscriptionsData?.length || 0})</CardTitle>
                     </div>
-                    <CardDescription>Mise à jour instantanée des participants.</CardDescription>
+                    <CardDescription>Mise à jour instantanée des participants et de leurs statuts.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {inscriptionsData && inscriptionsData.length > 0 ? (
