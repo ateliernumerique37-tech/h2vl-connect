@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import type { Adherent, Evenement, Inscription } from '@/lib/types';
-import { getAdherents } from '@/services/adherentsService';
-import { getEvenements } from '@/services/evenementsService';
-import { getInscriptions } from '@/services/inscriptionsService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -38,7 +36,7 @@ function StatsPageSkeleton() {
                 </div>
             </header>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {[...Array(3)].map(i => <Card key={i}><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-8 w-1/3" /></CardContent></Card>)}
+                {[...Array(3)].map((_, i) => <Card key={i}><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-8 w-1/3" /></CardContent></Card>)}
             </div>
             <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
                 <Card>
@@ -59,44 +57,30 @@ function StatsPageSkeleton() {
 
 
 export default function StatsPage() {
-    const [loading, setLoading] = useState(true);
-    const [adherents, setAdherents] = useState<Adherent[]>([]);
-    const [evenements, setEvenements] = useState<Evenement[]>([]);
-    const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
     const db = useFirestore();
-    
     const currentYear = new Date().getFullYear().toString();
     const [selectedYear, setSelectedYear] = useState(currentYear);
 
-    useEffect(() => {
-        if (!db) return;
-        async function fetchData() {
-            try {
-                const [adherentsData, evenementsData, inscriptionsData] = await Promise.all([
-                    getAdherents(db),
-                    getEvenements(db),
-                    getInscriptions(db)
-                ]);
-                setAdherents(adherentsData);
-                setEvenements(evenementsData);
-                setInscriptions(inscriptionsData);
-            } catch (error) {
-                console.error("Failed to fetch stats data:", error);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchData();
-    }, [db]);
+    const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
+    const evenementsQuery = useMemoFirebase(() => collection(db, 'evenements'), [db]);
+    const inscriptionsQuery = useMemoFirebase(() => collection(db, 'inscriptions'), [db]);
+
+    const { data: adherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
+    const { data: evenements, isLoading: isLoadingEvents } = useCollection<Evenement>(evenementsQuery);
+    const { data: inscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
+
+    const isLoading = isLoadingAdherents || isLoadingEvents || isLoadingInscriptions;
 
     const years = useMemo(() => {
+        if (!evenements || !adherents) return [currentYear];
         const eventYears = evenements.map(e => new Date(e.date).getFullYear());
         const memberYears = adherents.map(a => new Date(a.dateInscription).getFullYear());
         const allYears = [...eventYears, ...memberYears, new Date().getFullYear()];
         return [...new Set(allYears)].sort((a,b) => b-a).map(String);
-    }, [adherents, evenements]);
+    }, [adherents, evenements, currentYear]);
 
     const filteredData = useMemo(() => {
+        if (!adherents || !evenements || !inscriptions) return null;
         const yearNum = parseInt(selectedYear);
 
         const yearAdherents = adherents.filter(a => new Date(a.dateInscription).getFullYear() <= yearNum);
@@ -137,7 +121,7 @@ export default function StatsPage() {
 
     }, [selectedYear, adherents, evenements, inscriptions]);
 
-    if (loading) {
+    if (isLoading || !filteredData) {
         return <StatsPageSkeleton />;
     }
 
@@ -146,7 +130,7 @@ export default function StatsPage() {
             <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Statistiques de l'Association</h1>
-                    <p className="text-muted-foreground">Analyse des données clés de l'association pour l'année {selectedYear}.</p>
+                    <p className="text-muted-foreground">Analyse en temps réel pour l'année {selectedYear}.</p>
                 </div>
                 <div className="w-full sm:w-auto">
                     <Select onValueChange={setSelectedYear} defaultValue={selectedYear}>

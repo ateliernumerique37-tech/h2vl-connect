@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
@@ -16,11 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
-import { getEvenementById, deleteEvenement } from '@/services/evenementsService';
-import { getInscriptionsForEvent, addInscription, updateInscription } from '@/services/inscriptionsService';
-import { getAdherents } from '@/services/adherentsService';
+import { deleteEvenement } from '@/services/evenementsService';
+import { addInscription, updateInscription } from '@/services/inscriptionsService';
 import { addLog } from '@/services/logsService';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+import { doc, collection, query, where } from 'firebase/firestore';
 
 function EventDetailSkeleton() {
     return (
@@ -29,7 +29,6 @@ function EventDetailSkeleton() {
                 <CardHeader>
                     <Skeleton className="h-8 w-3/4" />
                     <Skeleton className="mt-2 h-4 w-full" />
-                     <Skeleton className="h-4 w-3/4" />
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-3">
                     <Skeleton className="h-6 w-1/2" />
@@ -37,45 +36,17 @@ function EventDetailSkeleton() {
                     <Skeleton className="h-6 w-1/2" />
                 </CardContent>
             </Card>
-
-             <div className="flex justify-center">
-                 <Skeleton className="h-12 w-48" />
-            </div>
-
-            <Card>
-                <CardHeader>
-                    <Skeleton className="h-8 w-1/2" />
-                     <Skeleton className="mt-2 h-4 w-1/3" />
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        {[...Array(3)].map((_, i) => (
-                             <div key={i} className="flex items-center justify-between rounded-lg border p-4">
-                                <div className="flex items-center gap-4">
-                                    <Skeleton className="h-10 w-10 rounded-full" />
-                                    <Skeleton className="h-4 w-32" />
-                                </div>
-                                <div className="flex items-center gap-4">
-                                     <Skeleton className="h-4 w-24" />
-                                     <Skeleton className="h-6 w-11" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     );
 }
 
 const MenuChoiceSection = ({ category, options, selected, onSelect, eventId }: { category: string, options: string[], selected: string | undefined, onSelect: (value: string) => void, eventId: string }) => {
-    const categoryId = `${category.toLowerCase()}-group-${eventId}`;
     return (
         <div className="space-y-2">
-            <Label className="font-semibold" role="header">{category}</Label>
+            <Label className="font-semibold">{category}</Label>
             <RadioGroup onValueChange={onSelect} value={selected} aria-label={`Choix pour ${category}`}>
                 {options.map((option, index) => {
-                    const optionId = `${categoryId}-option-${index}`;
+                    const optionId = `${category}-${eventId}-${index}`;
                     return (
                          <div key={optionId} className="flex items-center space-x-2">
                             <RadioGroupItem value={option} id={optionId} />
@@ -105,7 +76,6 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
         };
         onRegister(newInscription);
         setIsOpen(false);
-        // Reset form
         setSelectedAdherentId(undefined);
         setMenuChoices({});
     };
@@ -113,23 +83,23 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                 <Button size="lg" aria-label="Inscrire un nouvel adhérent à cet événement">
+                 <Button size="lg" aria-label={`Inscrire un adhérent à l'événement ${event.titre}`}>
                     <PlusCircle className="mr-2 h-5 w-5" />
                     Inscrire un adhérent
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle>Inscrire un adhérent à "{event.titre}"</DialogTitle>
+                    <DialogTitle>Inscription à "{event.titre}"</DialogTitle>
                     <DialogDescription>
-                        Sélectionnez un adhérent et remplissez les informations requises.
+                        Sélectionnez un adhérent pour cet événement.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="adherent-select">Adhérent</Label>
+                        <Label htmlFor="adherent-select">Choisir l'adhérent</Label>
                          <Select onValueChange={setSelectedAdherentId} value={selectedAdherentId}>
-                            <SelectTrigger id="adherent-select" aria-label="Sélectionner un adhérent">
+                            <SelectTrigger id="adherent-select" aria-label="Sélectionner l'adhérent dans la liste">
                                 <SelectValue placeholder="Sélectionnez un adhérent" />
                             </SelectTrigger>
                             <SelectContent>
@@ -143,22 +113,18 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                     </div>
 
                     {event.necessiteMenu && event.optionsMenu && (
-                        <Card className="p-4">
-                            <CardHeader className="p-0 pb-4">
-                                <CardTitle role="header">Choix du Menu</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-0 space-y-4">
-                                {event.optionsMenu.aperitifs && event.optionsMenu.aperitifs.length > 0 && <MenuChoiceSection category="Apéritifs" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />}
-                                {event.optionsMenu.entrees && event.optionsMenu.entrees.length > 0 && <MenuChoiceSection category="Entrées" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />}
-                                {event.optionsMenu.plats && event.optionsMenu.plats.length > 0 && <MenuChoiceSection category="Plats" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />}
-                                {event.optionsMenu.fromages && event.optionsMenu.fromages.length > 0 && <MenuChoiceSection category="Fromages" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />}
-                                {event.optionsMenu.desserts && event.optionsMenu.desserts.length > 0 && <MenuChoiceSection category="Desserts" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />}
-                            </CardContent>
-                        </Card>
+                        <div className="space-y-4 border rounded-lg p-4">
+                            <h4 className="font-semibold">Choix du Menu</h4>
+                            {event.optionsMenu.aperitifs && <MenuChoiceSection category="Apéritifs" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />}
+                            {event.optionsMenu.entrees && <MenuChoiceSection category="Entrées" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />}
+                            {event.optionsMenu.plats && <MenuChoiceSection category="Plats" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />}
+                            {event.optionsMenu.fromages && <MenuChoiceSection category="Fromages" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />}
+                            {event.optionsMenu.desserts && <MenuChoiceSection category="Desserts" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />}
+                        </div>
                     )}
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleRegister} disabled={!selectedAdherentId}>Inscrire</Button>
+                    <Button onClick={handleRegister} disabled={!selectedAdherentId}>Valider l'inscription</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -173,62 +139,25 @@ export default function EventDetailPage() {
     const db = useFirestore();
     const auth = useAuth();
     
-    const [event, setEvent] = useState<Evenement | undefined>();
-    const [adherents, setAdherents] = useState<Adherent[]>([]);
-    const [eventInscriptions, setEventInscriptions] = useState<(Inscription & { adherent?: Adherent })[]>([]);
-    const [loading, setLoading] = useState(true);
-    
-    useEffect(() => {
-        if (!id || !db) return;
-        async function fetchEventData() {
-            try {
-                const [eventData, inscriptionsData, adherentsData] = await Promise.all([
-                    getEvenementById(db, id),
-                    getInscriptionsForEvent(db, id),
-                    getAdherents(db)
-                ]);
+    const eventRef = useMemoFirebase(() => doc(db, 'evenements', id), [db, id]);
+    const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
-                if (eventData) {
-                    setEvent(eventData);
-                    setAdherents(adherentsData);
-                    const populatedInscriptions = inscriptionsData.map(inscription => {
-                        const adherent = adherentsData.find(a => a.id === inscription.id_adherent);
-                        return { ...inscription, adherent };
-                    });
-                    setEventInscriptions(populatedInscriptions);
-                } else {
-                    notFound();
-                }
-            } catch (error) {
-                console.error("Failed to fetch event data:", error);
-                toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de charger les données.' });
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchEventData();
-    }, [id, db, toast]);
+    const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
+    const { data: adherentsList } = useCollection<Adherent>(adherentsQuery);
+
+    const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions'), where('id_evenement', '==', id)), [db, id]);
+    const { data: inscriptionsData, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
 
     const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
         try {
             await updateInscription(db, inscriptionId, { a_paye: hasPaid });
-            let adherentName = '';
-            setEventInscriptions(prev => 
-                prev.map(inscription => {
-                    if (inscription.id === inscriptionId) {
-                        adherentName = inscription.adherent ? `${inscription.adherent.prenom} ${inscription.adherent.nom}` : 'un adhérent';
-                        return { ...inscription, a_paye: hasPaid };
-                    }
-                    return inscription;
-                })
-            );
             toast({
-                title: "Statut de paiement mis à jour",
-                description: `Le paiement de ${adherentName} a été marqué comme ${hasPaid ? 'réglé' : 'non réglé'}.`,
+                title: "Paiement mis à jour",
+                description: `Le statut a été modifié.`,
             });
         } catch (error) {
             console.error("Failed to update payment status:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de mettre à jour le statut du paiement.' });
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de modifier le statut.' });
         }
     };
     
@@ -238,18 +167,14 @@ export default function EventDetailPage() {
                 ...inscriptionData,
                 date_inscription: new Date().toISOString()
             };
-            const newId = await addInscription(db, newInscriptionData);
+            await addInscription(db, newInscriptionData);
             
-            const adherent = adherents.find(a => a.id === newInscriptionData.id_adherent);
-            const newPopulatedInscription = { ...newInscriptionData, id: newId, adherent };
-
-            setEventInscriptions(prev => [...prev, newPopulatedInscription]);
-            
+            const adherent = adherentsList?.find(a => a.id === inscriptionData.id_adherent);
             if (event && adherent) {
                 await addLog(db, auth, `Inscription de ${adherent.prenom} ${adherent.nom} à l'événement ${event.titre}`);
                 toast({
-                    title: "Inscription réussie",
-                    description: `${adherent.prenom} ${adherent.nom} a été inscrit à l'événement ${event.titre}.`,
+                    title: "Adhérent inscrit",
+                    description: `${adherent.prenom} ${adherent.nom} a été ajouté à la liste.`,
                 });
             }
         } catch (error) {
@@ -265,7 +190,7 @@ export default function EventDetailPage() {
             await addLog(db, auth, `Suppression de l'événement : ${event.titre}`);
             toast({
                 title: "Événement supprimé",
-                description: `L'événement "${event.titre}" a été supprimé.`,
+                description: `L'événement a été retiré avec succès.`,
             });
             router.push('/dashboard/events');
         } catch (error) {
@@ -274,7 +199,7 @@ export default function EventDetailPage() {
         }
     };
 
-    if (loading) {
+    if (isLoadingEvent || isLoadingInscriptions) {
         return <EventDetailSkeleton />;
     }
 
@@ -285,8 +210,6 @@ export default function EventDetailPage() {
     const formattedDate = new Date(event.date).toLocaleDateString("fr-FR", {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
-    
-    const shortDate = new Date(event.date).toLocaleDateString('fr-FR');
 
     return (
         <div className="space-y-8">
@@ -310,33 +233,32 @@ export default function EventDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                         <Euro className="h-5 w-5" aria-hidden="true" />
-                        <span>{event.prix > 0 ? `${event.prix.toFixed(2)} € par participant` : "Gratuit"}</span>
+                        <span>{event.prix > 0 ? `${event.prix.toFixed(2)} €` : "Gratuit"}</span>
                     </div>
                 </CardContent>
-                <CardFooter className="flex justify-start gap-2">
+                <CardFooter className="flex justify-start gap-4">
                     <Link href={`/dashboard/events/${event.id}/edit`} passHref>
-                        <Button variant="outline" aria-label={`Modifier l'événement ${event.titre} du ${shortDate}`}>
+                        <Button variant="outline" aria-label={`Modifier les détails de l'événement ${event.titre}`}>
                             <Pencil className="mr-2 h-4 w-4" /> Modifier
                         </Button>
                     </Link>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="destructive" aria-label={`Supprimer l'événement ${event.titre} du ${shortDate}`}>
+                          <Button variant="destructive" aria-label={`Supprimer définitivement l'événement ${event.titre}`}>
                             <Trash2 className="mr-2 h-4 w-4" />
                             Supprimer
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
+                            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Cette action est irréversible. Elle supprimera définitivement l'événement 
-                              <span className="font-semibold"> {event.titre}</span>.
+                              Cette action supprimera l'événement <strong>{event.titre}</strong> et toutes les inscriptions liées.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Annuler</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDelete}>Continuer</AlertDialogAction>
+                            <AlertDialogAction onClick={handleDelete}>Confirmer la suppression</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -344,62 +266,63 @@ export default function EventDetailPage() {
             </Card>
 
             <div className="flex justify-center">
-                 <RegisterMemberDialog event={event} adherentsList={adherents} onRegister={handleNewRegistration} />
+                 {adherentsList && <RegisterMemberDialog event={event} adherentsList={adherentsList} onRegister={handleNewRegistration} />}
             </div>
 
             <Card>
                 <CardHeader>
                     <div className="flex items-center gap-2">
                         <Users className="h-6 w-6" aria-hidden="true" />
-                        <CardTitle>Liste des Inscrits ({eventInscriptions.length})</CardTitle>
+                        <CardTitle>Liste des Inscrits ({inscriptionsData?.length || 0})</CardTitle>
                     </div>
-                    <CardDescription>Gérez les participants, leur statut de paiement et leur menu.</CardDescription>
+                    <CardDescription>Mise à jour instantanée des participants.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {eventInscriptions.length > 0 ? (
+                    {inscriptionsData && inscriptionsData.length > 0 ? (
                         <div className="space-y-4">
-                            {eventInscriptions.map(({ adherent, id: inscriptionId, a_paye, choixMenu }) => (
-                               <div key={inscriptionId} className="rounded-lg border p-4">
-                                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                       {adherent && (
-                                           <div className="flex items-center gap-4">
-                                                <Avatar>
-                                                    <AvatarImage src={`https://picsum.photos/seed/${adherent.id}/40/40`} alt={`Avatar de ${adherent.prenom} ${adherent.nom}`} data-ai-hint="avatar person" />
-                                                    <AvatarFallback>{`${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase()}</AvatarFallback>
-                                                </Avatar>
-                                                <p className="font-medium">{adherent.prenom} {adherent.nom}</p>
-                                           </div>
-                                       )}
-                                       {event.prix > 0 && (
-                                        <div className="flex w-full sm:w-auto items-center justify-end gap-4 sm:ml-auto">
-                                           <Label htmlFor={`payment-status-${inscriptionId}`} className="text-sm flex-shrink-0">
-                                                A payé {event.prix.toFixed(2)} €
-                                           </Label>
-                                            <Switch
-                                                id={`payment-status-${inscriptionId}`}
-                                                checked={a_paye}
-                                                onCheckedChange={(checked) => handlePaymentStatusChange(inscriptionId, checked)}
-                                                aria-label={`Marquer le paiement de ${adherent?.prenom} ${adherent?.nom} comme ${a_paye ? 'non réglé' : 'réglé'}`}
-                                            />
+                            {inscriptionsData.map((inscription) => {
+                                const adherent = adherentsList?.find(a => a.id === inscription.id_adherent);
+                                return (
+                                   <div key={inscription.id} className="rounded-lg border p-4">
+                                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                           {adherent && (
+                                               <div className="flex items-center gap-4">
+                                                    <Avatar>
+                                                        <AvatarImage src={`https://picsum.photos/seed/${adherent.id}/40/40`} alt={`Avatar de ${adherent.prenom} ${adherent.nom}`} data-ai-hint="avatar person" />
+                                                        <AvatarFallback>{`${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase()}</AvatarFallback>
+                                                    </Avatar>
+                                                    <p className="font-medium">{adherent.prenom} {adherent.nom}</p>
+                                               </div>
+                                           )}
+                                           <div className="flex w-full sm:w-auto items-center justify-end gap-4 sm:ml-auto">
+                                                <Label htmlFor={`payment-${inscription.id}`} className="text-sm">
+                                                     A payé {event.prix.toFixed(2)} €
+                                                </Label>
+                                                 <Switch
+                                                     id={`payment-${inscription.id}`}
+                                                     checked={inscription.a_paye}
+                                                     onCheckedChange={(checked) => handlePaymentStatusChange(inscription.id, checked)}
+                                                     aria-label={`Statut de paiement pour ${adherent?.prenom} ${adherent?.nom}`}
+                                                 />
+                                            </div>
                                        </div>
-                                       )}
+                                        {inscription.choixMenu && (
+                                            <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
+                                                <h4 className="font-medium text-foreground mb-1">Menu :</h4>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+                                                    {Object.entries(inscription.choixMenu).map(([k, v]) => v && (
+                                                        <p key={k}><strong>{k.replace('Choisi', '').replace('Choisie', '')} :</strong> {v}</p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                    </div>
-                                    {choixMenu && Object.keys(choixMenu).length > 0 && (
-                                        <div className="mt-4 pt-4 border-t text-sm text-muted-foreground space-y-1">
-                                            <h4 className="font-medium text-foreground">Menu choisi :</h4>
-                                            {choixMenu.aperitifChoisi && <p><strong>Apéritif :</strong> {choixMenu.aperitifChoisi}</p>}
-                                            {choixMenu.entreeChoisie && <p><strong>Entrée :</strong> {choixMenu.entreeChoisie}</p>}
-                                            {choixMenu.platChoisi && <p><strong>Plat :</strong> {choixMenu.platChoisi}</p>}
-                                            {choixMenu.fromageChoisi && <p><strong>Fromage :</strong> {choixMenu.fromageChoisi}</p>}
-                                            {choixMenu.dessertChoisi && <p><strong>Dessert :</strong> {choixMenu.dessertChoisi}</p>}
-                                        </div>
-                                    )}
-                               </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     ) : (
                          <div className="flex h-40 items-center justify-center rounded-lg border-2 border-dashed">
-                            <p className="text-muted-foreground">Aucun adhérent inscrit pour le moment.</p>
+                            <p className="text-muted-foreground">Aucun inscrit pour le moment.</p>
                         </div>
                     )}
                 </CardContent>

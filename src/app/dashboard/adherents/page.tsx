@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import type { Adherent } from "@/lib/types";
-import { getAdherents } from '@/services/adherentsService';
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import { AdherentCard } from "@/components/adherent-card";
@@ -12,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
 
 const getAge = (dateString: string) => {
   if (!dateString) return 0;
@@ -58,9 +58,9 @@ function AdherentsPageSkeleton() {
 }
 
 export default function AdherentsPage() {
-  const [adherents, setAdherents] = useState<Adherent[]>([]);
-  const [loading, setLoading] = useState(true);
   const db = useFirestore();
+  const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents'), orderBy('nom'), orderBy('prenom')), [db]);
+  const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,26 +71,11 @@ export default function AdherentsPage() {
   const [bureauFilter, setBureauFilter] = useState('Tous');
   const [droitImageFilter, setDroitImageFilter] = useState('Tous');
   const [ageFilter, setAgeFilter] = useState('Tous');
-  
-  useEffect(() => {
-    if (!db) return;
-    async function fetchAdherents() {
-        try {
-            const data = await getAdherents(db);
-            setAdherents(data);
-        } catch (error) {
-            console.error("Failed to fetch adherents:", error);
-        } finally {
-            setLoading(false);
-        }
-    }
-    fetchAdherents();
-  }, [db]);
 
   const hasActiveFilters = searchTerm || genreFilter !== 'Tous' || cotisationFilter !== 'Tous' || benevoleFilter !== 'Tous' || faafFilter !== 'Tous' || bureauFilter !== 'Tous' || droitImageFilter !== 'Tous' || ageFilter !== 'Tous';
 
-
   const filteredAdherents = useMemo(() => {
+    if (!adherents) return [];
     return adherents
       .filter(adherent => {
         const searchLower = searchTerm.toLowerCase();
@@ -117,12 +102,12 @@ export default function AdherentsPage() {
       .filter(adherent => {
         if (faafFilter === 'Tous') return true;
         const isFaaf = adherent.estMembreFaaf;
-        return (faafFilter === 'Oui') ? isBenevole : !isBenevole;
+        return (faafFilter === 'Oui') ? isFaaf : !isFaaf;
       })
       .filter(adherent => {
         if (bureauFilter === 'Tous') return true;
         const isBureau = adherent.estMembreBureau;
-        return (bureauFilter === 'Oui') ? isBureau : !isBenevole;
+        return (bureauFilter === 'Oui') ? isBureau : !isBureau;
       })
       .filter(adherent => {
         if (droitImageFilter === 'Tous') return true;
@@ -142,7 +127,7 @@ export default function AdherentsPage() {
       });
   }, [adherents, searchTerm, genreFilter, cotisationFilter, benevoleFilter, faafFilter, bureauFilter, droitImageFilter, ageFilter]);
   
-  if (loading) {
+  if (isLoading) {
       return <AdherentsPageSkeleton />;
   }
 
@@ -152,7 +137,7 @@ export default function AdherentsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Liste des Adhérents</h1>
           <p className="text-muted-foreground">
-            Gérez les membres de votre association.
+            Gérez les membres de votre association en temps réel.
           </p>
         </div>
         <Button asChild>
@@ -174,7 +159,7 @@ export default function AdherentsPage() {
                     id="search-adherent"
                     type="search"
                     role="search"
-                    placeholder="Rechercher un adhérent par nom, email, téléphone ou adresse"
+                    placeholder="Rechercher par nom, email, téléphone ou adresse"
                     aria-label="Rechercher un adhérent par nom, email, téléphone ou adresse"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}

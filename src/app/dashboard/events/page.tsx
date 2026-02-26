@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { EventCard } from "@/components/event-card";
-import { getEvenements } from "@/services/evenementsService";
 import type { Evenement } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Sparkles } from "lucide-react";
@@ -17,7 +16,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import AiEventForm from '@/components/admin/ai-event-form';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
 
 
 function EventsPageSkeleton() {
@@ -56,28 +56,15 @@ function EventsPageSkeleton() {
 }
 
 export default function EventsPage() {
-  const [allEvents, setAllEvents] = useState<Evenement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const db = useFirestore();
+  const eventsQuery = useMemoFirebase(() => query(collection(db, 'evenements'), orderBy('date', 'desc')), [db]);
+  const { data: allEvents, isLoading } = useCollection<Evenement>(eventsQuery);
+
   const [period, setPeriod] = useState('upcoming');
   const [selectedYear, setSelectedYear] = useState('Tous');
-  const db = useFirestore();
-  
-  useEffect(() => {
-    if (!db) return;
-    async function fetchEvents() {
-        try {
-            const data = await getEvenements(db);
-            setAllEvents(data);
-        } catch (error) {
-            console.error("Failed to fetch events:", error);
-        } finally {
-            setLoading(false);
-        }
-    }
-    fetchEvents();
-  }, [db]);
   
   const years = useMemo(() => {
+    if (!allEvents) return ['Tous'];
     const eventYears = allEvents.map(e => new Date(e.date).getFullYear());
     const uniqueYears = ['Tous', ...Array.from(new Set(eventYears)).sort((a,b) => b-a).map(String)];
     return uniqueYears;
@@ -86,6 +73,7 @@ export default function EventsPage() {
   const hasActiveFilters = period !== 'upcoming' || selectedYear !== 'Tous';
 
   const filteredEvents = useMemo(() => {
+    if (!allEvents) return [];
     const now = new Date();
     return allEvents
       .filter(event => {
@@ -108,7 +96,7 @@ export default function EventsPage() {
       });
   }, [period, selectedYear, allEvents]);
   
-  if (loading) {
+  if (isLoading) {
       return <EventsPageSkeleton />;
   }
 
@@ -118,7 +106,7 @@ export default function EventsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Événements</h1>
           <p className="text-muted-foreground">
-            Découvrez, filtrez et gérez les événements de l'association.
+            Découvrez et gérez les événements de l'association en temps réel.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -137,7 +125,7 @@ export default function EventsPage() {
             </Dialog>
           <Link href="/dashboard/events/create" passHref>
             <Button
-                aria-label="Créer un nouvel événement"
+                aria-label="Créer un nouvel événement manuellement"
             >
               <PlusCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Créer un événement

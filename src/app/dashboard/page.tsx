@@ -1,18 +1,17 @@
 'use client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Users, BadgeCheck, Cake } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import type { Adherent } from '@/lib/types';
-import { getAdherents } from '@/services/adherentsService';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
 const isBirthdayToday = (dateString: string) => {
     if (!dateString) return false;
     try {
         const birthDate = new Date(dateString);
         const today = new Date();
-        // Compare month and day, ignoring year and timezone issues.
         return birthDate.getMonth() === today.getMonth() && birthDate.getDate() === today.getDate();
     } catch (e) {
         return false;
@@ -66,33 +65,18 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardHomePage() {
-    const [adherents, setAdherents] = useState<Adherent[]>([]);
-    const [loading, setLoading] = useState(true);
     const db = useFirestore();
+    const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
+    const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
 
-    useEffect(() => {
-        if (!db) return;
-        async function fetchAdherents() {
-            try {
-                const data = await getAdherents(db);
-                setAdherents(data);
-            } catch (error) {
-                console.error("Failed to fetch adherents:", error);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchAdherents();
-    }, [db]);
-
-    const totalAdherents = adherents.length;
-    const adherentsAJour = adherents.filter(a => a.cotisationAJour).length;
+    const totalAdherents = adherents?.length || 0;
+    const adherentsAJour = adherents?.filter(a => a.cotisationAJour).length || 0;
 
     const birthdayAdherents = useMemo(() => {
-        return adherents.filter(adherent => isBirthdayToday(adherent.dateNaissance));
+        return (adherents || []).filter(adherent => isBirthdayToday(adherent.dateNaissance));
     }, [adherents]);
     
-    if (loading) {
+    if (isLoading) {
         return <DashboardSkeleton />;
     }
 
