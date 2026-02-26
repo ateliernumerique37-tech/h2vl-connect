@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
@@ -7,7 +6,7 @@ import type { Evenement, Adherent, Inscription } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, Loader2, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,7 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { deleteEvenement } from '@/services/evenementsService';
-import { addInscription, updateInscription } from '@/services/inscriptionsService';
+import { addInscription, updateInscription, deleteInscription } from '@/services/inscriptionsService';
 import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
@@ -111,11 +110,6 @@ function RegisterMemberDialog({ event, adherentsList, onRegister }: { event: Eve
                                 ))}
                             </SelectContent>
                         </Select>
-                        {adherentsList.length === 0 && (
-                            <p className="text-xs text-muted-foreground mt-1 italic">
-                                Note : Tous les adhérents sont déjà inscrits ou aucun n'est enregistré.
-                            </p>
-                        )}
                     </div>
 
                     {event.necessiteMenu && event.optionsMenu && (
@@ -148,14 +142,12 @@ export default function EventDetailPage() {
     const eventRef = useMemoFirebase(() => doc(db, 'evenements', id), [db, id]);
     const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
-    // Récupération de tous les adhérents
     const adherentsColl = useMemoFirebase(() => collection(db, 'adherents'), [db]);
     const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsColl);
 
     const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions'), where('id_evenement', '==', id)), [db, id]);
     const { data: inscriptionsData, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
 
-    // Filtrer les adhérents non inscrits
     const nonRegisteredAdherents = (rawAdherents || []).filter(adherent => 
         !(inscriptionsData || []).some(ins => ins.id_adherent === adherent.id)
     );
@@ -194,8 +186,24 @@ export default function EventDetailPage() {
             toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible d\'inscrire l\'adhérent.' });
         }
     };
+
+    const handleUnregister = async (inscriptionId: string, adherentName: string) => {
+        try {
+            await deleteInscription(db, inscriptionId);
+            if (event) {
+                await addLog(db, auth, `Désinscription de ${adherentName} de l'événement ${event.titre}`);
+                toast({
+                    title: "Désinscription réussie",
+                    description: `${adherentName} a été retiré de la liste.`,
+                });
+            }
+        } catch (error) {
+            console.error("Failed to unregister:", error);
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de désinscrire l\'adhérent.' });
+        }
+    };
     
-    const handleDelete = async () => {
+    const handleDeleteEvent = async () => {
         if (!event) return;
         try {
             await deleteEvenement(db, event.id);
@@ -270,7 +278,7 @@ export default function EventDetailPage() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Annuler</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDelete}>Confirmer la suppression</AlertDialogAction>
+                            <AlertDialogAction onClick={handleDeleteEvent}>Confirmer la suppression</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -294,33 +302,60 @@ export default function EventDetailPage() {
                         <div className="space-y-4">
                             {inscriptionsData.map((inscription) => {
                                 const adherent = rawAdherents?.find(a => a.id === inscription.id_adherent);
+                                const adherentName = adherent ? `${adherent.prenom} ${adherent.nom}` : "Adhérent supprimé";
+                                
                                 return (
-                                   <div key={inscription.id} className="rounded-lg border p-4">
+                                   <div key={inscription.id} className="rounded-lg border p-4 transition-all hover:shadow-sm">
                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                           {adherent && (
-                                               <div className="flex items-center gap-4">
-                                                    <Avatar>
-                                                        <AvatarImage src={`https://picsum.photos/seed/${adherent.id}/40/40`} alt={`Avatar de ${adherent.prenom} ${adherent.nom}`} data-ai-hint="avatar person" />
-                                                        <AvatarFallback>{`${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase()}</AvatarFallback>
-                                                    </Avatar>
-                                                    <p className="font-medium">{adherent.prenom} {adherent.nom}</p>
-                                               </div>
-                                           )}
+                                           <div className="flex items-center gap-4">
+                                                <Avatar>
+                                                    <AvatarImage src={`https://picsum.photos/seed/${inscription.id_adherent}/40/40`} alt={`Avatar de ${adherentName}`} data-ai-hint="avatar person" />
+                                                    <AvatarFallback>{adherent ? `${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase() : '??'}</AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="font-medium">{adherentName}</p>
+                                                    {!adherent && <p className="text-xs text-destructive">Profil supprimé de la base</p>}
+                                                </div>
+                                           </div>
                                            <div className="flex w-full sm:w-auto items-center justify-end gap-4 sm:ml-auto">
-                                                <Label htmlFor={`payment-${inscription.id}`} className="text-sm">
-                                                     A payé {event.prix.toFixed(2)} €
-                                                </Label>
-                                                 <Switch
-                                                     id={`payment-${inscription.id}`}
-                                                     checked={inscription.a_paye}
-                                                     onCheckedChange={(checked) => handlePaymentStatusChange(inscription.id, checked)}
-                                                     aria-label={`Statut de paiement pour ${adherent?.prenom} ${adherent?.nom}`}
-                                                 />
+                                                <div className="flex items-center gap-2 mr-4">
+                                                    <Label htmlFor={`payment-${inscription.id}`} className="text-sm cursor-pointer">
+                                                         A payé
+                                                    </Label>
+                                                     <Switch
+                                                         id={`payment-${inscription.id}`}
+                                                         checked={inscription.a_paye}
+                                                         onCheckedChange={(checked) => handlePaymentStatusChange(inscription.id, checked)}
+                                                         aria-label={`Statut de paiement pour ${adherentName}`}
+                                                     />
+                                                </div>
+                                                
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" aria-label={`Désinscrire ${adherentName}`}>
+                                                            <UserMinus className="h-4 w-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Confirmer la désinscription</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Voulez-vous retirer <strong>{adherentName}</strong> de la liste des participants pour cet événement ?
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleUnregister(inscription.id, adherentName)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                                                Désinscrire
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
                                             </div>
                                        </div>
                                         {inscription.choixMenu && (
                                             <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
-                                                <h4 className="font-medium text-foreground mb-1">Menu :</h4>
+                                                <h4 className="font-medium text-foreground mb-1">Menu choisi :</h4>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
                                                     {Object.entries(inscription.choixMenu).map(([k, v]) => v && (
                                                         <p key={k}><strong>{k.replace('Choisi', '').replace('Choisie', '')} :</strong> {v}</p>
