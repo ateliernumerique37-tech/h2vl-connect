@@ -541,14 +541,18 @@ export default function EventDetailPage() {
 
                         {/* Affichage des choix de menu sur des lignes distinctes et ordonnées */}
                         {inscription.choixMenu && Object.values(inscription.choixMenu).some(v => v) && (
-                          <div className="mt-2 space-y-1.5 border-t pt-3">
+                          <div className="mt-3 space-y-2 border-t pt-3" role="region" aria-label={`Détails du repas pour ${adherentName}`}>
                             {MENU_ORDER.map(menuItem => {
                               const value = inscription.choixMenu?.[menuItem.key as keyof typeof inscription.choixMenu];
                               if (!value) return null;
                               return (
-                                <div key={menuItem.key} className="flex flex-col gap-0.5">
-                                  <span className="text-[9px] font-bold text-primary uppercase tracking-widest">{menuItem.label}</span>
-                                  <span className="text-[11px] text-muted-foreground pl-2 border-l-2 border-primary/20">{value}</span>
+                                <div key={menuItem.key} className="block w-full">
+                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-0.5">
+                                    {menuItem.label}
+                                  </span>
+                                  <div className="text-[11px] text-foreground bg-muted/40 rounded px-2 py-1 border-l-2 border-primary/30">
+                                    {value}
+                                  </div>
                                 </div>
                               );
                             })}
