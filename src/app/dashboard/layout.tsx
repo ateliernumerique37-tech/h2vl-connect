@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -37,15 +38,15 @@ function DashboardSkeleton() {
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isMounted, setIsMounted] = useState(false);
-  const router = useRouter();
-  const { user, isUserLoading } = useUser();
-  const db = useFirestore();
   
   // Montage initial du client pour synchronisation SSR/Client
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  const router = useRouter();
+  const { user, isUserLoading } = useUser();
+  const db = useFirestore();
   const adminRef = useMemoFirebase(() => user ? doc(db, 'admins', user.uid) : null, [db, user]);
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
