@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -56,6 +57,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Audit: Auto-réparation sécurisée du profil admin manquant
+    // On ne lance la réparation que si le chargement initial est fini et qu'aucun doc n'est trouvé
     if (user && db && !isAdminDocLoading && !isHealing && !adminDoc && !adminError) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
@@ -66,12 +68,20 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         email: user.email,
         role: 'Administrateur',
       }).finally(() => {
-        setIsHealing(false);
+        // On reste en état "isHealing" jusqu'à ce que le listener useDoc détecte le nouveau document
       });
     }
   }, [user, db, adminDoc, isAdminDocLoading, isHealing, adminError]);
 
-  if (isUserLoading || isAdminDocLoading || isHealing) {
+  // Fin de la réparation dès que le document admin apparaît
+  useEffect(() => {
+    if (adminDoc && isHealing) {
+      setIsHealing(false);
+    }
+  }, [adminDoc, isHealing]);
+
+  // IMPORTANT: On attend que TOUT soit prêt avant d'afficher les enfants (qui font des requêtes Firestore)
+  if (isUserLoading || isAdminDocLoading || isHealing || (!adminDoc && !adminError)) {
     return <DashboardSkeleton />;
   }
 
@@ -79,12 +89,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // Si après réparation on a toujours une erreur d'accès au document admin, on bloque
-  if (adminError && !adminDoc) {
-    return <DashboardSkeleton />;
+  // Si on a un document admin, on est autorisé
+  if (adminDoc) {
+    return <>{children}</>;
   }
 
-  return <>{children}</>;
+  // Si après chargement et tentative de réparation, on n'a toujours pas de doc (ex: erreur de permission)
+  // On affiche le skeleton pour éviter le crash en attendant une résolution
+  return <DashboardSkeleton />;
 }
 
 export default function DashboardLayout({

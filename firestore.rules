@@ -11,7 +11,7 @@ service cloud.firestore {
 
     /** 
      * @description Vérifie si l'utilisateur est un administrateur.
-     * Utilise la collection 'admins' comme source de vérité.
+     * Un administrateur est un utilisateur dont l'UID existe dans la collection 'admins'.
      */
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
@@ -21,8 +21,8 @@ service cloud.firestore {
 
     /**
      * @description Profils Administrateurs.
-     * Un utilisateur peut lire et créer son propre profil.
-     * Seul un administrateur peut lister ou supprimer d'autres administrateurs.
+     * Un utilisateur doit pouvoir lire son propre document pour que l'AuthGuard fonctionne.
+     * L'existence d'un document ici octroie les privilèges d'administration.
      */
     match /admins/{userId} {
       allow get, create: if isSignedIn() && request.auth.uid == userId;
@@ -37,29 +37,29 @@ service cloud.firestore {
     }
 
     /**
-     * @description Événements. Lisibles par tous, gérés par les admins.
+     * @description Événements. Lisibles par les administrateurs.
      */
     match /evenements/{evenementId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     /**
-     * @description Inscriptions. Lisibles par tous (pour les listes d'événements), gérées par les admins ou l'intéressé.
+     * @description Inscriptions. Gérées par les administrateurs.
      */
     match /inscriptions/{inscriptionId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     /**
-     * @description Cotisations et Logs. Gestion exclusive par les administrateurs.
+     * @description Cotisations. Gestion exclusive par les administrateurs.
      */
     match /cotisations/{cotisationId} {
       allow read, write: if isAdmin();
     }
 
+    /**
+     * @description Logs d'audit.
+     */
     match /logs_admin/{logId} {
       allow read, write: if isAdmin();
     }
