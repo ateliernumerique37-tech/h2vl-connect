@@ -1,5 +1,5 @@
 'use client';
-import { collection, doc, addDoc, updateDoc, query, where, writeBatch, getDocs, type Firestore } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, query, where, writeBatch, getDocs, type Firestore, deleteDoc } from 'firebase/firestore';
 import type { Adherent } from '@/lib/types';
 
 const adherentsCollectionName = 'adherents';
@@ -44,21 +44,29 @@ export async function batchAddAdherents(db: Firestore, adherents: Omit<Adherent,
 
 /**
  * Mise à jour d'un adhérent. 
- * Si 'cotisationAJour' est activé, on ajoute automatiquement une ligne à l'historique.
+ * Gère l'ajout ou la suppression automatique de la cotisation en fonction du switch.
  */
 export async function updateAdherent(db: Firestore, id: string, updates: Partial<Adherent>): Promise<void> {
     const docRef = doc(db, adherentsCollectionName, id);
     
-    // Si on active manuellement la cotisation via le switch
     if (updates.cotisationAJour === true) {
+        // Activation : Ajoute le record
         await addCotisation(db, id);
         
-        // On traite les autres mises à jour si présentes
+        const { cotisationAJour, ...otherUpdates } = updates;
+        if (Object.keys(otherUpdates).length > 0) {
+            await updateDoc(docRef, otherUpdates);
+        }
+    } else if (updates.cotisationAJour === false) {
+        // Désactivation : Supprime le record de l'année en cours
+        await removeCotisation(db, id);
+        
         const { cotisationAJour, ...otherUpdates } = updates;
         if (Object.keys(otherUpdates).length > 0) {
             await updateDoc(docRef, otherUpdates);
         }
     } else {
+        // Pas de changement sur le statut de cotisation
         await updateDoc(docRef, updates);
     }
 }
@@ -126,7 +134,6 @@ async function addCotisationRecord(db: Firestore, adherentId: string): Promise<v
 
 /**
  * Ajoute une cotisation (record) et force la mise à jour du statut de l'adhérent à true.
- * Utilisé par le bouton d'encaissement et l'automatisation du switch.
  */
 export async function addCotisation(db: Firestore, adherentId: string): Promise<void> {
     const batch = writeBatch(db);
@@ -141,6 +148,30 @@ export async function addCotisation(db: Firestore, adherentId: string): Promise<
     
     const adherentRef = doc(db, adherentsCollectionName, adherentId);
     batch.update(adherentRef, { cotisationAJour: true });
+    
+    await batch.commit();
+}
+
+/**
+ * Supprime la cotisation de l'année en cours et met à jour le statut de l'adhérent à false.
+ */
+export async function removeCotisation(db: Firestore, adherentId: string): Promise<void> {
+    const currentYear = new Date().getFullYear();
+    const q = query(
+        collection(db, cotisationsCollectionName),
+        where('adherentId', '==', adherentId),
+        where('annee', '==', currentYear)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    
+    querySnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+    });
+    
+    const adherentRef = doc(db, adherentsCollectionName, adherentId);
+    batch.update(adherentRef, { cotisationAJour: false });
     
     await batch.commit();
 }
