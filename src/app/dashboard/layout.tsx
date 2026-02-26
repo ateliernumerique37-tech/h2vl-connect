@@ -10,23 +10,26 @@ import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 /**
- * Composant de chargement sémantique pour éviter les sauts visuels.
+ * Composant de chargement statique pour le rendu initial (Serveur et Client).
+ * Structure HTML 100% stable pour éviter les erreurs d'hydratation.
  */
 function DashboardSkeleton() {
-    return (
-        <div className="flex h-screen w-full" aria-hidden="true">
-            <div className="hidden w-64 flex-col border-r bg-background p-4 md:flex">
-                <Skeleton className="h-8 w-32 mb-8" />
-                <div className="space-y-4">
-                    {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-                </div>
-            </div>
-            <div className="flex-1 p-8">
-                 <Skeleton className="h-8 w-64 mb-6" />
-                 <Skeleton className="h-[200px] w-full rounded-xl" />
-            </div>
+  return (
+    <div className="flex h-screen w-full bg-background" aria-hidden="true">
+      <div className="hidden w-64 flex-col border-r bg-card p-4 md:flex">
+        <div className="mb-8 h-8 w-32 animate-pulse rounded-md bg-muted" />
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-10 w-full animate-pulse rounded-md bg-muted" />
+          ))}
         </div>
-    )
+      </div>
+      <div className="flex-1 p-4 md:p-8">
+        <div className="mb-6 h-8 w-64 animate-pulse rounded-md bg-muted" />
+        <div className="h-[200px] w-full animate-pulse rounded-xl bg-muted" />
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -39,7 +42,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   
-  // Montage client
+  // Montage initial du client
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -48,7 +51,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
 
-  // 1. Redirection si non connecté (uniquement après montage pour éviter les flashs)
+  // 1. Redirection si non connecté
   useEffect(() => {
     if (mounted && !isUserLoading && !user) {
       router.replace('/login');
@@ -76,13 +79,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [user, db, adminDoc, isAdminDocLoading, isHealing, mounted]);
 
-  // Chargement / Attente Hydratation
-  // Prévient le mismatch serveur/client en forçant le squelette lors de la première passe client
+  // Étape critique pour l'hydratation :
+  // On retourne le Skeleton tant que le composant n'est pas monté sur le client
+  // OU si les données nécessaires sont en cours de chargement.
   if (!mounted || isUserLoading || isAdminDocLoading || isHealing) {
     return <DashboardSkeleton />;
   }
 
-  // Sécurité ultime : ne rien rendre si l'utilisateur n'est finalement pas authentifié
+  // Sécurité : si l'utilisateur n'est pas authentifié, on ne rend rien (le useEffect gère la redirection)
   if (!user) return null;
 
   return <>{children}</>;
@@ -94,18 +98,18 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-      <AuthGuard>
-        <SidebarProvider>
-          <Sidebar>
-            <SidebarNav />
-          </Sidebar>
-          <SidebarInset className="flex flex-col">
-            <DashboardHeader />
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8" role="main">
-              {children}
-            </main>
-          </SidebarInset>
-        </SidebarProvider>
-      </AuthGuard>
+    <AuthGuard>
+      <SidebarProvider>
+        <Sidebar>
+          <SidebarNav />
+        </Sidebar>
+        <SidebarInset className="flex flex-col">
+          <DashboardHeader />
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8" role="main">
+            {children}
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </AuthGuard>
   );
 }
