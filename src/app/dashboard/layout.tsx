@@ -15,7 +15,7 @@ import { doc, setDoc } from 'firebase/firestore';
 function DashboardSkeleton() {
   return (
     <div className="flex h-screen w-full bg-background" aria-hidden="true">
-      <div className="hidden w-64 flex-col border-r bg-card p-4 md:flex">
+      <div className="hidden w-64 flex-col border-r bg-background p-4 md:flex">
         <div className="mb-8 h-8 w-32 animate-pulse rounded-md bg-muted" />
         <div className="space-y-4">
           {[...Array(5)].map((_, i) => (
@@ -36,8 +36,8 @@ function DashboardSkeleton() {
  * Gère la redirection, l'auto-réparation du profil et prévient les erreurs d'hydratation.
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const router = useRouter();
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   
@@ -50,16 +50,22 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
 
+  // Règle d'or : Ne RIEN rendre sur le serveur pour ce fragment asynchrone
+  // Cela évite les mismatches d'hydratation car l'état Auth est inconnu au serveur.
+  if (!isMounted) {
+    return null;
+  }
+
   // 1. Redirection si non connecté
   useEffect(() => {
-    if (isMounted && !isUserLoading && !user) {
+    if (!isUserLoading && !user) {
       router.replace('/login');
     }
-  }, [user, isUserLoading, router, isMounted]);
+  }, [user, isUserLoading, router]);
 
   // 2. Auto-réparation du profil admin si manquant
   useEffect(() => {
-    if (isMounted && user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
+    if (user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
       setIsHealing(true);
       const emailName = user.email ? user.email.split('@')[0] : 'Admin';
       
@@ -74,12 +80,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         setIsHealing(false);
       });
     }
-  }, [user, db, adminDoc, isAdminDocLoading, isHealing, isMounted]);
-
-  // Règle d'or : Ne RIEN rendre sur le serveur pour ce fragment asynchrone
-  if (!isMounted) {
-    return null;
-  }
+  }, [user, db, adminDoc, isAdminDocLoading, isHealing]);
 
   // Ensuite seulement, gérer la logique de chargement de Firebase Auth
   if (isUserLoading || isAdminDocLoading || isHealing) {
