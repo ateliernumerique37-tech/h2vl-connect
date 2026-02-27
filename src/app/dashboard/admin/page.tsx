@@ -10,10 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { createAdminProfile, updateAdminProfile, deleteAdminProfile } from "@/services/adminsService";
 import { addLog } from "@/services/logsService";
-import { batchAddAdherents, deleteAllAdherents } from "@/services/adherentsService";
+import { deleteAllAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser, useFirestore, useCollection, useMemoFirebase, useAuth } from "@/firebase";
-import { collection, query, orderBy } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, writeBatch, doc } from "firebase/firestore";
 import { AdminTable } from "@/components/admin/admin-table";
 import { AdminForm } from "@/components/admin/admin-form";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -119,47 +119,109 @@ export default function AdminPage() {
     }
   };
 
-  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    setIsImporting(true);
     const reader = new FileReader();
+    
     reader.onload = async (e) => {
-      setIsImporting(true);
       const text = e.target?.result as string;
       try {
+        // 1. Parsing initial
         const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
-        if (lines.length < 2) throw new Error("Fichier vide ou corrompu.");
-        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        if (lines.length < 2) throw new Error("Le fichier CSV est vide ou ne contient que des en-têtes.");
+
+        // 2. Récupération des adhérents existants pour la déduplication
+        const existingSnap = await getDocs(collection(db, 'adherents'));
+        const existingAdherents = existingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as Adherent }));
+
         const rows = lines.slice(1);
-        const newAdherents: Omit<Adherent, 'id'>[] = rows.map(row => {
-          const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
-          const d: any = {};
-          headers.forEach((h, i) => d[h] = values[i]);
-          return {
-            prenom: d.Prenom || '',
-            nom: d.Nom || '',
-            email: d.Email || '',
-            telephone: d.Telephone || '',
-            adresse: d.Adresse || '',
-            dateNaissance: d.DateNaissance ? new Date(d.DateNaissance).toISOString() : '',
-            genre: d.Genre || 'Autre',
-            dateInscription: new Date().toISOString(),
-            estMembreBureau: d.MembreBureau === 'oui',
-            estBenevole: d.Benevole === 'oui',
-            estMembreFaaf: d.MembreFAAF === 'oui',
-            accordeDroitImage: d.DroitImage === 'oui',
-            cotisationAJour: d.CotisationAJour === 'oui',
+        const newAdherentsBatch: Omit<Adherent, 'id'>[] = [];
+        let duplicateCount = 0;
+
+        for (const row of rows) {
+          // Parsing robuste avec gestion des guillemets
+          const values = row.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          
+          // Mappage des colonnes (ordre imposé)
+          const data = {
+            prenom: values[0] || "",
+            nom: values[1] || "",
+            email: values[2] || "",
+            telephone: values[3] || "",
+            adresse: values[4] || "",
+            dateNaissance: values[5] ? new Date(values[5]).toISOString() : "",
+            genre: (values[6] as 'H' | 'F' | 'Autre') || "Autre",
+            dateInscription: values[7] ? new Date(values[7]).toISOString() : new Date().toISOString(),
+            estMembreBureau: values[8]?.toLowerCase() === 'oui',
+            estBenevole: values[9]?.toLowerCase() === 'oui',
+            estMembreFaaf: values[10]?.toLowerCase() === 'oui',
+            accordeDroitImage: values[11]?.toLowerCase() === 'oui',
+            cotisationAJour: values[12]?.toLowerCase() === 'oui',
           };
+
+          // 3. Système anti-doublons (Email ou Nom+Prénom)
+          const isDuplicate = existingAdherents.some(existing => {
+            const sameEmail = data.email && existing.email.toLowerCase() === data.email.toLowerCase();
+            const sameName = existing.nom.toLowerCase() === data.nom.toLowerCase() && 
+                             existing.prenom.toLowerCase() === data.prenom.toLowerCase();
+            return sameEmail || sameName;
+          });
+
+          if (isDuplicate) {
+            duplicateCount++;
+            continue;
+          }
+
+          newAdherentsBatch.push(data);
+        }
+
+        // 4. Envoi par lots (Batch)
+        if (newAdherentsBatch.length > 0) {
+          const batch = writeBatch(db);
+          newAdherentsBatch.forEach(adherentData => {
+            const newDocRef = doc(collection(db, 'adherents'));
+            batch.set(newDocRef, adherentData);
+            
+            // Si cotisation à jour, créer l'entrée historique
+            if (adherentData.cotisationAJour) {
+              const cotisRef = doc(collection(db, 'cotisations'));
+              batch.set(cotisRef, {
+                adherentId: newDocRef.id,
+                annee: new Date().getFullYear(),
+                datePaiement: new Date().toISOString(),
+                montant: 15
+              });
+            }
+          });
+          await batch.commit();
+        }
+
+        // 5. Journalisation et Feedback
+        const logMsg = `Importation CSV : ${newAdherentsBatch.length} nouveaux adhérents ajoutés, ${duplicateCount} doublons ignorés.`;
+        await addLog(db, auth, logMsg);
+
+        toast({
+          title: "Importation terminée",
+          description: `Succès : ${newAdherentsBatch.length} adhérents importés. ${duplicateCount} doublons ont été ignorés.`,
+          variant: "default",
         });
-        await batchAddAdherents(db, newAdherents);
-        await addLog(db, auth, `Import de ${newAdherents.length} adhérents.`);
-        toast({ title: "Importation terminée", description: `${newAdherents.length} adhérents ont été ajoutés.` });
+
       } catch (err: any) {
-        toast({ variant: 'destructive', title: "Erreur CSV", description: err.message });
+        console.error("CSV Import Error:", err);
+        toast({
+          variant: 'destructive',
+          title: "Échec de l'importation",
+          description: err.message || "Une erreur est survenue lors de la lecture du fichier.",
+        });
       } finally {
         setIsImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     };
+
     reader.readAsText(file);
   };
   
@@ -182,7 +244,7 @@ export default function AdminPage() {
                     </CardTitle>
                     <CardDescription>Liste des personnes autorisées à gérer l'association.</CardDescription>
                 </div>
-                <Button onClick={handleOpenCreate} size="sm">
+                <Button onClick={handleOpenCreate} size="sm" className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Nouvel Admin
                 </Button>
@@ -203,14 +265,29 @@ export default function AdminPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Base de données</CardTitle>
-                    <CardDescription>Maintenance et imports.</CardDescription>
+                    <CardDescription>Maintenance et imports CSV.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <Button onClick={() => fileInputRef.current?.click()} disabled={isImporting} variant="outline" className="w-full">
+                    <div className="relative">
+                      <Button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        disabled={isImporting} 
+                        variant="outline" 
+                        className="w-full min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        aria-label="Importer un fichier CSV d'adhérents"
+                      >
                         {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        Importer CSV Adhérents
-                    </Button>
-                    <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileImport} />
+                        {isImporting ? "Importation en cours..." : "Importer CSV Adhérents"}
+                      </Button>
+                      <input 
+                        ref={fileInputRef} 
+                        type="file" 
+                        accept=".csv" 
+                        className="sr-only" 
+                        onChange={handleFileUpload}
+                        aria-hidden="true"
+                      />
+                    </div>
                     
                     <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
                         <div className="flex items-center gap-2 text-destructive font-semibold mb-2">
@@ -220,7 +297,7 @@ export default function AdminPage() {
                         <p className="text-xs text-muted-foreground mb-4">La purge supprimera tous les adhérents, cotisations et inscriptions sans retour possible.</p>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm" className="w-full" disabled={isPurging}>
+                                <Button variant="destructive" size="sm" className="w-full min-h-[40px]" disabled={isPurging}>
                                     {isPurging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     Purger tous les Adhérents
                                 </Button>
@@ -244,8 +321,8 @@ export default function AdminPage() {
 
             <Card className="h-fit">
                 <CardHeader>
-                    <CardTitle>Dernières Actions</CardTitle>
-                    <CardDescription>Audit en temps réel (Page {logsCurrentPage}/{totalLogsPages}).</CardDescription>
+                    <CardTitle>Journal d'Audit</CardTitle>
+                    <CardDescription>Actions récentes (Page {logsCurrentPage}/{totalLogsPages}).</CardDescription>
                 </CardHeader>
                 <CardContent className="px-2">
                     <div className="max-h-[500px] overflow-y-auto">
@@ -281,17 +358,19 @@ export default function AdminPage() {
                                 size="sm"
                                 onClick={() => setLogsCurrentPage(prev => Math.max(1, prev - 1))}
                                 disabled={logsCurrentPage === 1}
-                                className="h-8 w-8 p-0"
+                                className="h-10 w-10 p-0 focus-visible:ring-2 focus-visible:ring-primary"
+                                aria-label="Page de logs précédente"
                             >
                                 <ChevronLeft className="h-4 w-4" />
                             </Button>
-                            <span className="text-xs font-medium">Page {logsCurrentPage}</span>
+                            <span className="text-xs font-medium">Page {logsCurrentPage} sur {totalLogsPages}</span>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setLogsCurrentPage(prev => Math.min(totalLogsPages, prev + 1))}
                                 disabled={logsCurrentPage === totalLogsPages}
-                                className="h-8 w-8 p-0"
+                                className="h-10 w-10 p-0 focus-visible:ring-2 focus-visible:ring-primary"
+                                aria-label="Page de logs suivante"
                             >
                                 <ChevronRight className="h-4 w-4" />
                             </Button>
