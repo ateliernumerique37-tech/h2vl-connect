@@ -73,7 +73,7 @@ export default function AdherentsPage() {
   const [ageFilter, setAgeFilter] = useState('Tous');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Debounce logic for search term
+  // Debounce logic for search term (WCAG Performance & Focus stability)
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
@@ -129,7 +129,7 @@ export default function AdherentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Live Region for Screen Readers */}
+      {/* Live Region for Screen Readers (WCAG 2.2 Compliance) */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {filteredAdherents.length > 0 
           ? `Affichage de ${filteredAdherents.length} adhérent${filteredAdherents.length > 1 ? 's' : ''} sur un total de ${adherents?.length || 0}.`
@@ -141,7 +141,7 @@ export default function AdherentsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Liste des Adhérents</h1>
           <p className="text-muted-foreground">Gérez les membres de votre association.</p>
         </div>
-        <Button asChild className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        <Button asChild className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 min-h-[44px]">
             <Link href="/dashboard/adherents/create">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Ajouter un adhérent
@@ -158,7 +158,7 @@ export default function AdherentsPage() {
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                       id="search-adherent"
-                      className="pl-10 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      className="pl-10 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 min-h-[44px]"
                       placeholder="Nom, email, téléphone..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -168,9 +168,8 @@ export default function AdherentsPage() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
                 <div className="space-y-1">
-                  <span className="sr-only">Filtrer par genre</span>
                   <Select onValueChange={setGenreFilter} defaultValue="Tous" value={genreFilter}>
-                      <SelectTrigger aria-label="Genre" className="focus-visible:ring-2 focus-visible:ring-primary">
+                      <SelectTrigger aria-label="Filtrer par genre" className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]">
                         <SelectValue placeholder="Genre" />
                       </SelectTrigger>
                       <SelectContent>
@@ -182,9 +181,8 @@ export default function AdherentsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="sr-only">Filtrer par statut de cotisation</span>
                   <Select onValueChange={setCotisationFilter} defaultValue="Tous" value={cotisationFilter}>
-                      <SelectTrigger aria-label="Cotisation" className="focus-visible:ring-2 focus-visible:ring-primary">
+                      <SelectTrigger aria-label="Filtrer par statut de cotisation" className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]">
                         <SelectValue placeholder="Cotisation" />
                       </SelectTrigger>
                       <SelectContent>
@@ -196,9 +194,8 @@ export default function AdherentsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="sr-only">Filtrer par statut bénévole</span>
                   <Select onValueChange={setBenevoleFilter} defaultValue="Tous" value={benevoleFilter}>
-                      <SelectTrigger aria-label="Bénévole" className="focus-visible:ring-2 focus-visible:ring-primary">
+                      <SelectTrigger aria-label="Filtrer par statut bénévole" className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]">
                         <SelectValue placeholder="Bénévole" />
                       </SelectTrigger>
                       <SelectContent>
@@ -210,9 +207,8 @@ export default function AdherentsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="sr-only">Filtrer par appartenance FAAF</span>
                   <Select onValueChange={setFaafFilter} defaultValue="Tous" value={faafFilter}>
-                      <SelectTrigger aria-label="FAAF" className="focus-visible:ring-2 focus-visible:ring-primary">
+                      <SelectTrigger aria-label="Filtrer par appartenance FAAF" className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]">
                         <SelectValue placeholder="FAAF" />
                       </SelectTrigger>
                       <SelectContent>
@@ -224,9 +220,8 @@ export default function AdherentsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="sr-only">Filtrer par appartenance au bureau</span>
                   <Select onValueChange={setBureauFilter} defaultValue="Tous" value={bureauFilter}>
-                      <SelectTrigger aria-label="Bureau" className="focus-visible:ring-2 focus-visible:ring-primary">
+                      <SelectTrigger aria-label="Filtrer par appartenance au bureau" className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]">
                         <SelectValue placeholder="Bureau" />
                       </SelectTrigger>
                       <SelectContent>
@@ -238,9 +233,8 @@ export default function AdherentsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="sr-only">Filtrer par droit à l'image</span>
                   <Select onValueChange={setDroitImageFilter} defaultValue="Tous" value={droitImageFilter}>
-                      <SelectTrigger aria-label="Droit image" className="focus-visible:ring-2 focus-visible:ring-primary">
+                      <SelectTrigger aria-label="Filtrer par droit à l'image" className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]">
                         <SelectValue placeholder="Droit image" />
                       </SelectTrigger>
                       <SelectContent>
@@ -252,9 +246,8 @@ export default function AdherentsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="sr-only">Filtrer par tranche d'âge</span>
                   <Select onValueChange={setAgeFilter} defaultValue="Tous" value={ageFilter}>
-                      <SelectTrigger aria-label="Âge" className="focus-visible:ring-2 focus-visible:ring-primary">
+                      <SelectTrigger aria-label="Filtrer par tranche d'âge" className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]">
                         <SelectValue placeholder="Âge" />
                       </SelectTrigger>
                       <SelectContent>
@@ -273,7 +266,7 @@ export default function AdherentsPage() {
       {paginatedAdherents.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center rounded-lg border-2 border-dashed bg-muted/50 p-8 text-center" role="alert">
             <Search className="h-10 w-10 text-muted-foreground mb-4 opacity-20" />
-            <p className="text-lg font-medium">Aucun adhérent trouvé.</p>
+            <p className="text-lg font-medium">Aucun adhérent ne correspond à cette recherche.</p>
             <p className="text-sm text-muted-foreground">Modifiez vos filtres ou votre recherche pour voir plus de résultats.</p>
         </div>
       ) : (
@@ -292,7 +285,7 @@ export default function AdherentsPage() {
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
                 aria-label="Aller à la page précédente"
-                className="focus-visible:ring-2 focus-visible:ring-primary"
+                className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]"
               >
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Précédent
@@ -306,7 +299,7 @@ export default function AdherentsPage() {
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
                 aria-label="Aller à la page suivante"
-                className="focus-visible:ring-2 focus-visible:ring-primary"
+                className="focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]"
               >
                 Suivant
                 <ChevronRight className="h-4 w-4 ml-2" />
