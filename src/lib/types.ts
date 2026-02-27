@@ -22,6 +22,7 @@ export interface Evenement {
   date: string; // ISO string format
   lieu: string;
   prix: number;
+  nombrePlacesMax: number;
   imageId: string;
   necessiteMenu?: boolean;
   optionsMenu?: {

@@ -6,7 +6,8 @@ import type { Evenement, Adherent, Inscription } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
@@ -39,10 +40,11 @@ function EventDetailSkeleton() {
           <Skeleton className="h-8 w-3/4" />
           <Skeleton className="mt-2 h-4 w-full" />
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
-          <Skeleton className="h-6 w-1/2" />
-          <Skeleton className="h-6 w-1/2" />
-          <Skeleton className="h-6 w-1/2" />
+        <CardContent className="grid gap-4 sm:grid-cols-4">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </CardContent>
       </Card>
     </div>
@@ -84,12 +86,14 @@ function RegisterMemberDialog({
   event, 
   adherentsList, 
   onRegister, 
-  isLoading 
+  isLoading,
+  currentCount
 }: { 
   event: Evenement; 
   adherentsList: Adherent[]; 
   onRegister: (inscription: Omit<Inscription, 'id' | 'date_inscription'>) => Promise<void>; 
-  isLoading: boolean 
+  isLoading: boolean;
+  currentCount: number;
 }) {
   const [selectedAdherentId, setSelectedAdherentId] = useState<string>("");
   const [isPaid, setIsPaid] = useState(false);
@@ -101,6 +105,7 @@ function RegisterMemberDialog({
   
   const listboxId = "adherents-listbox";
   const inputId = "adherent-search-input";
+  const isFull = currentCount >= (event.nombrePlacesMax || Infinity);
 
   const filteredAdherents = useMemo(() => {
     return adherentsList.filter(a => 
@@ -138,7 +143,7 @@ function RegisterMemberDialog({
   };
 
   const handleRegister = async () => {
-    if (!selectedAdherentId) return;
+    if (!selectedAdherentId || isFull) return;
     setIsSubmitting(true);
     try {
       const newInscription: Omit<Inscription, 'id' | 'date_inscription'> = {
@@ -157,9 +162,9 @@ function RegisterMemberDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="lg" className="w-full shadow-md min-h-[48px]" aria-label={`Inscrire un adhérent à l'événement ${event.titre}`}>
+        <Button size="lg" disabled={isFull} className="w-full shadow-md min-h-[48px]" aria-label={isFull ? "L'événement est complet" : `Inscrire un adhérent à l'événement ${event.titre}`}>
           <PlusCircle className="mr-2 h-5 w-5" />
-          Inscrire un adhérent
+          {isFull ? "Événement complet" : "Inscrire un adhérent"}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[450px] flex flex-col max-h-[90vh]">
@@ -171,6 +176,11 @@ function RegisterMemberDialog({
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto pr-2 space-y-6 py-2">
+          {isFull && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm font-semibold text-center" role="alert">
+              Attention : Cet événement est déjà complet.
+            </div>
+          )}
           <div className="space-y-3">
             <Label htmlFor={inputId} className="font-semibold">Choix de l'adhérent</Label>
             <div 
@@ -279,7 +289,7 @@ function RegisterMemberDialog({
         <DialogFooter className="mt-auto pt-4 border-t">
           <Button 
             onClick={handleRegister} 
-            disabled={!selectedAdherentId || isSubmitting} 
+            disabled={!selectedAdherentId || isSubmitting || isFull} 
             className="w-full h-12 text-base font-semibold"
             aria-label="Confirmer l'inscription"
           >
@@ -314,6 +324,20 @@ export default function EventDetailPage() {
     return allInscriptions.filter(ins => ins.id_evenement === id);
   }, [allInscriptions, id]);
 
+  const financialStats = useMemo(() => {
+    if (!event || !eventInscriptions) return { attendance: 0, expected: 0, perceived: 0, remaining: 0, occupancyRate: 0 };
+    
+    const attendance = eventInscriptions.length;
+    const maxPlaces = event.nombrePlacesMax || 1;
+    const occupancyRate = Math.min(Math.round((attendance / maxPlaces) * 100), 100);
+    
+    const expected = attendance * event.prix;
+    const perceived = eventInscriptions.filter(i => i.a_paye).length * event.prix;
+    const remaining = expected - perceived;
+
+    return { attendance, expected, perceived, remaining, occupancyRate };
+  }, [event, eventInscriptions]);
+
   const nonRegisteredAdherents = useMemo(() => {
     if (!rawAdherents) return [];
     const registeredIds = new Set(eventInscriptions.map(ins => ins.id_adherent));
@@ -327,7 +351,7 @@ export default function EventDetailPage() {
       await updateInscription(db, inscriptionId, { a_paye: hasPaid });
       toast({ title: "Paiement mis à jour" });
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: 'Action impossible.' });
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue.' });
     }
   };
   
@@ -336,11 +360,11 @@ export default function EventDetailPage() {
       await addInscription(db, { ...inscriptionData, date_inscription: new Date().toISOString() });
       const adherent = rawAdherents?.find(a => a.id === inscriptionData.id_adherent);
       if (event && adherent) {
-        await addLog(db, auth, `Inscription de ${adherent.prenom} ${adherent.nom} à ${event.titre}`);
-        toast({ title: "Inscription validée", description: `${adherent.prenom} est bien inscrit.` });
+        await addLog(db, auth, `Inscription : ${adherent.prenom} ${adherent.nom} à ${event.titre}`);
+        toast({ title: "Inscription validée" });
       }
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: "L'inscription a échoué." });
+      toast({ variant: 'destructive', title: 'Erreur', description: "Échec de l'inscription." });
     }
   };
 
@@ -348,11 +372,11 @@ export default function EventDetailPage() {
     try {
       await deleteInscription(db, inscriptionId);
       if (event) {
-        await addLog(db, auth, `Désinscription de ${adherentName} de ${event.titre}`);
-        toast({ title: "Adhérent retiré", description: `${adherentName} a été désinscrit.` });
+        await addLog(db, auth, `Désinscription : ${adherentName} de ${event.titre}`);
+        toast({ title: "Désinscription réussie" });
       }
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: "Action impossible." });
+      toast({ variant: 'destructive', title: 'Erreur', description: "Échec de la désinscription." });
     }
   };
   
@@ -364,7 +388,7 @@ export default function EventDetailPage() {
       toast({ title: "Événement supprimé" });
       router.push('/dashboard/events');
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: "Suppression impossible." });
+      toast({ variant: 'destructive', title: 'Erreur', description: "Échec de la suppression." });
     }
   };
 
@@ -378,7 +402,31 @@ export default function EventDetailPage() {
   return (
     <div className="space-y-8 pb-10">
       <header className="flex flex-col gap-2 border-b pb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">{event.titre}</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold tracking-tight text-primary">{event.titre}</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild className="min-h-[40px]">
+              <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="mr-2 h-4 w-4" /> Modifier</Link>
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="min-h-[40px]">
+                  <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Suppression définitive ?</AlertDialogTitle>
+                  <AlertDialogDescription>L'événement et ses {eventInscriptions.length} inscriptions seront effacés.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive hover:bg-destructive/90">Confirmer</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground mt-2">
           <div className="flex items-center gap-2" aria-label={`Date: ${formattedDate}`}>
             <Calendar className="h-4 w-4 text-primary" />
@@ -395,53 +443,48 @@ export default function EventDetailPage() {
         </div>
       </header>
 
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-primary/5 border-primary/20">
+          <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2"><TrendingUp className="h-3 w-3" /> Taux de remplissage</CardTitle></CardHeader>
+          <CardContent className="p-4 pt-1">
+            <div className="text-2xl font-bold">{financialStats.occupancyRate}%</div>
+            <p className="text-[10px] text-muted-foreground">{financialStats.attendance} / {event.nombrePlacesMax || '∞'} places</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase flex items-center gap-2"><Wallet className="h-3 w-3 text-muted-foreground" /> Recettes attendues</CardTitle></CardHeader>
+          <CardContent className="p-4 pt-1">
+            <div className="text-2xl font-bold">{financialStats.expected.toFixed(2)} €</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-50 border-green-100">
+          <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-green-700 flex items-center gap-2"><Coins className="h-3 w-3" /> Recettes perçues</CardTitle></CardHeader>
+          <CardContent className="p-4 pt-1">
+            <div className="text-2xl font-bold text-green-700">{financialStats.perceived.toFixed(2)} €</div>
+          </CardContent>
+        </Card>
+        <Card className={cn(financialStats.remaining > 0 ? "bg-red-50 border-red-100" : "bg-muted/30")}>
+          <CardHeader className="p-4 pb-0"><CardTitle className={cn("text-xs font-bold uppercase", financialStats.remaining > 0 ? "text-red-700" : "text-muted-foreground")}>Reste à percevoir</CardTitle></CardHeader>
+          <CardContent className="p-4 pt-1">
+            <div className={cn("text-2xl font-bold", financialStats.remaining > 0 ? "text-red-700" : "text-muted-foreground")}>
+              {financialStats.remaining.toFixed(2)} €
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2">
           <Card className="shadow-sm border-2">
             <CardHeader className="bg-muted/30 pb-4">
-              <CardTitle className="text-lg">Description de l'événement</CardTitle>
+              <CardTitle className="text-lg">Description</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">
                 {event.description}
               </p>
             </CardContent>
-            <CardFooter className="flex flex-wrap gap-4 border-t bg-muted/10 pt-6">
-              <Button variant="outline" size="sm" asChild className="min-h-[40px]" aria-label={`Modifier ${event.titre}`}>
-                <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="mr-2 h-4 w-4" /> Modifier l'événement</Link>
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" className="min-h-[40px]" aria-label={`Supprimer ${event.titre}`}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Supprimer l'événement
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Confirmer la suppression ?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Cette action est définitive pour l'événement <strong>{event.titre}</strong> et toutes les inscriptions liées.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive hover:bg-destructive/90">Confirmer</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </CardFooter>
           </Card>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <Card className="bg-primary/5 border-primary/20">
-              <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-primary">Inscrits</CardTitle></CardHeader>
-              <CardContent className="p-4 pt-1"><div className="text-2xl font-bold">{eventInscriptions.length}</div></CardContent>
-            </Card>
-            <Card className="bg-green-50 border-green-200">
-              <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-green-700">Payés</CardTitle></CardHeader>
-              <CardContent className="p-4 pt-1"><div className="text-2xl font-bold">{eventInscriptions.filter(i => i.a_paye).length}</div></CardContent>
-            </Card>
-          </div>
         </div>
 
         <div className="space-y-6">
@@ -450,13 +493,14 @@ export default function EventDetailPage() {
             adherentsList={nonRegisteredAdherents} 
             onRegister={handleNewRegistration} 
             isLoading={isLoadingAdherents || isLoadingInscriptions}
+            currentCount={eventInscriptions.length}
           />
 
           <Card className="shadow-sm border-2 overflow-hidden">
             <CardHeader className="bg-muted/30 border-b">
               <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">Liste des inscrits</CardTitle>
+                <CardTitle className="text-lg">Liste des inscrits ({eventInscriptions.length})</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="px-3 pt-6">
@@ -471,23 +515,25 @@ export default function EventDetailPage() {
                     return (
                       <div key={inscription.id} className="flex flex-col gap-3 rounded-xl border p-4 hover:border-primary/40 transition-all bg-card shadow-sm">
                         <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm font-bold truncate text-foreground">{adherentName}</span>
-                              <span className="text-[10px] text-muted-foreground">Inscrit le {new Date(inscription.date_inscription).toLocaleDateString()}</span>
+                          <div className="min-w-0">
+                            <span className="text-sm font-bold truncate block text-foreground">{adherentName}</span>
+                            <div className="mt-1">
+                              <span className="sr-only">Statut du paiement : </span>
+                              {inscription.a_paye ? (
+                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Payé</Badge>
+                              ) : (
+                                <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">En attente</Badge>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex flex-col items-center">
                               <Switch
                                 checked={inscription.a_paye}
                                 onCheckedChange={(checked) => handlePaymentStatusChange(inscription.id, checked)}
-                                className="scale-75"
-                                aria-label={`Paiement pour ${adherentName}`}
+                                className="scale-90"
+                                aria-label={`Basculer le statut de paiement pour ${adherentName}`}
                               />
-                              <span className={cn("text-[9px] font-bold uppercase tracking-tighter", inscription.a_paye ? "text-green-600" : "text-orange-500")}>
-                                {inscription.a_paye ? "PAYÉ" : "DÛ"}
-                              </span>
                             </div>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -502,7 +548,7 @@ export default function EventDetailPage() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleUnregister(inscription.id, adherentName)} className="bg-destructive hover:bg-destructive/90">Désinscrire</AlertDialogAction>
+                                  <AlertDialogAction onClick={() => handleUnregister(inscription.id, adherentName)} className="bg-destructive hover:bg-destructive/90">Confirmer</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -510,16 +556,16 @@ export default function EventDetailPage() {
                         </div>
 
                         {inscription.choixMenu && Object.values(inscription.choixMenu).some(v => v) && (
-                          <div className="mt-3 space-y-2 border-t pt-3" role="region" aria-label={`Détails du repas pour ${adherentName}`}>
+                          <div className="mt-2 space-y-2 border-t pt-3" role="region" aria-label={`Choix de menu pour ${adherentName}`}>
                             {MENU_ORDER.map(menuItem => {
                               const value = inscription.choixMenu?.[menuItem.key as keyof typeof inscription.choixMenu];
                               if (!value) return null;
                               return (
                                 <div key={menuItem.key} className="block w-full">
-                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-0.5">
+                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-1">
                                     {menuItem.label}
                                   </span>
-                                  <div className="text-[11px] text-foreground bg-muted/40 rounded px-2 py-1 border-l-2 border-primary/30">
+                                  <div className="text-[11px] text-foreground bg-muted/40 rounded px-2 py-1.5 border-l-2 border-primary/30">
                                     {value}
                                   </div>
                                 </div>
@@ -533,7 +579,7 @@ export default function EventDetailPage() {
                 </div>
               ) : (
                 <div className="py-12 text-center border-2 border-dashed rounded-xl">
-                  <p className="text-sm text-muted-foreground italic">Aucun inscrit pour cet événement.</p>
+                  <p className="text-sm text-muted-foreground italic">Aucun inscrit pour le moment.</p>
                 </div>
               )}
             </CardContent>

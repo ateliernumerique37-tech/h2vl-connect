@@ -41,15 +41,8 @@ function EditEventSkeleton() {
                         <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
                         <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
                     </div>
-                     <div className="space-y-2">
-                        <Skeleton className="h-4 w-1/4" />
-                        <Skeleton className="h-10 w-full" />
-                    </div>
                 </CardContent>
             </Card>
-             <div className="flex justify-start">
-                <Skeleton className="h-10 w-48" />
-            </div>
         </div>
     )
 }
@@ -71,6 +64,7 @@ export default function EditEventPage() {
     const [date, setDate] = useState('');
     const [lieu, setLieu] = useState('');
     const [prix, setPrix] = useState('0');
+    const [nombrePlacesMax, setNombrePlacesMax] = useState('50');
     const [necessiteMenu, setNecessiteMenu] = useState(false);
     const [aperitifs, setAperitifs] = useState('');
     const [entrees, setEntrees] = useState('');
@@ -83,17 +77,18 @@ export default function EditEventPage() {
         if (!id || !db) return;
         async function fetchEvent() {
             try {
+                // Fetch direct reference or via service
                 const foundEvent = await getEvenementById(db, id);
                 if (foundEvent) {
                     setTitre(foundEvent.titre);
                     setDescription(foundEvent.description);
-                    // Format date for datetime-local input
                     const d = new Date(foundEvent.date);
                     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
                     setDate(d.toISOString().slice(0, 16));
                     
                     setLieu(foundEvent.lieu);
                     setPrix(foundEvent.prix.toString());
+                    setNombrePlacesMax((foundEvent.nombrePlacesMax || 50).toString());
                     setNecessiteMenu(foundEvent.necessiteMenu || false);
                     if (foundEvent.optionsMenu) {
                         setAperitifs(foundEvent.optionsMenu.aperitifs?.join(', ') || '');
@@ -107,7 +102,7 @@ export default function EditEventPage() {
                 }
             } catch (error) {
                 console.error("Failed to fetch event:", error);
-                toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de charger les données de l\'événement.' });
+                toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue lors du chargement.' });
             } finally {
                 setLoading(false);
             }
@@ -127,6 +122,7 @@ export default function EditEventPage() {
                 date: new Date(date).toISOString(),
                 lieu,
                 prix: parseFloat(prix),
+                nombrePlacesMax: parseInt(nombrePlacesMax, 10),
                 necessiteMenu,
             };
 
@@ -151,7 +147,7 @@ export default function EditEventPage() {
             router.push(`/dashboard/events/${id}`);
         } catch (error) {
             console.error("Failed to update event:", error);
-            toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de modifier l\'événement.' });
+            toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue lors de l\'enregistrement.' });
             setIsSubmitting(false);
         }
     };
@@ -174,11 +170,11 @@ export default function EditEventPage() {
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="titre">Titre de l'événement</Label>
-                        <Input id="titre" name="titre" required value={titre} onChange={(e) => setTitre(e.target.value)} />
+                        <Input id="titre" name="titre" required value={titre} onChange={(e) => setTitre(e.target.value)} maxLength={100} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="description">Description</Label>
-                        <Textarea id="description" name="description" required value={description} onChange={(e) => setDescription(e.target.value)} />
+                        <Textarea id="description" name="description" required value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} />
                     </div>
                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
@@ -187,12 +183,18 @@ export default function EditEventPage() {
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="lieu">Lieu</Label>
-                            <Input id="lieu" name="lieu" required value={lieu} onChange={(e) => setLieu(e.target.value)} />
+                            <Input id="lieu" name="lieu" required value={lieu} onChange={(e) => setLieu(e.target.value)} maxLength={200} />
                         </div>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="prix">Prix (€)</Label>
-                        <Input id="prix" name="prix" type="number" min="0" step="0.01" required value={prix} onChange={(e) => setPrix(e.target.value)} />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                          <Label htmlFor="prix">Prix (€)</Label>
+                          <Input id="prix" name="prix" type="number" min="0" step="0.01" required value={prix} onChange={(e) => setPrix(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="nombrePlacesMax">Nombre de places max</Label>
+                          <Input id="nombrePlacesMax" name="nombrePlacesMax" type="number" min="1" required value={nombrePlacesMax} onChange={(e) => setNombrePlacesMax(e.target.value)} />
+                      </div>
                     </div>
                 </CardContent>
             </Card>
@@ -248,7 +250,7 @@ export default function EditEventPage() {
             </Card>
 
             <div className="flex justify-start">
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting} className="min-h-[44px]">
                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Enregistrer les modifications
                 </Button>

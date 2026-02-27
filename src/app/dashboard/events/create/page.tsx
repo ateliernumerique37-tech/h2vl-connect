@@ -35,6 +35,7 @@ export default function CreateEventPage() {
                 date: new Date(formData.get('date') as string).toISOString(),
                 lieu: formData.get('lieu') as string,
                 prix: parseFloat(formData.get('prix') as string),
+                nombrePlacesMax: parseInt(formData.get('nombrePlacesMax') as string, 10),
                 imageId: `event-${Math.floor(Math.random() * 6) + 1}`, // Temporary random image
                 necessiteMenu: formData.get('necessiteMenu') === 'on',
                 optionsMenu: {},
@@ -87,11 +88,11 @@ export default function CreateEventPage() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="titre">Titre de l'événement</Label>
-                            <Input id="titre" name="titre" required />
+                            <Input id="titre" name="titre" required maxLength={100} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="description">Description</Label>
-                            <Textarea id="description" name="description" required />
+                            <Textarea id="description" name="description" required maxLength={2000} />
                         </div>
                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
@@ -100,12 +101,18 @@ export default function CreateEventPage() {
                             </div>
                              <div className="space-y-2">
                                 <Label htmlFor="lieu">Lieu</Label>
-                                <Input id="lieu" name="lieu" required />
+                                <Input id="lieu" name="lieu" required maxLength={200} />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="prix">Prix (€)</Label>
-                            <Input id="prix" name="prix" type="number" min="0" step="0.01" defaultValue="0" required />
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                              <Label htmlFor="prix">Prix (€)</Label>
+                              <Input id="prix" name="prix" type="number" min="0" step="0.01" defaultValue="0" required />
+                          </div>
+                          <div className="space-y-2">
+                              <Label htmlFor="nombrePlacesMax">Nombre de places max</Label>
+                              <Input id="nombrePlacesMax" name="nombrePlacesMax" type="number" min="1" defaultValue="50" required />
+                          </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -161,7 +168,7 @@ export default function CreateEventPage() {
                 </Card>
 
                 <div className="flex justify-start">
-                    <Button type="submit" disabled={isSubmitting}>
+                    <Button type="submit" disabled={isSubmitting} className="min-h-[44px]">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Créer l'événement
                     </Button>
