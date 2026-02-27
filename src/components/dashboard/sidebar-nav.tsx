@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, BarChart2, CalendarDays, Shield, Users } from "lucide-react";
@@ -50,10 +50,18 @@ const menuItems = [
 export function SidebarNav() {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
+  
+  // Utilisation d'une ref pour stocker le pathname initial au montage du composant SidebarNav
+  // (qui est monté quand le Sheet mobile s'ouvre)
+  const mountedPathname = useRef(pathname);
 
   useEffect(() => {
-    if (isMobile) {
+    // On ne ferme la sidebar que si le pathname actuel est différent de celui au montage
+    // Cela signifie que l'utilisateur a effectivement cliqué sur un lien et navigué.
+    if (isMobile && pathname !== mountedPathname.current) {
       setOpenMobile(false);
+      // On met à jour la ref pour les navigations successives si le composant reste monté
+      mountedPathname.current = pathname;
     }
   }, [pathname, isMobile, setOpenMobile]);
 
