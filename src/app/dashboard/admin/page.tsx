@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Loader2, Upload, AlertTriangle, ShieldCheck } from "lucide-react";
+import { PlusCircle, Loader2, Upload, AlertTriangle, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Admin, LogAdmin, Adherent } from "@/lib/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +17,8 @@ import { collection, query, orderBy } from "firebase/firestore";
 import { AdminTable } from "@/components/admin/admin-table";
 import { AdminForm } from "@/components/admin/admin-form";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+
+const LOGS_PER_PAGE = 20;
 
 function AdminPageSkeleton() {
     return (
@@ -50,7 +52,18 @@ export default function AdminPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [logsCurrentPage, setLogsCurrentPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const paginatedLogs = useMemo(() => {
+    if (!logsAdmin) return [];
+    const start = (logsCurrentPage - 1) * LOGS_PER_PAGE;
+    return logsAdmin.slice(start, start + LOGS_PER_PAGE);
+  }, [logsAdmin, logsCurrentPage]);
+
+  const totalLogsPages = useMemo(() => {
+    return logsAdmin ? Math.ceil(logsAdmin.length / LOGS_PER_PAGE) : 0;
+  }, [logsAdmin]);
 
   const handleOpenCreate = () => {
     setEditingAdmin(undefined);
@@ -231,13 +244,13 @@ export default function AdminPage() {
             <Card className="h-fit">
                 <CardHeader>
                     <CardTitle>Dernières Actions</CardTitle>
-                    <CardDescription>Audit en temps réel.</CardDescription>
+                    <CardDescription>Audit en temps réel (Page {logsCurrentPage}/{totalLogsPages}).</CardDescription>
                 </CardHeader>
                 <CardContent className="px-2">
-                    <div className="max-h-[300px] overflow-y-auto">
+                    <div className="max-h-[500px] overflow-y-auto">
                         <Table>
                             <TableBody>
-                            {logsAdmin?.slice(0, 10).map(log => (
+                            {paginatedLogs.map(log => (
                                 <TableRow key={log.id} className="hover:bg-transparent">
                                     <TableCell className="py-2">
                                         <div className="flex flex-col gap-0.5">
@@ -260,6 +273,29 @@ export default function AdminPage() {
                             </TableBody>
                         </Table>
                     </div>
+                    {totalLogsPages > 1 && (
+                        <div className="flex items-center justify-between gap-2 p-4 border-t mt-4">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setLogsCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={logsCurrentPage === 1}
+                                className="h-8 w-8 p-0"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="text-xs font-medium">Page {logsCurrentPage}</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setLogsCurrentPage(prev => Math.min(totalLogsPages, prev + 1))}
+                                disabled={logsCurrentPage === totalLogsPages}
+                                className="h-8 w-8 p-0"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { EventCard } from "@/components/event-card";
 import type { Evenement } from '@/lib/types';
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Sparkles } from "lucide-react";
+import { PlusCircle, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,6 +19,7 @@ import AiEventForm from '@/components/admin/ai-event-form';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 
+const ITEMS_PER_PAGE = 20;
 
 function EventsPageSkeleton() {
     return (
@@ -62,7 +63,13 @@ export default function EventsPage() {
 
   const [period, setPeriod] = useState('upcoming');
   const [selectedYear, setSelectedYear] = useState('Tous');
+  const [currentPage, setCurrentPage] = useState(1);
   
+  // Reset to first page when any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [period, selectedYear]);
+
   const years = useMemo(() => {
     if (!allEvents) return ['Tous'];
     const eventYears = allEvents.map(e => new Date(e.date).getFullYear());
@@ -95,6 +102,12 @@ export default function EventsPage() {
         return period === 'upcoming' ? dateA - dateB : dateB - dateA;
       });
   }, [period, selectedYear, allEvents]);
+
+  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
+  const paginatedEvents = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredEvents.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredEvents, currentPage]);
   
   if (isLoading) {
       return <EventsPageSkeleton />;
@@ -158,7 +171,7 @@ export default function EventsPage() {
       </Card>
 
 
-       {filteredEvents.length === 0 ? (
+       {paginatedEvents.length === 0 ? (
          <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
             <p className="text-muted-foreground">
               {hasActiveFilters
@@ -168,10 +181,40 @@ export default function EventsPage() {
             </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {paginatedEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 py-4 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                aria-label="Page précédente"
+              >
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Précédent
+              </Button>
+              <div className="text-sm font-medium">
+                Page {currentPage} sur {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                aria-label="Page suivante"
+              >
+                Suivant
+                <ChevronRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
