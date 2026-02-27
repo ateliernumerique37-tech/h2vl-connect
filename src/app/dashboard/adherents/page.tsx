@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import type { Adherent } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { PlusCircle, ChevronLeft, ChevronRight, Search, Download } from "lucide-react";
 import { AdherentCard } from "@/components/adherent-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -124,6 +123,58 @@ export default function AdherentsPage() {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredAdherents.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredAdherents, currentPage]);
+
+  const handleExportCSV = () => {
+    if (!adherents || adherents.length === 0) return;
+
+    const headers = [
+      "Prenom", "Nom", "Email", "Telephone", "Adresse", "DateNaissance", 
+      "Genre", "DateInscription", "MembreBureau", "Benevole", "MembreFAAF", 
+      "DroitImage", "CotisationAJour"
+    ];
+
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return "";
+      try {
+        return dateStr.split('T')[0];
+      } catch (e) {
+        return "";
+      }
+    };
+
+    const formatBool = (bool: boolean) => (bool ? "Oui" : "Non");
+
+    const rows = adherents.map(a => [
+      a.prenom,
+      a.nom,
+      a.email,
+      a.telephone || "",
+      a.adresse || "",
+      formatDate(a.dateNaissance),
+      a.genre || "Autre",
+      formatDate(a.dateInscription),
+      formatBool(a.estMembreBureau),
+      formatBool(a.estBenevole),
+      formatBool(a.estMembreFaaf),
+      formatBool(a.accordeDroitImage),
+      formatBool(a.cotisationAJour)
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `base_adherents_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   
   if (isLoading) return <AdherentsPageSkeleton />;
 
@@ -141,12 +192,24 @@ export default function AdherentsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Liste des Adhérents</h1>
           <p className="text-muted-foreground">Gérez les membres de votre association.</p>
         </div>
-        <Button asChild className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 min-h-[44px]">
-            <Link href="/dashboard/adherents/create">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Ajouter un adhérent
-            </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline"
+            onClick={handleExportCSV}
+            disabled={!adherents || adherents.length === 0}
+            className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 min-h-[44px]"
+            aria-label="Exporter la base complète des adhérents au format CSV"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Exporter la base (CSV)
+          </Button>
+          <Button asChild className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 min-h-[44px]">
+              <Link href="/dashboard/adherents/create">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Ajouter un adhérent
+              </Link>
+          </Button>
+        </div>
       </div>
 
       <Card>
