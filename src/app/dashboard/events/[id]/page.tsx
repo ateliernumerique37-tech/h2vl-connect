@@ -447,12 +447,14 @@ export default function EventDetailPage() {
     const rows = eventInscriptions.map(ins => {
       const ad = rawAdherents.find(a => a.id === ins.id_adherent);
       
-      // Formatage des choix de menu
+      // Formatage des choix de menu ordonné (Correctif pour les cuisines)
       const menuChoices = ins.choixMenu 
-        ? Object.entries(ins.choixMenu)
-            .filter(([_, v]) => v)
-            .map(([k, v]) => `${k.replace('Choisi', '')}: ${v}`)
-            .join(' | ')
+        ? MENU_ORDER.map(menuItem => {
+            const value = ins.choixMenu?.[menuItem.key as keyof typeof ins.choixMenu];
+            return value ? `${menuItem.label}: ${value}` : null;
+          })
+          .filter(Boolean)
+          .join(' | ')
         : '';
       
       return [
