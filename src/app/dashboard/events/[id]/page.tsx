@@ -124,7 +124,6 @@ function RegisterMemberDialog({
     }
   }, [isOpen]);
 
-  // Scroll into view logic for keyboard navigation
   useEffect(() => {
     if (activeIndex >= 0 && listboxRef.current) {
       const activeElement = listboxRef.current.querySelector(`[id="adherent-option-${filteredAdherents[activeIndex]?.id}"]`);
@@ -199,7 +198,6 @@ function RegisterMemberDialog({
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto pr-2 space-y-6 py-2">
-          {/* Live Region for Screen Reader Announcements */}
           <div className="sr-only" aria-live="polite">
             {searchTerm && `${filteredAdherents.length} adhérent(s) trouvé(s). Utilisez les flèches haut et bas pour naviguer.`}
           </div>
@@ -212,9 +210,7 @@ function RegisterMemberDialog({
           
           <div className="space-y-3">
             <Label htmlFor={inputId} className="font-semibold">Choix de l'adhérent</Label>
-            <div 
-              className="relative"
-            >
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id={inputId}
@@ -402,11 +398,38 @@ export default function EventDetailPage() {
   
   const handleNewRegistration = async (inscriptionData: Omit<Inscription, 'id' | 'date_inscription'>) => {
     try {
-      await addInscription(db, { ...inscriptionData, date_inscription: new Date().toISOString() });
+      const inscriptionDate = new Date().toISOString();
+      await addInscription(db, { ...inscriptionData, date_inscription: inscriptionDate });
+      
       const adherent = rawAdherents?.find(a => a.id === inscriptionData.id_adherent);
+      
       if (event && adherent) {
         await addLog(db, auth, `Inscription : ${adherent.prenom} ${adherent.nom} à ${event.titre}`);
-        toast({ title: "Inscription validée" });
+        
+        // Envoi de l'email de confirmation via l'API Nodemailer
+        try {
+          const formattedEventDate = new Date(event.date).toLocaleDateString("fr-FR", {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+          });
+
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: adherent.email,
+              firstName: adherent.prenom,
+              eventTitle: event.titre,
+              eventDate: formattedEventDate,
+              eventLocation: event.lieu,
+              price: event.prix,
+              menuChoices: inscriptionData.choixMenu
+            }),
+          });
+          toast({ title: "Inscription validée et email envoyé" });
+        } catch (emailError) {
+          console.error("Échec envoi email:", emailError);
+          toast({ title: "Inscription validée", description: "Note: L'envoi de l'email a échoué." });
+        }
       }
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erreur', description: "Échec de l'inscription." });
@@ -440,14 +463,11 @@ export default function EventDetailPage() {
   const handleExportCSV = () => {
     if (!event || !eventInscriptions.length || !rawAdherents) return;
 
-    // Entêtes du CSV
     const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Montant Payé", "Choix Menu"];
     
-    // Construction des lignes
     const rows = eventInscriptions.map(ins => {
       const ad = rawAdherents.find(a => a.id === ins.id_adherent);
       
-      // Formatage des choix de menu ordonné (Correctif pour les cuisines)
       const menuChoices = ins.choixMenu 
         ? MENU_ORDER.map(menuItem => {
             const value = ins.choixMenu?.[menuItem.key as keyof typeof ins.choixMenu];
@@ -468,18 +488,15 @@ export default function EventDetailPage() {
       ];
     });
 
-    // Génération du contenu CSV (Excel compatible)
     const csvString = [
       headers.join(';'),
       ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
     ].join('\n');
 
-    // Ajout du BOM UTF-8 pour Excel France
     const bom = "\uFEFF";
     const blob = new Blob([bom + csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     
-    // Déclenchement du téléchargement
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", `inscrits_${event.titre.replace(/\s+/g, '_')}.csv`);
