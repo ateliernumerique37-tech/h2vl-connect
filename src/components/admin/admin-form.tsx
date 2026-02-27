@@ -20,11 +20,12 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
     prenom: initialData?.prenom || '',
     nom: initialData?.nom || '',
     email: initialData?.email || '',
-    role: initialData?.role || 'Administrateur' as Admin['role'],
+    role: (initialData?.role || 'Administrateur') as Admin['role'],
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     await onSubmit(formData);
   };
 
@@ -40,6 +41,7 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
             placeholder="Ex: Jean"
             required
             aria-required="true"
+            maxLength={50}
           />
         </div>
         <div className="space-y-2">
@@ -51,6 +53,7 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
             placeholder="Ex: Dupont"
             required
             aria-required="true"
+            maxLength={50}
           />
         </div>
       </div>
@@ -65,7 +68,9 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
           placeholder="jean.dupont@example.com"
           required
           aria-required="true"
-          disabled={!!initialData} // Email non modifiable si existant
+          disabled={!!initialData}
+          maxLength={255}
+          autoComplete="email"
         />
       </div>
 
@@ -75,7 +80,7 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
           value={formData.role}
           onValueChange={(value: Admin['role']) => setFormData({ ...formData, role: value })}
         >
-          <SelectTrigger id="role" aria-label="Sélectionner un rôle">
+          <SelectTrigger id="role" aria-label="Sélectionner un rôle" className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             <SelectValue placeholder="Choisir un rôle" />
           </SelectTrigger>
           <SelectContent>
@@ -87,10 +92,10 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           Annuler
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting} className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {initialData ? "Enregistrer les modifications" : "Créer le compte"}
         </Button>

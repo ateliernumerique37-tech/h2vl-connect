@@ -22,6 +22,7 @@ export default function ForgotPasswordPage() {
 
     const handlePasswordReset = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (isLoading) return;
         setIsLoading(true);
         try {
             await sendPasswordResetEmail(auth, email);
@@ -67,16 +68,17 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 aria-label="Saisissez l'adresse email de votre compte administrateur"
+                maxLength={255}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Envoyer le lien
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
             Vous vous souvenez de votre mot de passe ?{" "}
-            <Link href="/login" className="underline">
+            <Link href="/login" className="underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               Se connecter
             </Link>
           </div>

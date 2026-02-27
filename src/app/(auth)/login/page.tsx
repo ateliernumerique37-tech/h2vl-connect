@@ -23,6 +23,7 @@ export default function LoginPage() {
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isLoading) return;
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -83,10 +84,11 @@ export default function LoginPage() {
                 type="email"
                 placeholder="m@example.com"
                 required
-                autoComplete="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 aria-label="Saisissez l'adresse email de votre compte administrateur"
+                maxLength={255}
               />
             </div>
             <div className="grid gap-2">
@@ -94,7 +96,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Mot de passe</Label>
                 <Link
                   href="/forgot-password"
-                  className="ml-auto inline-block text-sm underline"
+                  className="ml-auto inline-block text-sm underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   aria-label="Mot de passe oublié ?"
                 >
                   Mot de passe oublié ?
@@ -108,16 +110,17 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 aria-label="Saisissez votre mot de passe, saisie masquée"
+                maxLength={100}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading} aria-label="Valider la connexion à l'espace H2vl">
+            <Button type="submit" className="w-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" disabled={isLoading} aria-label="Valider la connexion à l'espace H2vl">
                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Se connecter
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
             Vous n'avez pas de compte ?{" "}
-            <Link href="/signup" className="underline">
+            <Link href="/signup" className="underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               S'inscrire
             </Link>
           </div>

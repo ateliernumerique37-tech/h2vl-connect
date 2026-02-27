@@ -50,6 +50,7 @@ export default function CreateAdherentPage() {
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (isLoading) return;
         setIsLoading(true);
         try {
             const newAdherentData = {
@@ -88,24 +89,24 @@ export default function CreateAdherentPage() {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                         <Label htmlFor="prenom">Prénom</Label>
-                        <Input id="prenom" name="prenom" required value={formData.prenom} onChange={handleInputChange} aria-label="Saisir le prénom" />
+                        <Input id="prenom" name="prenom" required value={formData.prenom} onChange={handleInputChange} aria-label="Saisir le prénom" maxLength={50} />
                         </div>
                         <div className="space-y-2">
                         <Label htmlFor="nom">Nom</Label>
-                        <Input id="nom" name="nom" required value={formData.nom} onChange={handleInputChange} aria-label="Saisir le nom" />
+                        <Input id="nom" name="nom" required value={formData.nom} onChange={handleInputChange} aria-label="Saisir le nom" maxLength={50} />
                         </div>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" name="email" type="email" required value={formData.email} onChange={handleInputChange} aria-label="Saisir l'email" />
+                        <Input id="email" name="email" type="email" required value={formData.email} onChange={handleInputChange} aria-label="Saisir l'email" maxLength={255} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="telephone">Téléphone</Label>
-                        <Input id="telephone" name="telephone" type="tel" value={formData.telephone} onChange={handleInputChange} aria-label="Saisir le téléphone" />
+                        <Input id="telephone" name="telephone" type="tel" value={formData.telephone} onChange={handleInputChange} aria-label="Saisir le téléphone" maxLength={20} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="adresse">Adresse</Label>
-                        <Input id="adresse" name="adresse" value={formData.adresse} onChange={handleInputChange} aria-label="Saisir l'adresse" />
+                        <Input id="adresse" name="adresse" value={formData.adresse} onChange={handleInputChange} aria-label="Saisir l'adresse" maxLength={500} />
                     </div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
@@ -115,7 +116,7 @@ export default function CreateAdherentPage() {
                         <div className="space-y-2">
                             <Label htmlFor="genre">Genre</Label>
                             <Select name="genre" onValueChange={handleSelectChange} value={formData.genre}>
-                                <SelectTrigger id="genre" aria-label="Sélectionner le genre">
+                                <SelectTrigger id="genre" aria-label="Sélectionner le genre" className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                                     <SelectValue placeholder="Genre" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -158,7 +159,7 @@ export default function CreateAdherentPage() {
             </Card>
             
             <div className="flex justify-start">
-                <Button type="submit" disabled={isLoading}>
+                <Button type="submit" disabled={isLoading} className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Enregistrer l'adhérent
                 </Button>

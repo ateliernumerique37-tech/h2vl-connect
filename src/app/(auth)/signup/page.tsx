@@ -33,6 +33,7 @@ export default function SignupPage() {
 
   const handleSignup = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isLoading) return;
     setIsLoading(true);
     
     if (!db) {
@@ -46,19 +47,17 @@ export default function SignupPage() {
     }
 
     try {
-      // Step 1: Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Step 2: Create admin document in Firestore
       const adminRef = doc(db, "admins", user.uid);
       await setDoc(adminRef, {
         prenom: firstName,
         nom: lastName,
         email: email,
-        role: 'Administrateur', // Default role
+        role: 'Administrateur',
+        dateCreation: new Date().toISOString()
       });
-
 
       toast({
         title: "Inscription réussie !",
@@ -125,6 +124,7 @@ export default function SignupPage() {
                   autoComplete="given-name" 
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
+                  maxLength={50}
                 />
               </div>
               <div className="grid gap-2">
@@ -136,6 +136,7 @@ export default function SignupPage() {
                   autoComplete="family-name" 
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
+                  maxLength={50}
                 />
               </div>
             </div>
@@ -149,6 +150,7 @@ export default function SignupPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                maxLength={255}
               />
             </div>
             <div className="grid gap-2">
@@ -160,16 +162,17 @@ export default function SignupPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                maxLength={100}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Créer un compte
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
             Vous avez déjà un compte ?{" "}
-            <Link href="/login" className="underline">
+            <Link href="/login" className="underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               Se connecter
             </Link>
           </div>
