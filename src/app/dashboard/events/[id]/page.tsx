@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
@@ -437,6 +437,58 @@ export default function EventDetailPage() {
     }
   };
 
+  const handleExportCSV = () => {
+    if (!event || !eventInscriptions.length || !rawAdherents) return;
+
+    // Entêtes du CSV
+    const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Montant Payé", "Choix Menu"];
+    
+    // Construction des lignes
+    const rows = eventInscriptions.map(ins => {
+      const ad = rawAdherents.find(a => a.id === ins.id_adherent);
+      
+      // Formatage des choix de menu
+      const menuChoices = ins.choixMenu 
+        ? Object.entries(ins.choixMenu)
+            .filter(([_, v]) => v)
+            .map(([k, v]) => `${k.replace('Choisi', '')}: ${v}`)
+            .join(' | ')
+        : '';
+      
+      return [
+        ad?.prenom || '',
+        ad?.nom || '',
+        ad?.email || '',
+        ad?.telephone || '',
+        ins.a_paye ? "Payé" : "En attente",
+        event.prix.toFixed(2),
+        menuChoices
+      ];
+    });
+
+    // Génération du contenu CSV (Excel compatible)
+    const csvString = [
+      headers.join(';'),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
+
+    // Ajout du BOM UTF-8 pour Excel France
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    // Déclenchement du téléchargement
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `inscrits_${event.titre.replace(/\s+/g, '_')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "Export CSV prêt", description: "Le fichier a été téléchargé." });
+  };
+
   if (isLoadingEvent) return <EventDetailSkeleton />;
   if (!event) return notFound();
   
@@ -543,9 +595,22 @@ export default function EventDetailPage() {
 
           <Card className="shadow-sm border-2 overflow-hidden">
             <CardHeader className="bg-muted/30 border-b">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">Liste des inscrits ({eventInscriptions.length})</CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg">Liste des inscrits ({eventInscriptions.length})</CardTitle>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleExportCSV} 
+                  disabled={eventInscriptions.length === 0}
+                  className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Exporter la liste des inscrits au format CSV"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Exporter (CSV)
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="px-3 pt-6">
