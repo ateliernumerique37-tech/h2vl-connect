@@ -154,7 +154,6 @@ function RegisterMemberDialog({
         }
         break;
       case 'Escape':
-        // Let shadcn dialog handle close, but we can clear active index
         setActiveIndex(-1);
         break;
     }
@@ -200,6 +199,11 @@ function RegisterMemberDialog({
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto pr-2 space-y-6 py-2">
+          {/* Live Region for Screen Reader Announcements */}
+          <div className="sr-only" aria-live="polite">
+            {searchTerm && `${filteredAdherents.length} adhérent(s) trouvé(s). Utilisez les flèches haut et bas pour naviguer.`}
+          </div>
+
           {isFull && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm font-semibold text-center" role="alert">
               Attention : Cet événement est déjà complet.
@@ -210,11 +214,6 @@ function RegisterMemberDialog({
             <Label htmlFor={inputId} className="font-semibold">Choix de l'adhérent</Label>
             <div 
               className="relative"
-              role="combobox"
-              aria-expanded={isOpen}
-              aria-haspopup="listbox"
-              aria-controls={listboxId}
-              aria-owns={listboxId}
             >
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -228,7 +227,11 @@ function RegisterMemberDialog({
                   if (selectedAdherentId) setSelectedAdherentId("");
                 }}
                 onKeyDown={handleKeyDown}
+                role="combobox"
                 aria-autocomplete="list"
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
+                aria-controls={listboxId}
                 aria-activedescendant={activeIndex >= 0 ? `adherent-option-${filteredAdherents[activeIndex]?.id}` : undefined}
                 aria-label="Rechercher et sélectionner un adhérent"
                 autoComplete="off"
