@@ -12,7 +12,7 @@ import { createAdminProfile, updateAdminProfile, deleteAdminProfile } from "@/se
 import { addLog } from "@/services/logsService";
 import { batchAddAdherents, deleteAllAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { useUser, useFirestore, useCollection, useMemoFirebase, useAuth } from "@/firebase";
 import { collection, query, orderBy } from "firebase/firestore";
 import { AdminTable } from "@/components/admin/admin-table";
 import { AdminForm } from "@/components/admin/admin-form";
@@ -39,6 +39,7 @@ function AdminPageSkeleton() {
 export default function AdminPage() {
   const { toast } = useToast();
   const db = useFirestore();
+  const auth = useAuth();
   const { user } = useUser();
   
   const adminsQuery = useMemoFirebase(() => query(collection(db, 'admins')), [db]);
@@ -79,12 +80,12 @@ export default function AdminPage() {
     setIsSubmitting(true);
     try {
         if (editingAdmin) {
-            await updateAdminProfile(db, editingAdmin.id, formData);
-            await addLog(db, { currentUser: user } as any, `Modification de l'admin : ${formData.prenom} ${formData.nom}`);
+            await updateAdminProfile(db, auth, editingAdmin.id, formData);
+            await addLog(db, auth, `Modification de l'admin : ${formData.prenom} ${formData.nom}`);
             toast({ title: "Modifications enregistrées" });
         } else {
             await createAdminProfile(db, formData);
-            await addLog(db, { currentUser: user } as any, `Création du profil admin : ${formData.prenom} ${formData.nom}`);
+            await addLog(db, auth, `Création du profil admin : ${formData.prenom} ${formData.nom}`);
             toast({ title: "Profil administrateur créé", description: "L'utilisateur peut maintenant s'inscrire avec cet email." });
         }
         setIsFormDialogOpen(false);
@@ -98,7 +99,7 @@ export default function AdminPage() {
   const handleDeleteAdmin = async (admin: Admin) => {
     try {
         await deleteAdminProfile(db, admin.id);
-        await addLog(db, { currentUser: user } as any, `Suppression de l'admin : ${admin.prenom} ${admin.nom}`);
+        await addLog(db, auth, `Suppression de l'admin : ${admin.prenom} ${admin.nom}`);
         toast({ title: "Administrateur supprimé" });
     } catch (error: any) {
         toast({ variant: 'destructive', title: "Erreur", description: error.message });
@@ -109,7 +110,7 @@ export default function AdminPage() {
     setIsPurging(true);
     try {
         await deleteAllAdherents(db);
-        await addLog(db, { currentUser: user } as any, "Purge complète de la base des adhérents.");
+        await addLog(db, auth, "Purge complète de la base des adhérents.");
         toast({ title: "Base nettoyée", description: "Tous les adhérents ont été supprimés." });
     } catch (error: any) {
         toast({ variant: "destructive", title: "Erreur de purge", description: error.message });
@@ -151,7 +152,7 @@ export default function AdminPage() {
           };
         });
         await batchAddAdherents(db, newAdherents);
-        await addLog(db, { currentUser: user } as any, `Import de ${newAdherents.length} adhérents.`);
+        await addLog(db, auth, `Import de ${newAdherents.length} adhérents.`);
         toast({ title: "Importation terminée", description: `${newAdherents.length} adhérents ont été ajoutés.` });
       } catch (err: any) {
         toast({ variant: 'destructive', title: "Erreur CSV", description: err.message });
