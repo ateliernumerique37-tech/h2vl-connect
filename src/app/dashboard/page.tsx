@@ -7,6 +7,7 @@ import type { Adherent } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
+import { DashboardTips } from '@/components/dashboard/dashboard-tips';
 
 /**
  * Vérifie si c'est l'anniversaire d'un adhérent aujourd'hui.
@@ -110,6 +111,9 @@ export default function DashboardHomePage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Widget intelligent de conseils du jour */}
+            <DashboardTips />
             
             <Card>
                 <CardHeader>
