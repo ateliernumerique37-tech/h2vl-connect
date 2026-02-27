@@ -145,7 +145,8 @@ export default function AdminPage() {
           // Parsing robuste avec gestion des guillemets
           const values = row.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
           
-          // Mappage des colonnes (ordre imposé)
+          // Mappage des colonnes (ordre imposé par l'audit)
+          // Prenom,Nom,Email,Telephone,Adresse,DateNaissance,Genre,DateInscription,MembreBureau,Benevole,MembreFAAF,DroitImage,CotisationAJour
           const data = {
             prenom: values[0] || "",
             nom: values[1] || "",
@@ -162,7 +163,7 @@ export default function AdminPage() {
             cotisationAJour: values[12]?.toLowerCase() === 'oui',
           };
 
-          // 3. Système anti-doublons (Email ou Nom+Prénom)
+          // 3. Système anti-doublons (Email ou Nom+Prénom) - Insensible à la casse
           const isDuplicate = existingAdherents.some(existing => {
             const sameEmail = data.email && existing.email.toLowerCase() === data.email.toLowerCase();
             const sameName = existing.nom.toLowerCase() === data.nom.toLowerCase() && 
@@ -185,7 +186,7 @@ export default function AdminPage() {
             const newDocRef = doc(collection(db, 'adherents'));
             batch.set(newDocRef, adherentData);
             
-            // Si cotisation à jour, créer l'entrée historique
+            // Si cotisation à jour, créer l'entrée historique (15€ par défaut)
             if (adherentData.cotisationAJour) {
               const cotisRef = doc(collection(db, 'cotisations'));
               batch.set(cotisRef, {
@@ -199,14 +200,13 @@ export default function AdminPage() {
           await batch.commit();
         }
 
-        // 5. Journalisation et Feedback
+        // 5. Journalisation et Feedback (aria-live compatible via Toast)
         const logMsg = `Importation CSV : ${newAdherentsBatch.length} nouveaux adhérents ajoutés, ${duplicateCount} doublons ignorés.`;
         await addLog(db, auth, logMsg);
 
         toast({
           title: "Importation terminée",
           description: `Succès : ${newAdherentsBatch.length} adhérents importés. ${duplicateCount} doublons ont été ignorés.`,
-          variant: "default",
         });
 
       } catch (err: any) {
