@@ -30,9 +30,23 @@ export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'i
 export async function updateAdherent(db: Firestore, id: string, updates: Partial<Adherent>): Promise<void> {
     const docRef = doc(db, adherentsCollectionName, id);
     
-    // Filtrage strict des champs autorisés pour la mise à jour
+    // Filtrage strict des champs autorisés pour la mise à jour (13 champs gérés)
     const allowedUpdates: Partial<Adherent> = {};
-    const keys: (keyof Adherent)[] = ['prenom', 'nom', 'email', 'telephone', 'adresse', 'dateNaissance', 'genre', 'estMembreBureau', 'estBenevole', 'estMembreFaaf', 'accordeDroitImage', 'cotisationAJour'];
+    const keys: (keyof Adherent)[] = [
+        'prenom', 
+        'nom', 
+        'email', 
+        'telephone', 
+        'adresse', 
+        'dateNaissance', 
+        'genre', 
+        'dateInscription', 
+        'estMembreBureau', 
+        'estBenevole', 
+        'estMembreFaaf', 
+        'accordeDroitImage', 
+        'cotisationAJour'
+    ];
     
     keys.forEach(key => {
         if (updates[key] !== undefined) {
