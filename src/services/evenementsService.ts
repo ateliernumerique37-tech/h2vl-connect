@@ -1,9 +1,23 @@
 'use client';
-import { collection, doc, addDoc, updateDoc, query, where, writeBatch, getDocs, type Firestore } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, query, where, writeBatch, getDocs, getDoc, type Firestore } from 'firebase/firestore';
 import type { Evenement } from '@/lib/types';
 
 const evenementsCollectionName = 'evenements';
 const inscriptionsCollectionName = 'inscriptions';
+
+/**
+ * Récupère un événement spécifique par son ID.
+ * @returns L'événement typé ou null si non trouvé.
+ */
+export async function getEvenementById(db: Firestore, id: string): Promise<Evenement | null> {
+    const docRef = doc(db, evenementsCollectionName, id);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Evenement;
+    }
+    return null;
+}
 
 export async function addEvenement(db: Firestore, eventData: Omit<Evenement, 'id'>): Promise<string> {
     const docRef = await addDoc(collection(db, evenementsCollectionName), eventData);

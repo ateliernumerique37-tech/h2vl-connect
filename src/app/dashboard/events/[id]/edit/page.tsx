@@ -77,7 +77,6 @@ export default function EditEventPage() {
         if (!id || !db) return;
         async function fetchEvent() {
             try {
-                // Fetch direct reference or via service
                 const foundEvent = await getEvenementById(db, id);
                 if (foundEvent) {
                     setTitre(foundEvent.titre);
@@ -98,7 +97,8 @@ export default function EditEventPage() {
                         setDesserts(foundEvent.optionsMenu.desserts?.join(', ') || '');
                     }
                 } else {
-                    notFound();
+                    toast({ variant: 'destructive', title: 'Erreur', description: 'Événement introuvable.' });
+                    router.push('/dashboard/events');
                 }
             } catch (error) {
                 console.error("Failed to fetch event:", error);
@@ -108,11 +108,12 @@ export default function EditEventPage() {
             }
         }
         fetchEvent();
-    }, [id, db, toast]);
+    }, [id, db, toast, router]);
 
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (isSubmitting) return;
         setIsSubmitting(true);
         
         try {
@@ -250,7 +251,7 @@ export default function EditEventPage() {
             </Card>
 
             <div className="flex justify-start">
-                <Button type="submit" disabled={isSubmitting} className="min-h-[44px]">
+                <Button type="submit" disabled={isSubmitting} className="min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Enregistrer les modifications
                 </Button>
