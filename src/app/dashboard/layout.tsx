@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
@@ -91,6 +91,21 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  // Gestion de la réinitialisation du focus lors de la navigation
+  useEffect(() => {
+    // On laisse un léger délai pour s'assurer que le DOM est prêt après le rendu de la page
+    const timeoutId = setTimeout(() => {
+      const mainContent = document.getElementById('main-content');
+      if (mainContent) {
+        mainContent.focus();
+      }
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [pathname]);
+
   return (
     <AuthGuard>
       <div id="top" className="flex min-h-screen w-full flex-col bg-background">
