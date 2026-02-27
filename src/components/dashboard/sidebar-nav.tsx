@@ -19,16 +19,19 @@ const menuItems = [
     icon: LayoutDashboard,
     label: "Tableau de bord",
     exact: true,
+    accessKey: "1",
   },
   {
     href: "/dashboard/events",
     icon: CalendarDays,
     label: "Événements",
+    accessKey: "2",
   },
   {
     href: "/dashboard/adherents",
     icon: Users,
     label: "Adhérents",
+    accessKey: "3",
   },
   {
     href: "/dashboard/stats",
@@ -48,9 +51,9 @@ export function SidebarNav() {
   return (
     <>
       <SidebarHeader>
-        <div className="flex items-center gap-2">
-          <Logo className="size-8 text-sidebar-foreground" />
-          <span className="text-lg font-semibold text-sidebar-foreground">
+        <div className="flex items-center gap-2 px-2 py-4">
+          <Logo className="size-8 text-primary" />
+          <span className="text-xl font-bold text-primary tracking-tight">
             H2vl Connect
           </span>
         </div>
@@ -66,11 +69,12 @@ export function SidebarNav() {
                   children: item.label,
                   "aria-label": item.label,
                 }}
-                aria-label={item.label}
+                aria-label={item.accessKey ? `${item.label}, raccourci Alt + ${item.accessKey}` : item.label}
+                className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
               >
-                <Link href={item.href}>
-                  <item.icon />
-                  <span>{item.label}</span>
+                <Link href={item.href} accessKey={item.accessKey}>
+                  <item.icon className="size-5" />
+                  <span className="font-medium">{item.label}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -78,7 +82,7 @@ export function SidebarNav() {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
-         {/* Could be a user profile link or logout */}
+         {/* Espace réservé pour d'éventuels liens de profil ou paramètres */}
       </SidebarFooter>
     </>
   );

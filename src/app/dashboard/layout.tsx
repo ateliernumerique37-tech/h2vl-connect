@@ -36,7 +36,6 @@ function DashboardSkeleton() {
  * Gère la redirection, l'auto-réparation du profil et prévient les erreurs d'hydratation.
  */
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  // TOUS LES HOOKS DOIVENT ÊTRE DÉCLARÉS ICI, AVANT TOUT RETURN
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const { user, isUserLoading } = useUser();
@@ -46,19 +45,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
   const [isHealing, setIsHealing] = useState(false);
 
-  // Montage initial du client
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // 1. Redirection si non connecté
   useEffect(() => {
     if (isMounted && !isUserLoading && !user) {
       router.replace('/login');
     }
   }, [isMounted, user, isUserLoading, router]);
 
-  // 2. Auto-réparation du profil admin si manquant
   useEffect(() => {
     if (isMounted && user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
       setIsHealing(true);
@@ -77,19 +73,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isMounted, user, db, adminDoc, isAdminDocLoading, isHealing]);
 
-  // RETOURS ANTICIPÉS UNIQUEMENT APRÈS TOUS LES HOOKS
-  
-  // Règle d'or : Ne RIEN rendre sur le serveur pour ce fragment asynchrone
   if (!isMounted) {
     return null;
   }
 
-  // Ensuite seulement, gérer la logique de chargement de Firebase Auth
   if (isUserLoading || isAdminDocLoading || isHealing) {
     return <DashboardSkeleton />;
   }
 
-  // Sécurité finale : si l'utilisateur n'est pas authentifié, on ne rend rien (le useEffect redirige)
   if (!user) return null;
 
   return <>{children}</>;
@@ -102,17 +93,37 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthGuard>
-      <SidebarProvider>
-        <Sidebar>
-          <SidebarNav />
-        </Sidebar>
-        <SidebarInset className="flex flex-col">
-          <DashboardHeader />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8" role="main">
-            {children}
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
+      <div id="top" className="flex min-h-screen w-full flex-col bg-background">
+        <a 
+          href="#main-content" 
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          Aller au contenu principal
+        </a>
+        
+        <SidebarProvider>
+          <Sidebar>
+            <SidebarNav />
+          </Sidebar>
+          <SidebarInset className="flex flex-col">
+            <DashboardHeader />
+            <main 
+              id="main-content" 
+              className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 outline-none focus-visible:ring-2 focus-visible:ring-primary/20" 
+              role="main"
+              tabIndex={-1}
+            >
+              {children}
+            </main>
+            <a 
+              href="#top" 
+              className="sr-only focus:not-sr-only focus:fixed focus:bottom-4 focus:right-4 focus:z-[100] focus:bg-background focus:border focus:border-primary focus:text-primary focus:px-3 focus:py-2 focus:rounded-full focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              Retour en haut de page
+            </a>
+          </SidebarInset>
+        </SidebarProvider>
+      </div>
     </AuthGuard>
   );
 }
