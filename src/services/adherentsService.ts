@@ -10,10 +10,14 @@ const inscriptionsCollectionName = 'inscriptions';
  * Ajoute un adhérent et crée sa cotisation initiale si nécessaire.
  */
 export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'id'>): Promise<string> {
-    const adherentsCollection = collection(db, adherentsCollectionName);
-    const docRef = await addDoc(adherentsCollection, adherentData);
+    const { prenom, nom, email, telephone, adresse, dateNaissance, genre, dateInscription, estMembreBureau, estBenevole, estMembreFaaf, accordeDroitImage, cotisationAJour } = adherentData;
     
-    if (adherentData.cotisationAJour) {
+    const adherentsCollection = collection(db, adherentsCollectionName);
+    const docRef = await addDoc(adherentsCollection, {
+        prenom, nom, email, telephone, adresse, dateNaissance, genre, dateInscription, estMembreBureau, estBenevole, estMembreFaaf, accordeDroitImage, cotisationAJour
+    });
+    
+    if (cotisationAJour) {
         await addCotisation(db, docRef.id);
     }
     
@@ -21,57 +25,50 @@ export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'i
 }
 
 /**
- * Importation massive d'adhérents.
- */
-export async function batchAddAdherents(db: Firestore, adherents: Omit<Adherent, 'id'>[]): Promise<void> {
-    const batch = writeBatch(db);
-    adherents.forEach(adherent => {
-        const adherentRef = doc(collection(db, adherentsCollectionName));
-        batch.set(adherentRef, adherent);
-        if (adherent.cotisationAJour) {
-            const cotisationRef = doc(collection(db, cotisationsCollectionName));
-            batch.set(cotisationRef, {
-                adherentId: adherentRef.id,
-                annee: new Date().getFullYear(),
-                datePaiement: new Date().toISOString(),
-                montant: 15,
-            });
-        }
-    });
-    await batch.commit();
-}
-
-/**
- * Mise à jour d'un adhérent. 
- * Gère l'ajout ou la suppression automatique de la cotisation en fonction du switch.
+ * Mise à jour d'un adhérent avec protection contre le Mass Assignment.
  */
 export async function updateAdherent(db: Firestore, id: string, updates: Partial<Adherent>): Promise<void> {
     const docRef = doc(db, adherentsCollectionName, id);
     
+    // Filtrage strict des champs autorisés pour la mise à jour
+    const allowedUpdates: Partial<Adherent> = {};
+    const keys: (keyof Adherent)[] = ['prenom', 'nom', 'email', 'telephone', 'adresse', 'dateNaissance', 'genre', 'estMembreBureau', 'estBenevole', 'estMembreFaaf', 'accordeDroitImage', 'cotisationAJour'];
+    
+    keys.forEach(key => {
+        if (updates[key] !== undefined) {
+            (allowedUpdates as any)[key] = updates[key];
+        }
+    });
+
     if (updates.cotisationAJour === true) {
         await addCotisation(db, id);
-        const { cotisationAJour, ...rest } = updates;
+        const { cotisationAJour, ...rest } = allowedUpdates;
         if (Object.keys(rest).length > 0) await updateDoc(docRef, rest);
     } else if (updates.cotisationAJour === false) {
         await removeCotisation(db, id);
-        const { cotisationAJour, ...rest } = updates;
+        const { cotisationAJour, ...rest } = allowedUpdates;
         if (Object.keys(rest).length > 0) await updateDoc(docRef, rest);
     } else {
-        await updateDoc(docRef, updates);
+        await updateDoc(docRef, allowedUpdates);
     }
 }
 
 /**
- * Suppression d'un adhérent avec cascade logicielle.
+ * Suppression d'un adhérent avec CASCADE LOGICIELLE (RGPD - Droit à l'oubli).
+ * Supprime l'adhérent, ses cotisations et ses inscriptions en une seule transaction.
  */
 export async function deleteAdherent(db: Firestore, id: string): Promise<void> {
     const batch = writeBatch(db);
+    
+    // 1. Référence de l'adhérent
     const adherentRef = doc(db, adherentsCollectionName, id);
     batch.delete(adherentRef);
     
+    // 2. Suppression des cotisations liées
     const cotisationsSnap = await getDocs(query(collection(db, cotisationsCollectionName), where('adherentId', '==', id)));
     cotisationsSnap.forEach((doc) => batch.delete(doc.ref));
 
+    // 3. Suppression des inscriptions liées
     const inscriptionsSnap = await getDocs(query(collection(db, inscriptionsCollectionName), where('id_adherent', '==', id)));
     inscriptionsSnap.forEach((doc) => batch.delete(doc.ref));
     
@@ -99,7 +96,6 @@ export async function deleteAllAdherents(db: Firestore): Promise<void> {
 
 /**
  * Ajoute une cotisation et met à jour le statut de l'adhérent.
- * Vérifie d'abord si une cotisation existe déjà pour l'année en cours.
  */
 export async function addCotisation(db: Firestore, adherentId: string): Promise<void> {
     const currentYear = new Date().getFullYear();

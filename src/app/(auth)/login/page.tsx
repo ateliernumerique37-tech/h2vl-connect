@@ -33,24 +33,11 @@ export default function LoginPage() {
       });
       router.push('/dashboard');
     } catch (error: any) {
-      console.error("Login Error:", error);
+      // RGPD/Sécurité : Message générique pour ne pas confirmer l'existence d'un compte
+      let descriptiveError = "Identifiants incorrects ou service indisponible.";
       
-      let descriptiveError = "Une erreur inattendue est survenue. Veuillez réessayer.";
-      if (error.code) {
-          switch (error.code) {
-              case 'auth/user-not-found':
-              case 'auth/wrong-password':
-              case 'auth/invalid-credential':
-                  descriptiveError = "Identifiants incorrects. Veuillez vérifier votre email et mot de passe.";
-                  break;
-              case 'auth/too-many-requests':
-                  descriptiveError = "Accès temporairement désactivé en raison de trop nombreuses tentatives. Réessayez plus tard.";
-                  break;
-              default:
-                  descriptiveError = `Erreur : ${error.message} (code: ${error.code})`;
-          }
-      } else if (error.message) {
-          descriptiveError = error.message;
+      if (error.code === 'auth/too-many-requests') {
+          descriptiveError = "Accès temporairement bloqué par mesure de sécurité. Réessayez plus tard.";
       }
 
       toast({
@@ -87,7 +74,7 @@ export default function LoginPage() {
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                aria-label="Saisissez l'adresse email de votre compte administrateur"
+                aria-label="Saisissez votre adresse email"
                 maxLength={255}
               />
             </div>
@@ -96,8 +83,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Mot de passe</Label>
                 <Link
                   href="/forgot-password"
-                  className="ml-auto inline-block text-sm underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  aria-label="Mot de passe oublié ?"
+                  className="ml-auto inline-block text-sm underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
                   Mot de passe oublié ?
                 </Link>
@@ -109,18 +95,17 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                aria-label="Saisissez votre mot de passe, saisie masquée"
                 maxLength={100}
               />
             </div>
-            <Button type="submit" className="w-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" disabled={isLoading} aria-label="Valider la connexion à l'espace H2vl">
+            <Button type="submit" className="w-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" disabled={isLoading}>
                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Se connecter
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
             Vous n'avez pas de compte ?{" "}
-            <Link href="/signup" className="underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            <Link href="/signup" className="underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
               S'inscrire
             </Link>
           </div>

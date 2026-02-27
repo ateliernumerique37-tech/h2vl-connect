@@ -50,7 +50,6 @@ export default function AdherentDetailPage() {
   const adherentRef = useMemoFirebase(() => id ? doc(db, 'adherents', id) : null, [db, id]);
   const { data: adherent, isLoading: isLoadingAdherent } = useDoc<Adherent>(adherentRef);
 
-  // Simplified query to avoid index requirements, we'll sort on client side
   const cotisationsQuery = useMemoFirebase(() => id ? query(
     collection(db, 'cotisations'), 
     where('adherentId', '==', id)
@@ -89,7 +88,7 @@ export default function AdherentDetailPage() {
     if (!text) return;
     navigator.clipboard.writeText(text);
     setCopiedField(fieldName);
-    toast({ title: "Copié !", description: `${fieldName} a été copié.` });
+    toast({ title: "Copié !" });
     setTimeout(() => setCopiedField(null), 2000);
   };
 
@@ -98,18 +97,17 @@ export default function AdherentDetailPage() {
         await updateAdherent(db, id, { [field]: checked });
         toast({ title: "Statut mis à jour" });
     } catch (error) {
-        console.error(`Failed to update ${field}:`, error);
-        toast({ variant: 'destructive', title: 'Erreur' });
+        toast({ variant: 'destructive', title: 'Erreur de mise à jour' });
     }
   };
   
   const handleDelete = async () => {
     try {
         await deleteAdherent(db, id);
-        toast({ title: "Adhérent supprimé" });
+        toast({ title: "Adhérent supprimé définitivement (RGPD)" });
         router.push('/dashboard/adherents');
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Erreur' });
+        toast({ variant: 'destructive', title: 'Erreur de suppression' });
     }
   };
 
@@ -119,7 +117,7 @@ export default function AdherentDetailPage() {
         setShowAddCotisationDialog(false);
         toast({ title: "Cotisation ajoutée" });
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Erreur' });
+        toast({ variant: 'destructive', title: 'Erreur système' });
     }
   };
 
@@ -128,7 +126,7 @@ export default function AdherentDetailPage() {
         await updateAdherent(db, id, formData);
         toast({ title: "Modifications enregistrées" });
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Erreur' });
+        toast({ variant: 'destructive', title: 'Échec de l\'enregistrement' });
     }
   };
 
@@ -138,36 +136,36 @@ export default function AdherentDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/adherents" aria-label="Retour à la liste des adhérents">
+          <Link href="/dashboard/adherents" aria-label="Retour à la liste">
             <ChevronLeft className="h-6 w-6" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">Fiche de {adherent.prenom} {adherent.nom}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Profil Adhérent</h1>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Informations Personnelles</CardTitle>
-          <CardDescription>Contact et profil personnel.</CardDescription>
+          <CardDescription>Données protégées par le secret professionnel.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="prenom">Prénom</Label>
-              <Input id="prenom" name="prenom" value={formData.prenom || ''} onChange={handleInputChange} />
+              <Input id="prenom" name="prenom" value={formData.prenom || ''} onChange={handleInputChange} maxLength={50} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="nom">Nom</Label>
-              <Input id="nom" name="nom" value={formData.nom || ''} onChange={handleInputChange} />
+              <Input id="nom" name="nom" value={formData.nom || ''} onChange={handleInputChange} maxLength={50} />
             </div>
           </div>
           
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <div className="flex gap-2">
-                <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="flex-1" />
-                <Button variant="outline" size="icon" type="button" onClick={() => handleCopy(formData.email, "L'email")}>
-                    {copiedField === "L'email" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="flex-1" maxLength={255} />
+                <Button variant="outline" size="icon" type="button" onClick={() => handleCopy(formData.email, "Email")}>
+                    {copiedField === "Email" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
             </div>
           </div>
@@ -175,34 +173,34 @@ export default function AdherentDetailPage() {
           <div className="space-y-2">
             <Label htmlFor="telephone">Téléphone</Label>
             <div className="flex gap-2">
-                <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} className="flex-1" />
-                <Button variant="outline" size="icon" type="button" onClick={() => handleCopy(formData.telephone, "Le téléphone")}>
-                    {copiedField === "Le téléphone" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} className="flex-1" maxLength={20} />
+                <Button variant="outline" size="icon" type="button" onClick={() => handleCopy(formData.telephone, "Téléphone")}>
+                    {copiedField === "Téléphone" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
             </div>
           </div>
         </CardContent>
         <CardFooter className="flex flex-wrap justify-start gap-4 border-t pt-6">
-          <Button onClick={handleSaveChanges} aria-label={`Enregistrer les modifications pour ${adherent.prenom}`}>
-            <Save className="mr-2 h-4 w-4" /> Enregistrer
+          <Button onClick={handleSaveChanges}>
+            <Save className="mr-2 h-4 w-4" /> Enregistrer les modifications
           </Button>
            <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" aria-label={`Supprimer ${adherent.prenom}`}>
-                <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+              <Button variant="destructive">
+                <Trash2 className="mr-2 h-4 w-4" /> Supprimer (Droit à l'oubli)
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                <AlertDialogTitle>Confirmer la suppression RGPD</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Action irréversible pour <strong>{adherent.prenom} {adherent.nom}</strong>.
+                  Cette action supprimera TOUTES les données (profil, cotisations, inscriptions) de manière irréversible.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Supprimer
+                    Confirmer la suppression
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -212,8 +210,8 @@ export default function AdherentDetailPage() {
 
       <Card>
         <CardHeader>
-            <CardTitle>Statuts</CardTitle>
-            <CardDescription>Gérez les autorisations.</CardDescription>
+            <CardTitle>Statuts Associatifs</CardTitle>
+            <CardDescription>Gérez les autorisations et l'engagement.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
@@ -236,7 +234,7 @@ export default function AdherentDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Historique Financier</CardTitle>
-          <CardDescription>Suivi des cotisations.</CardDescription>
+          <CardDescription>Suivi des cotisations annuelles.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -259,7 +257,7 @@ export default function AdherentDetailPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-6 text-muted-foreground">
-                    Aucun historique de paiement.
+                    Aucun historique financier.
                   </TableCell>
                 </TableRow>
               )}
@@ -269,15 +267,15 @@ export default function AdherentDetailPage() {
          <CardFooter className="border-t pt-6">
           <Dialog open={showAddCotisationDialog} onOpenChange={setShowAddCotisationDialog}>
             <DialogTrigger asChild>
-              <Button aria-label={`Valider cotisation pour ${adherent.prenom}`}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Valider une cotisation (15 €)
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" /> Valider une cotisation
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Valider le paiement</DialogTitle>
                 <DialogDescription>
-                  Enregistrer 15,00 € pour <strong>{adherent.prenom} {adherent.nom}</strong> ?
+                  Enregistrer le paiement de la cotisation pour l'année en cours ?
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

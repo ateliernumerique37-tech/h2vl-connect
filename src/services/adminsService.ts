@@ -7,49 +7,52 @@ const ADMINS_COLLECTION = 'admins';
 
 /**
  * Crée un profil administrateur dans Firestore.
- * Note: L'inscription Auth est gérée séparément pour éviter la déconnexion de l'utilisateur actuel.
  */
 export async function createAdminProfile(db: Firestore, adminData: Omit<Admin, 'id' | 'dateCreation'>): Promise<string> {
+    const { prenom, nom, email, role } = adminData;
+    
     const adminRef = collection(db, ADMINS_COLLECTION);
     const newDoc = await addDoc(adminRef, {
-        ...adminData,
+        prenom,
+        nom,
+        email,
+        role,
         dateCreation: new Date().toISOString()
     });
     return newDoc.id;
 }
 
 /**
- * Met à jour un profil administrateur existant dans Firestore et synchronise avec Firebase Auth
- * si l'administrateur mis à jour est l'utilisateur actuellement connecté.
+ * Met à jour un profil administrateur existant avec protection contre le Mass Assignment.
  */
 export async function updateAdminProfile(db: Firestore, auth: Auth, id: string, updates: Partial<Admin>): Promise<void> {
     const adminDocRef = doc(db, ADMINS_COLLECTION, id);
-    await updateDoc(adminDocRef, updates);
+    
+    const allowedUpdates: any = {};
+    if (updates.prenom !== undefined) allowedUpdates.prenom = updates.prenom;
+    if (updates.nom !== undefined) allowedUpdates.nom = updates.nom;
+    if (updates.role !== undefined) allowedUpdates.role = updates.role;
 
-    // Synchronisation avec Firebase Auth uniquement si c'est l'utilisateur connecté lui-même
+    await updateDoc(adminDocRef, allowedUpdates);
+
     try {
         const currentUser = auth.currentUser;
         if (currentUser && currentUser.uid === id) {
-            // Reconstitution du displayName (Prénom Nom)
-            const prenom = updates.prenom !== undefined ? updates.prenom : (currentUser.displayName?.split(' ')[0] || '');
-            const nom = updates.nom !== undefined ? updates.nom : (currentUser.displayName?.split(' ').slice(1).join(' ') || '');
-            
+            const prenom = allowedUpdates.prenom !== undefined ? allowedUpdates.prenom : (currentUser.displayName?.split(' ')[0] || '');
+            const nom = allowedUpdates.nom !== undefined ? allowedUpdates.nom : (currentUser.displayName?.split(' ').slice(1).join(' ') || '');
             const newDisplayName = `${prenom} ${nom}`.trim();
             
             if (newDisplayName && newDisplayName !== currentUser.displayName) {
-                await updateProfile(currentUser, {
-                    displayName: newDisplayName
-                });
+                await updateProfile(currentUser, { displayName: newDisplayName });
             }
         }
     } catch (authError) {
-        // On ne bloque pas la mise à jour Firestore si la mise à jour du profil Auth échoue
-        console.warn("Échec de la synchronisation avec le profil Firebase Auth:", authError);
+        // Log interne uniquement, pas d'exposition front-end
     }
 }
 
 /**
- * Supprime un profil administrateur de Firestore.
+ * Supprime un profil administrateur.
  */
 export async function deleteAdminProfile(db: Firestore, id: string): Promise<void> {
     await deleteDoc(doc(db, ADMINS_COLLECTION, id));
