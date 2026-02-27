@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -102,9 +102,10 @@ function RegisterMemberDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
+  const listboxRef = useRef<HTMLDivElement>(null);
   
-  const listboxId = "adherents-listbox";
-  const inputId = "adherent-search-input";
+  const listboxId = `adherents-listbox-${event.id}`;
+  const inputId = `adherent-search-input-${event.id}`;
   const isFull = currentCount >= (event.nombrePlacesMax || Infinity);
 
   const filteredAdherents = useMemo(() => {
@@ -123,22 +124,39 @@ function RegisterMemberDialog({
     }
   }, [isOpen]);
 
+  // Scroll into view logic for keyboard navigation
+  useEffect(() => {
+    if (activeIndex >= 0 && listboxRef.current) {
+      const activeElement = listboxRef.current.querySelector(`[id="adherent-option-${filteredAdherents[activeIndex]?.id}"]`);
+      if (activeElement) {
+        activeElement.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [activeIndex, filteredAdherents]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (filteredAdherents.length === 0) return;
 
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      const nextIndex = (activeIndex + 1) % filteredAdherents.length;
-      setActiveIndex(nextIndex);
-      setSelectedAdherentId(filteredAdherents[nextIndex].id);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevIndex = (activeIndex - 1 + filteredAdherents.length) % filteredAdherents.length;
-      setActiveIndex(prevIndex);
-      setSelectedAdherentId(filteredAdherents[prevIndex].id);
-    } else if (e.key === 'Enter' && selectedAdherentId) {
-      e.preventDefault();
-      handleRegister();
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex((prev) => (prev + 1) % filteredAdherents.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex((prev) => (prev - 1 + filteredAdherents.length) % filteredAdherents.length);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (activeIndex >= 0) {
+          setSelectedAdherentId(filteredAdherents[activeIndex].id);
+          setSearchTerm(`${filteredAdherents[activeIndex].prenom} ${filteredAdherents[activeIndex].nom}`);
+        }
+        break;
+      case 'Escape':
+        // Let shadcn dialog handle close, but we can clear active index
+        setActiveIndex(-1);
+        break;
     }
   };
 
@@ -158,11 +176,17 @@ function RegisterMemberDialog({
       setIsSubmitting(false);
     }
   };
+
+  const clearSelection = () => {
+    setSelectedAdherentId("");
+    setSearchTerm("");
+    setActiveIndex(-1);
+  };
   
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="lg" disabled={isFull} className="w-full shadow-md min-h-[48px]" aria-label={isFull ? "L'événement est complet" : `Inscrire un adhérent à l'événement ${event.titre}`}>
+        <Button size="lg" disabled={isFull} className="w-full shadow-md min-h-[48px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" aria-label={isFull ? "L'événement est complet" : `Inscrire un adhérent à l'événement ${event.titre}`}>
           <PlusCircle className="mr-2 h-5 w-5" />
           {isFull ? "Événement complet" : "Inscrire un adhérent"}
         </Button>
@@ -181,6 +205,7 @@ function RegisterMemberDialog({
               Attention : Cet événement est déjà complet.
             </div>
           )}
+          
           <div className="space-y-3">
             <Label htmlFor={inputId} className="font-semibold">Choix de l'adhérent</Label>
             <div 
@@ -189,31 +214,45 @@ function RegisterMemberDialog({
               aria-expanded={isOpen}
               aria-haspopup="listbox"
               aria-controls={listboxId}
+              aria-owns={listboxId}
             >
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id={inputId}
-                placeholder="Saisissez un nom..."
-                className="pl-9 min-h-[44px]"
+                placeholder="Rechercher par nom ou prénom..."
+                className="pl-9 pr-9 min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
                   setActiveIndex(-1);
-                  setSelectedAdherentId("");
+                  if (selectedAdherentId) setSelectedAdherentId("");
                 }}
                 onKeyDown={handleKeyDown}
                 aria-autocomplete="list"
                 aria-activedescendant={activeIndex >= 0 ? `adherent-option-${filteredAdherents[activeIndex]?.id}` : undefined}
+                aria-label="Rechercher et sélectionner un adhérent"
                 autoComplete="off"
               />
+              {searchTerm && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground" 
+                  onClick={clearSelection}
+                  aria-label="Effacer la recherche"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             
-            <ScrollArea className="h-[200px] rounded-md border bg-muted/5">
+            <ScrollArea className="h-[200px] rounded-md border bg-muted/5 shadow-inner">
               <div 
                 id={listboxId}
+                ref={listboxRef}
                 className="p-1" 
                 role="listbox" 
-                aria-label="Liste des adhérents disponibles"
+                aria-label="Résultats de recherche des adhérents"
               >
                 {isLoading ? (
                   <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
@@ -232,12 +271,13 @@ function RegisterMemberDialog({
                           aria-selected={isSelected}
                           onClick={() => {
                             setSelectedAdherentId(adherent.id);
+                            setSearchTerm(`${adherent.prenom} ${adherent.nom}`);
                             setActiveIndex(index);
                           }}
                           className={cn(
                             "flex w-full items-center justify-between rounded-sm px-3 py-3 text-sm transition-colors cursor-pointer min-h-[44px]",
                             isSelected && "bg-primary text-primary-foreground font-medium",
-                            isHighlighted && !isSelected && "bg-muted",
+                            isHighlighted && !isSelected && "bg-accent text-accent-foreground",
                             !isHighlighted && !isSelected && "hover:bg-muted/50"
                           )}
                         >
@@ -249,14 +289,14 @@ function RegisterMemberDialog({
                   </div>
                 ) : (
                   <div className="p-8 text-center text-sm text-muted-foreground italic">
-                    {adherentsList.length === 0 ? "Tous les membres sont déjà inscrits." : "Aucun membre trouvé."}
+                    {adherentsList.length === 0 ? "Tous les membres sont déjà inscrits." : "Aucun membre trouvé pour cette recherche."}
                   </div>
                 )}
               </div>
             </ScrollArea>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/20">
+          <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/20 hover:bg-muted/30 transition-colors">
             <div className="space-y-0.5">
               <Label htmlFor="paid-toggle" className="font-semibold cursor-pointer">Paiement reçu</Label>
               <p className="text-xs text-muted-foreground">Cochez si le règlement a été effectué.</p>
@@ -266,22 +306,24 @@ function RegisterMemberDialog({
 
           {event.necessiteMenu && event.optionsMenu && (
             <div className="space-y-4 rounded-lg border p-4 bg-muted/5">
-              <h4 className="font-bold border-b pb-2 text-sm uppercase">Choix du Menu</h4>
-              {event.optionsMenu.aperitifs?.length ? (
-                <MenuChoiceSection category="Apéritif" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />
-              ) : null}
-              {event.optionsMenu.entrees?.length ? (
-                <MenuChoiceSection category="Entrée" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />
-              ) : null}
-              {event.optionsMenu.plats?.length ? (
-                <MenuChoiceSection category="Plat principal" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />
-              ) : null}
-              {event.optionsMenu.fromages?.length ? (
-                <MenuChoiceSection category="Fromage" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />
-              ) : null}
-              {event.optionsMenu.desserts?.length ? (
-                <MenuChoiceSection category="Dessert" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />
-              ) : null}
+              <h4 className="font-bold border-b pb-2 text-sm uppercase text-primary/80">Choix du Menu</h4>
+              <div className="grid gap-4">
+                {event.optionsMenu.aperitifs?.length ? (
+                  <MenuChoiceSection category="Apéritif" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />
+                ) : null}
+                {event.optionsMenu.entrees?.length ? (
+                  <MenuChoiceSection category="Entrée" options={event.optionsMenu.entrees} eventId={event.id} selected={menuChoices?.entreeChoisie} onSelect={(value) => setMenuChoices(prev => ({...prev, entreeChoisie: value}))} />
+                ) : null}
+                {event.optionsMenu.plats?.length ? (
+                  <MenuChoiceSection category="Plat principal" options={event.optionsMenu.plats} eventId={event.id} selected={menuChoices?.platChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, platChoisi: value}))} />
+                ) : null}
+                {event.optionsMenu.fromages?.length ? (
+                  <MenuChoiceSection category="Fromage" options={event.optionsMenu.fromages} eventId={event.id} selected={menuChoices?.fromageChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, fromageChoisi: value}))} />
+                ) : null}
+                {event.optionsMenu.desserts?.length ? (
+                  <MenuChoiceSection category="Dessert" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />
+                ) : null}
+              </div>
             </div>
           )}
         </div>
@@ -290,7 +332,7 @@ function RegisterMemberDialog({
           <Button 
             onClick={handleRegister} 
             disabled={!selectedAdherentId || isSubmitting || isFull} 
-            className="w-full h-12 text-base font-semibold"
+            className="w-full h-12 text-base font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label="Confirmer l'inscription"
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -405,7 +447,7 @@ export default function EventDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h1 className="text-3xl font-bold tracking-tight text-primary">{event.titre}</h1>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild className="min-h-[40px]">
+            <Button variant="outline" size="sm" asChild className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary">
               <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="mr-2 h-4 w-4" /> Modifier</Link>
             </Button>
             <AlertDialog>
@@ -421,7 +463,7 @@ export default function EventDetailPage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive hover:bg-destructive/90">Confirmer</AlertDialogAction>
+                  <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive hover:bg-destructive/90 focus-visible:ring-2 focus-visible:ring-destructive">Confirmer</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
