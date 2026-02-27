@@ -129,25 +129,22 @@ export default function AdminPage() {
     reader.onload = async (e) => {
       const text = e.target?.result as string;
       try {
-        // 1. Parsing initial
         const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
         if (lines.length < 2) throw new Error("Le fichier CSV est vide ou ne contient que des en-têtes.");
 
-        // 2. Récupération des adhérents existants pour la déduplication
         const existingSnap = await getDocs(collection(db, 'adherents'));
         const existingAdherents = existingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as Adherent }));
 
         const rows = lines.slice(1);
-        const newAdherentsBatch: Omit<Adherent, 'id'>[] = [];
-        let duplicateCount = 0;
+        const batch = writeBatch(db);
+        let createCount = 0;
+        let updateCount = 0;
 
         for (const row of rows) {
-          // Parsing robuste avec gestion des guillemets
           const values = row.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
           
-          // Mappage des colonnes (ordre imposé par l'audit)
-          // Prenom,Nom,Email,Telephone,Adresse,DateNaissance,Genre,DateInscription,MembreBureau,Benevole,MembreFAAF,DroitImage,CotisationAJour
-          const data = {
+          // Mappage robuste des 13 champs
+          const csvData = {
             prenom: values[0] || "",
             nom: values[1] || "",
             email: values[2] || "",
@@ -163,31 +160,43 @@ export default function AdminPage() {
             cotisationAJour: values[12]?.toLowerCase() === 'oui',
           };
 
-          // 3. Système anti-doublons (Email ou Nom+Prénom) - Insensible à la casse
-          const isDuplicate = existingAdherents.some(existing => {
-            const sameEmail = data.email && existing.email.toLowerCase() === data.email.toLowerCase();
-            const sameName = existing.nom.toLowerCase() === data.nom.toLowerCase() && 
-                             existing.prenom.toLowerCase() === data.prenom.toLowerCase();
+          const existingMatch = existingAdherents.find(ex => {
+            const sameEmail = csvData.email && ex.email.toLowerCase() === csvData.email.toLowerCase();
+            const sameName = ex.nom.toLowerCase() === csvData.nom.toLowerCase() && 
+                             ex.prenom.toLowerCase() === csvData.prenom.toLowerCase();
             return sameEmail || sameName;
           });
 
-          if (isDuplicate) {
-            duplicateCount++;
-            continue;
-          }
-
-          newAdherentsBatch.push(data);
-        }
-
-        // 4. Envoi par lots (Batch)
-        if (newAdherentsBatch.length > 0) {
-          const batch = writeBatch(db);
-          newAdherentsBatch.forEach(adherentData => {
-            const newDocRef = doc(collection(db, 'adherents'));
-            batch.set(newDocRef, adherentData);
+          if (existingMatch) {
+            // Logique UPSERT : Mise à jour sélective
+            const updates: any = {};
+            if (values[0]) updates.prenom = values[0];
+            if (values[1]) updates.nom = values[1];
+            if (values[2]) updates.email = values[2];
+            if (values[3]) updates.telephone = values[3];
+            if (values[4]) updates.adresse = values[4];
+            if (values[5]) updates.dateNaissance = new Date(values[5]).toISOString();
+            if (values[6]) updates.genre = values[6] as 'H' | 'F' | 'Autre';
+            if (values[7]) updates.dateInscription = new Date(values[7]).toISOString();
             
-            // Si cotisation à jour, créer l'entrée historique (15€ par défaut)
-            if (adherentData.cotisationAJour) {
+            // Pour les booléens, on ne met à jour que si la case n'est pas vide
+            if (values[8] !== "") updates.estMembreBureau = values[8].toLowerCase() === 'oui';
+            if (values[9] !== "") updates.estBenevole = values[9].toLowerCase() === 'oui';
+            if (values[10] !== "") updates.estMembreFaaf = values[10].toLowerCase() === 'oui';
+            if (values[11] !== "") updates.accordeDroitImage = values[11].toLowerCase() === 'oui';
+            if (values[12] !== "") updates.cotisationAJour = values[12].toLowerCase() === 'oui';
+
+            if (Object.keys(updates).length > 0) {
+              batch.update(doc(db, 'adherents', existingMatch.id), updates);
+              updateCount++;
+            }
+          } else {
+            // Création d'un nouvel adhérent
+            const newDocRef = doc(collection(db, 'adherents'));
+            batch.set(newDocRef, csvData);
+            createCount++;
+            
+            if (csvData.cotisationAJour) {
               const cotisRef = doc(collection(db, 'cotisations'));
               batch.set(cotisRef, {
                 adherentId: newDocRef.id,
@@ -196,17 +205,19 @@ export default function AdminPage() {
                 montant: 15
               });
             }
-          });
+          }
+        }
+
+        if (createCount > 0 || updateCount > 0) {
           await batch.commit();
         }
 
-        // 5. Journalisation et Feedback (aria-live compatible via Toast)
-        const logMsg = `Importation CSV : ${newAdherentsBatch.length} nouveaux adhérents ajoutés, ${duplicateCount} doublons ignorés.`;
+        const logMsg = `Importation CSV : ${createCount} nouveaux adhérents créés, ${updateCount} adhérents mis à jour.`;
         await addLog(db, auth, logMsg);
 
         toast({
           title: "Importation terminée",
-          description: `Succès : ${newAdherentsBatch.length} adhérents importés. ${duplicateCount} doublons ont été ignorés.`,
+          description: `Succès : ${createCount} créés, ${updateCount} mis à jour.`,
         });
 
       } catch (err: any) {
@@ -214,7 +225,7 @@ export default function AdminPage() {
         toast({
           variant: 'destructive',
           title: "Échec de l'importation",
-          description: err.message || "Une erreur est survenue lors de la lecture du fichier.",
+          description: "Le fichier CSV est mal formaté ou contient des erreurs.",
         });
       } finally {
         setIsImporting(false);
@@ -265,7 +276,7 @@ export default function AdminPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Base de données</CardTitle>
-                    <CardDescription>Maintenance et imports CSV.</CardDescription>
+                    <CardDescription>Maintenance et imports CSV (Upsert).</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="relative">
@@ -277,7 +288,7 @@ export default function AdminPage() {
                         aria-label="Importer un fichier CSV d'adhérents"
                       >
                         {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        {isImporting ? "Importation en cours..." : "Importer CSV Adhérents"}
+                        {isImporting ? "Importation en cours..." : "Importer / Mettre à jour CSV"}
                       </Button>
                       <input 
                         ref={fileInputRef} 
