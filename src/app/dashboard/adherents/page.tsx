@@ -127,6 +127,7 @@ export default function AdherentsPage() {
   const handleExportCSV = () => {
     if (!adherents || adherents.length === 0) return;
 
+    // Ordre strict des 13 colonnes pour compatibilité miroir avec l'import
     const headers = [
       "Prenom", "Nom", "Email", "Telephone", "Adresse", "DateNaissance", 
       "Genre", "DateInscription", "MembreBureau", "Benevole", "MembreFAAF", 
@@ -136,7 +137,7 @@ export default function AdherentsPage() {
     const formatDate = (dateStr: string) => {
       if (!dateStr) return "";
       try {
-        return dateStr.split('T')[0];
+        return dateStr.split('T')[0]; // Format YYYY-MM-DD
       } catch (e) {
         return "";
       }
@@ -160,12 +161,14 @@ export default function AdherentsPage() {
       formatBool(a.cotisationAJour)
     ]);
 
+    // Construction du contenu CSV avec séparateur virgule et protection des champs par guillemets doubles
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Ajout du BOM UTF-8 pour Excel (compatibilité accents)
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
