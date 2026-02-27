@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
@@ -10,7 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -25,9 +23,6 @@ import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@
 import { doc, collection, query } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 
-/**
- * Ordre d'affichage imposé pour les choix de menu.
- */
 const MENU_ORDER = [
   { key: 'aperitifChoisi', label: 'Apéritif' },
   { key: 'entreeChoisie', label: 'Entrée' },
@@ -54,9 +49,6 @@ function EventDetailSkeleton() {
   );
 }
 
-/**
- * Composant de sélection de menu pour le dialogue d'inscription.
- */
 const MenuChoiceSection = ({ 
   category, 
   options, 
@@ -88,9 +80,6 @@ const MenuChoiceSection = ({
   )
 };
 
-/**
- * Dialogue d'inscription d'un membre.
- */
 function RegisterMemberDialog({ 
   event, 
   adherentsList, 
@@ -119,7 +108,6 @@ function RegisterMemberDialog({
     );
   }, [adherentsList, searchTerm]);
 
-  // Réinitialisation de l'état à la fermeture/ouverture
   useEffect(() => {
     if (!isOpen) {
       setSelectedAdherentId("");
@@ -130,7 +118,6 @@ function RegisterMemberDialog({
     }
   }, [isOpen]);
 
-  // Navigation au clavier pour la liste
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (filteredAdherents.length === 0) return;
 
@@ -170,7 +157,7 @@ function RegisterMemberDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="lg" className="w-full shadow-md" aria-label={`Inscrire un adhérent à l'événement ${event.titre}`}>
+        <Button size="lg" className="w-full shadow-md min-h-[48px]" aria-label={`Inscrire un adhérent à l'événement ${event.titre}`}>
           <PlusCircle className="mr-2 h-5 w-5" />
           Inscrire un adhérent
         </Button>
@@ -184,7 +171,6 @@ function RegisterMemberDialog({
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto pr-2 space-y-6 py-2">
-          {/* Section Recherche et Liste */}
           <div className="space-y-3">
             <Label htmlFor={inputId} className="font-semibold">Choix de l'adhérent</Label>
             <div 
@@ -198,7 +184,7 @@ function RegisterMemberDialog({
               <Input
                 id={inputId}
                 placeholder="Saisissez un nom..."
-                className="pl-9"
+                className="pl-9 min-h-[44px]"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -260,7 +246,6 @@ function RegisterMemberDialog({
             </ScrollArea>
           </div>
 
-          {/* Section Paiement */}
           <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/20">
             <div className="space-y-0.5">
               <Label htmlFor="paid-toggle" className="font-semibold cursor-pointer">Paiement reçu</Label>
@@ -269,7 +254,6 @@ function RegisterMemberDialog({
             <Switch id="paid-toggle" checked={isPaid} onCheckedChange={setIsPaid} aria-label="Marquer comme payé dès l'inscription" />
           </div>
 
-          {/* Section Menu (Conditionnelle) */}
           {event.necessiteMenu && event.optionsMenu && (
             <div className="space-y-4 rounded-lg border p-4 bg-muted/5">
               <h4 className="font-bold border-b pb-2 text-sm uppercase">Choix du Menu</h4>
@@ -316,25 +300,20 @@ export default function EventDetailPage() {
   const db = useFirestore();
   const auth = useAuth();
   
-  // Récupération de l'événement
   const eventRef = useMemoFirebase(() => id ? doc(db, 'evenements', id) : null, [db, id]);
   const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
 
-  // Récupération de tous les adhérents
   const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
   const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
 
-  // Récupération de toutes les inscriptions
   const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions')), [db]);
   const { data: allInscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
 
-  // Inscriptions filtrées pour cet événement
   const eventInscriptions = useMemo(() => {
     if (!allInscriptions || !id) return [];
     return allInscriptions.filter(ins => ins.id_evenement === id);
   }, [allInscriptions, id]);
 
-  // Adhérents non encore inscrits (pour le dialogue)
   const nonRegisteredAdherents = useMemo(() => {
     if (!rawAdherents) return [];
     const registeredIds = new Set(eventInscriptions.map(ins => ins.id_adherent));
@@ -343,7 +322,6 @@ export default function EventDetailPage() {
       .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [rawAdherents, eventInscriptions]);
 
-  // Actions
   const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
     try {
       await updateInscription(db, inscriptionId, { a_paye: hasPaid });
@@ -399,7 +377,6 @@ export default function EventDetailPage() {
 
   return (
     <div className="space-y-8 pb-10">
-      {/* Header */}
       <header className="flex flex-col gap-2 border-b pb-6">
         <h1 className="text-3xl font-bold tracking-tight text-primary">{event.titre}</h1>
         <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground mt-2">
@@ -419,7 +396,6 @@ export default function EventDetailPage() {
       </header>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Colonne Principale: Description & Gestion */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="shadow-sm border-2">
             <CardHeader className="bg-muted/30 pb-4">
@@ -431,12 +407,12 @@ export default function EventDetailPage() {
               </p>
             </CardContent>
             <CardFooter className="flex flex-wrap gap-4 border-t bg-muted/10 pt-6">
-              <Button variant="outline" size="sm" asChild aria-label={`Modifier ${event.titre}`}>
+              <Button variant="outline" size="sm" asChild className="min-h-[40px]" aria-label={`Modifier ${event.titre}`}>
                 <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="mr-2 h-4 w-4" /> Modifier l'événement</Link>
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" aria-label={`Supprimer ${event.titre}`}>
+                  <Button variant="destructive" size="sm" className="min-h-[40px]" aria-label={`Supprimer ${event.titre}`}>
                     <Trash2 className="mr-2 h-4 w-4" /> Supprimer l'événement
                   </Button>
                 </AlertDialogTrigger>
@@ -456,7 +432,6 @@ export default function EventDetailPage() {
             </CardFooter>
           </Card>
 
-          {/* Statistiques rapides */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Card className="bg-primary/5 border-primary/20">
               <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-primary">Inscrits</CardTitle></CardHeader>
@@ -469,7 +444,6 @@ export default function EventDetailPage() {
           </div>
         </div>
 
-        {/* Colonne Latérale: Inscriptions */}
         <div className="space-y-6">
           <RegisterMemberDialog 
             event={event} 
@@ -498,10 +472,6 @@ export default function EventDetailPage() {
                       <div key={inscription.id} className="flex flex-col gap-3 rounded-xl border p-4 hover:border-primary/40 transition-all bg-card shadow-sm">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3 min-w-0">
-                            <Avatar className="h-10 w-10 border-2">
-                              <AvatarImage src={`https://picsum.photos/seed/${inscription.id_adherent}/40/40`} alt={adherentName} data-ai-hint="avatar person" />
-                              <AvatarFallback className="bg-primary/10 text-primary font-bold">{adherentName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
                             <div className="flex flex-col min-w-0">
                               <span className="text-sm font-bold truncate text-foreground">{adherentName}</span>
                               <span className="text-[10px] text-muted-foreground">Inscrit le {new Date(inscription.date_inscription).toLocaleDateString()}</span>
@@ -539,7 +509,6 @@ export default function EventDetailPage() {
                           </div>
                         </div>
 
-                        {/* Affichage des choix de menu sur des lignes distinctes et ordonnées */}
                         {inscription.choixMenu && Object.values(inscription.choixMenu).some(v => v) && (
                           <div className="mt-3 space-y-2 border-t pt-3" role="region" aria-label={`Détails du repas pour ${adherentName}`}>
                             {MENU_ORDER.map(menuItem => {

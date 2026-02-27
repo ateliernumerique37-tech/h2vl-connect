@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import type { Adherent } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2, Eye } from "lucide-react";
 import {
@@ -28,7 +27,6 @@ type AdherentCardProps = {
 export function AdherentCard({ adherent }: AdherentCardProps) {
   const db = useFirestore();
   const { toast } = useToast();
-  const initials = `${adherent.prenom?.[0] ?? ''}${adherent.nom?.[0] ?? ''}`.toUpperCase();
   
   const handleDelete = async () => {
     try {
@@ -38,22 +36,17 @@ export function AdherentCard({ adherent }: AdherentCardProps) {
         description: `${adherent.prenom} ${adherent.nom} a été supprimé de la base de données.`,
       });
     } catch (error) {
-      console.error("Failed to delete adherent:", error);
       toast({
         variant: "destructive",
         title: "Erreur",
-        description: `Impossible de supprimer ${adherent.prenom} ${adherent.nom}.`,
+        description: "Impossible de supprimer l'adhérent.",
       });
     }
   };
 
   return (
     <Card className="flex flex-col h-full overflow-hidden transition-all hover:shadow-md border-2 hover:border-primary/20">
-      <CardHeader className="flex flex-row items-center gap-4 p-4 pb-2">
-        <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-          <AvatarImage src={`https://picsum.photos/seed/${adherent.id}/48/48`} alt={`Avatar de ${adherent.prenom} ${adherent.nom}`} data-ai-hint="avatar person" />
-          <AvatarFallback className="bg-primary/10 text-primary font-bold">{initials}</AvatarFallback>
-        </Avatar>
+      <CardHeader className="p-4 pb-2">
         <div className="grid gap-0.5 overflow-hidden">
           <p className="font-bold text-lg truncate leading-tight">{adherent.prenom} {adherent.nom}</p>
           <p className="text-sm text-muted-foreground truncate">{adherent.email}</p>
@@ -66,13 +59,13 @@ export function AdherentCard({ adherent }: AdherentCardProps) {
           </div>
       </CardContent>
       <CardFooter className="p-3 pt-2 border-t bg-muted/30 gap-2 flex flex-wrap">
-        <Button asChild variant="secondary" size="sm" className="flex-1 min-w-[80px]" aria-label={`Consulter la fiche complète de ${adherent.prenom} ${adherent.nom}`}>
+        <Button asChild variant="secondary" size="sm" className="flex-1 min-w-[80px] min-h-[40px]" aria-label={`Consulter la fiche complète de ${adherent.prenom} ${adherent.nom}`}>
             <Link href={`/dashboard/adherents/${adherent.id}`}>
                 <Eye className="mr-2 h-4 w-4" />
                 Détails
             </Link>
         </Button>
-        <Button asChild variant="outline" size="sm" className="flex-1 min-w-[80px]" aria-label={`Modifier les informations de ${adherent.prenom} ${adherent.nom}`}>
+        <Button asChild variant="outline" size="sm" className="flex-1 min-w-[80px] min-h-[40px]" aria-label={`Modifier les informations de ${adherent.prenom} ${adherent.nom}`}>
             <Link href={`/dashboard/adherents/${adherent.id}`}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Modifier
@@ -80,7 +73,7 @@ export function AdherentCard({ adherent }: AdherentCardProps) {
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" size="sm" className="px-3" aria-label={`Supprimer l'adhérent ${adherent.prenom} ${adherent.nom}`}>
+            <Button variant="destructive" size="sm" className="px-3 min-h-[40px]" aria-label={`Supprimer l'adhérent ${adherent.prenom} ${adherent.nom}`}>
                 <Trash2 className="h-4 w-4" />
             </Button>
           </AlertDialogTrigger>
@@ -94,7 +87,7 @@ export function AdherentCard({ adherent }: AdherentCardProps) {
             <AlertDialogFooter>
               <AlertDialogCancel>Annuler</AlertDialogCancel>
               <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                Supprimer {adherent.prenom}
+                Supprimer
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

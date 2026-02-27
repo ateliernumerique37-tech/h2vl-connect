@@ -33,7 +33,6 @@ export default function LoginPage() {
       });
       router.push('/dashboard');
     } catch (error: any) {
-      // RGPD/Sécurité : Message générique pour ne pas confirmer l'existence d'un compte
       let descriptiveError = "Identifiants incorrects ou service indisponible.";
       
       if (error.code === 'auth/too-many-requests') {
@@ -57,9 +56,9 @@ export default function LoginPage() {
           <div className="mb-4 flex justify-center">
             <Logo className="h-12 w-12 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Connexion</CardTitle>
+          <CardTitle className="text-2xl">Connexion Administrateur</CardTitle>
           <CardDescription>
-            Entrez votre email ci-dessous pour vous connecter à votre compte
+            Entrez vos identifiants pour accéder au tableau de bord
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -98,17 +97,11 @@ export default function LoginPage() {
                 maxLength={100}
               />
             </div>
-            <Button type="submit" className="w-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" disabled={isLoading}>
+            <Button type="submit" className="w-full min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" disabled={isLoading}>
                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Se connecter
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm">
-            Vous n'avez pas de compte ?{" "}
-            <Link href="/signup" className="underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-              S'inscrire
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>
