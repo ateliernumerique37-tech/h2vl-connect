@@ -92,10 +92,17 @@ export default function AdherentDetailPage() {
 
   const handleCopy = (text: string | undefined, fieldName: string) => {
     if (!text) return;
-    navigator.clipboard.writeText(text);
-    setCopiedField(fieldName);
-    toast({ title: "Copié !" });
-    setTimeout(() => setCopiedField(null), 2000);
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopiedField(fieldName);
+            toast({ title: "Copié !" });
+            setTimeout(() => setCopiedField(null), 2000);
+        }).catch(() => {
+            toast({ variant: "destructive", title: "Erreur de copie" });
+        });
+    } else {
+        toast({ variant: "destructive", title: "API Presse-papier non disponible" });
+    }
   };
 
   const handleSwitchChange = async (field: keyof Adherent, checked: boolean) => {
@@ -174,7 +181,14 @@ export default function AdherentDetailPage() {
               <Label htmlFor="email">Email</Label>
               <div className="flex gap-2">
                   <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="flex-1" maxLength={255} />
-                  <Button variant="outline" size="icon" type="button" onClick={() => handleCopy(formData.email, "Email")}>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    type="button" 
+                    onClick={() => handleCopy(formData.email, "Email")}
+                    disabled={!formData.email}
+                    aria-label="Copier l'adresse mail dans le presse-papier"
+                  >
                       {copiedField === "Email" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                   </Button>
               </div>
@@ -183,7 +197,14 @@ export default function AdherentDetailPage() {
               <Label htmlFor="telephone">Téléphone</Label>
               <div className="flex gap-2">
                   <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} className="flex-1" maxLength={20} />
-                  <Button variant="outline" size="icon" type="button" onClick={() => handleCopy(formData.telephone, "Téléphone")}>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    type="button" 
+                    onClick={() => handleCopy(formData.telephone, "Téléphone")}
+                    disabled={!formData.telephone}
+                    aria-label="Copier le numéro de téléphone dans le presse-papier"
+                  >
                       {copiedField === "Téléphone" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                   </Button>
               </div>
@@ -192,7 +213,19 @@ export default function AdherentDetailPage() {
 
           <div className="space-y-2">
             <Label htmlFor="adresse">Adresse postale</Label>
-            <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} maxLength={500} />
+            <div className="flex gap-2">
+                <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} className="flex-1" maxLength={500} />
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    type="button" 
+                    onClick={() => handleCopy(formData.adresse, "Adresse")}
+                    disabled={!formData.adresse}
+                    aria-label="Copier l'adresse postale dans le presse-papier"
+                >
+                    {copiedField === "Adresse" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
