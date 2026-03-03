@@ -1,13 +1,22 @@
 'use client';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Users, BadgeCheck, Cake, Heart, UserPlus, Milestone } from 'lucide-react';
+import { Users, BadgeCheck, Cake, Heart, Milestone, Loader2 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import type { Adherent } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { DashboardTips } from '@/components/dashboard/dashboard-tips';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+
+const BIRTHDAY_MESSAGES = [
+    "Bonjour [Prenom], toute l'équipe de l'association te souhaite un merveilleux anniversaire ! Que cette journée soit remplie de joie.",
+    "Joyeux anniversaire [Prenom] ! Nous te souhaitons le meilleur pour cette nouvelle année. Au plaisir de se voir bientôt à l'association.",
+    "C'est un jour spécial ! Bon anniversaire [Prenom]. Profite bien de ta journée, on pense bien à toi.",
+    "Un très bel anniversaire à toi [Prenom] ! Merci pour ta présence parmi nous. Santé et bonheur !"
+];
 
 /**
  * Calcule l'âge exact à partir d'une chaîne de date ISO.
@@ -75,12 +84,14 @@ function DashboardSkeleton() {
 
 export default function DashboardHomePage() {
     const db = useFirestore();
+    const { toast } = useToast();
     const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
     const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
 
     const [birthdayAdherents, setBirthdayAdherents] = useState<Adherent[]>([]);
+    const [sendingIds, setSendingIds] = useState<string[]>([]);
 
-    // Calcul des statistiques avec useMemo pour la performance et la robustesse
+    // Calcul des statistiques
     const stats = useMemo(() => {
         if (!adherents) return {
             total: 0,
@@ -95,7 +106,6 @@ export default function DashboardHomePage() {
         const tauxCotisation = total > 0 ? Math.round((aJour / total) * 100) : 0;
         const benevoles = adherents.filter(a => a.estBenevole).length;
 
-        // Calcul de la moyenne d'âge
         const validAges = adherents
             .map(a => calculateAge(a.dateNaissance))
             .filter((age): age is number => age !== null);
@@ -104,22 +114,57 @@ export default function DashboardHomePage() {
             ? Math.round(validAges.reduce((sum, age) => sum + age, 0) / validAges.length)
             : 'N/A';
 
-        return {
-            total,
-            aJour,
-            tauxCotisation,
-            benevoles,
-            moyenneAge
-        };
+        return { total, aJour, tauxCotisation, benevoles, moyenneAge };
     }, [adherents]);
 
-    // Gestion des anniversaires différée pour éviter les erreurs d'hydratation
     useEffect(() => {
         if (adherents) {
             const todayBirthdays = adherents.filter(adherent => isBirthdayToday(adherent.dateNaissance));
             setBirthdayAdherents(todayBirthdays);
         }
     }, [adherents]);
+
+    const handleSendBirthday = async (adherent: Adherent) => {
+        if (sendingIds.includes(adherent.id)) return;
+        
+        setSendingIds(prev => [...prev, adherent.id]);
+        
+        try {
+            const randomMsg = BIRTHDAY_MESSAGES[Math.floor(Math.random() * BIRTHDAY_MESSAGES.length)];
+            const customMessage = randomMsg.replace('[Prenom]', adherent.prenom);
+
+            const response = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: adherent.email,
+                    firstName: adherent.prenom,
+                    type: 'birthday',
+                    subject: `Joyeux anniversaire ${adherent.prenom} ! 🎉`,
+                    customMessage
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                toast({
+                    title: "Email envoyé !",
+                    description: `Message d'anniversaire envoyé à ${adherent.prenom}.`,
+                });
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Erreur d'envoi",
+                description: "Impossible d'envoyer le message d'anniversaire.",
+            });
+        } finally {
+            setSendingIds(prev => prev.filter(id => id !== adherent.id));
+        }
+    };
     
     if (isLoading) {
         return <DashboardSkeleton />;
@@ -197,9 +242,25 @@ export default function DashboardHomePage() {
                     {birthdayAdherents.length > 0 ? (
                         <ul className="space-y-3" aria-live="polite">
                             {birthdayAdherents.map(adherent => (
-                                <li key={adherent.id} className="text-base flex items-center gap-2">
-                                    <span className="text-xl">🎂</span>
-                                    <span>C'est l'anniversaire de <span className="font-bold">{adherent.prenom} {adherent.nom}</span> aujourd'hui !</span>
+                                <li key={adherent.id} className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 rounded-lg border border-primary/10 bg-card/50">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xl" aria-hidden="true">🎂</span>
+                                        <span>C'est l'anniversaire de <span className="font-bold">{adherent.prenom} {adherent.nom}</span> aujourd'hui !</span>
+                                    </div>
+                                    <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        className="shrink-0 min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                                        onClick={() => handleSendBirthday(adherent)}
+                                        disabled={sendingIds.includes(adherent.id)}
+                                        aria-label={`Envoyer un email d'anniversaire à ${adherent.prenom}`}
+                                    >
+                                        {sendingIds.includes(adherent.id) ? (
+                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        ) : (
+                                            "🎂 Souhaiter l'anniversaire"
+                                        )}
+                                    </Button>
                                 </li>
                             ))}
                         </ul>
