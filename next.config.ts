@@ -9,6 +9,10 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   /* config options here */
+  i18n: {
+    locales: ['fr'],
+    defaultLocale: 'fr',
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
