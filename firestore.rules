@@ -1,42 +1,45 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Fonction d'aide pour vérifier l'authentification
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Adhérents : Lecture/Écriture pour les admins authentifiés
     match /adherents/{adherentId} {
       allow read, write: if isAuthenticated();
     }
 
-    // Événements : Lecture/Écriture pour les admins authentifiés
     match /evenements/{evenementId} {
       allow read, write: if isAuthenticated();
     }
 
-    // Inscriptions : Lecture/Écriture pour les admins authentifiés
     match /inscriptions/{inscriptionId} {
       allow read, write: if isAuthenticated();
     }
 
-    // Cotisations : Lecture/Écriture pour les admins authentifiés
     match /cotisations/{cotisationId} {
       allow read, write: if isAuthenticated();
     }
 
-    // Profils Admins : Lecture pour les authentifiés, Écriture restreinte au propriétaire
     match /admins/{userId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Journal d'audit (Logs) : Règle "Append-Only" STRICTE
-    // Interdiction formelle de modifier ou supprimer un log pour garantir l'intégrité de la piste d'audit
     match /logs_admin/{logId} {
       allow read, create: if isAuthenticated();
       allow update, delete: if false;
+    }
+
+    match /email_campaigns/{campaignId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /email_logs/{logId} {
+      allow read, write: if isAuthenticated();
+      // Tracking pixel can update without full auth context if needed, but here we stay simple
+      allow update: if true; 
     }
   }
 }

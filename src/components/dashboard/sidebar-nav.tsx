@@ -1,9 +1,10 @@
+
 "use client"
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart2, CalendarDays, Shield, Users } from "lucide-react";
+import { LayoutDashboard, BarChart2, CalendarDays, Shield, Users, Mail } from "lucide-react";
 import {
   SidebarHeader,
   SidebarMenu,
@@ -36,6 +37,11 @@ const menuItems = [
     accessKey: "3",
   },
   {
+    href: "/dashboard/communication",
+    icon: Mail,
+    label: "Communication",
+  },
+  {
     href: "/dashboard/stats",
     icon: BarChart2,
     label: "Statistiques",
@@ -51,16 +57,11 @@ export function SidebarNav() {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
   
-  // Utilisation d'une ref pour stocker le pathname initial au montage du composant SidebarNav
-  // (qui est monté quand le Sheet mobile s'ouvre)
   const mountedPathname = useRef(pathname);
 
   useEffect(() => {
-    // On ne ferme la sidebar que si le pathname actuel est différent de celui au montage
-    // Cela signifie que l'utilisateur a effectivement cliqué sur un lien et navigué.
     if (isMobile && pathname !== mountedPathname.current) {
       setOpenMobile(false);
-      // On met à jour la ref pour les navigations successives si le composant reste monté
       mountedPathname.current = pathname;
     }
   }, [pathname, isMobile, setOpenMobile]);
@@ -99,7 +100,6 @@ export function SidebarNav() {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
-         {/* Espace réservé pour d'éventuels liens de profil ou paramètres */}
       </SidebarFooter>
     </>
   );

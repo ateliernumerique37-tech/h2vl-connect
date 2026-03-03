@@ -1,10 +1,25 @@
+
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const { to, firstName, type, customMessage, subject: providedSubject, eventTitle, eventDate, eventLocation, price, menuChoices } = data;
+    const { 
+      to, 
+      firstName, 
+      type, 
+      customMessage, 
+      subject: providedSubject, 
+      eventTitle, 
+      eventDate, 
+      eventLocation, 
+      price, 
+      menuChoices,
+      logId, // ID de tracking unique
+      campaignSubject,
+      campaignBody
+    } = data;
 
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
@@ -18,6 +33,10 @@ export async function POST(request: Request) {
 
     let html = '';
     let subject = providedSubject || `Confirmation d'inscription : ${eventTitle}`;
+
+    // Base URL pour le pixel de tracking (détection automatique de l'host si possible)
+    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://h2vl-connect.web.app';
+    const trackingPixel = logId ? `<img src="${origin}/api/track/${logId}" width="1" height="1" style="display:none;" />` : '';
 
     if (type === 'birthday') {
       html = `
@@ -35,6 +54,28 @@ export async function POST(request: Request) {
               <strong>EVA</strong>, la petite mascotte de h2vl qui veille sur vous ✨
             </p>
           </div>
+          <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
+            Ceci est un message de l'association H2VL.
+          </div>
+        </div>
+      `;
+    } else if (type === 'campaign') {
+      subject = campaignSubject;
+      html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #1A75D1; padding: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 20px;">H2VL : Information</h1>
+          </div>
+          <div style="padding: 30px;">
+            <p style="font-size: 16px; font-weight: bold;">Bonjour ${firstName},</p>
+            <div style="font-size: 16px; color: #333; white-space: pre-wrap;">${campaignBody}</div>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="font-size: 14px; color: #666;">
+              Cordialement,<br/>
+              <strong>EVA</strong>, la petite mascotte de h2vl qui veille sur vous ✨
+            </p>
+          </div>
+          ${trackingPixel}
           <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
             Ceci est un message de l'association H2VL.
           </div>

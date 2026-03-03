@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Admin": {
@@ -21,7 +22,15 @@
         "prenom": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "telephone": { "type": "string" },
-        "dateInscription": { "type": "string", "format": "date-time" }
+        "adresse": { "type": "string" },
+        "dateNaissance": { "type": "string", "format": "date-time" },
+        "genre": { "type": "string", "enum": ["H", "F", "Autre"] },
+        "dateInscription": { "type": "string", "format": "date-time" },
+        "estMembreBureau": { "type": "boolean" },
+        "estBenevole": { "type": "boolean" },
+        "estMembreFaaf": { "type": "boolean" },
+        "accordeDroitImage": { "type": "boolean" },
+        "cotisationAJour": { "type": "boolean" }
       },
       "required": ["nom", "prenom", "email", "dateInscription"]
     },
@@ -60,6 +69,27 @@
           "datePaiement": { "type": "string", "format": "date-time" },
           "montant": { "type": "number" }
         }
+    },
+    "CampagneEmail": {
+      "title": "CampagneEmail",
+      "type": "object",
+      "properties": {
+        "sujet": { "type": "string" },
+        "corps": { "type": "string" },
+        "dateEnvoi": { "type": "string", "format": "date-time" },
+        "nbDestinataires": { "type": "number" }
+      }
+    },
+    "LogEmail": {
+      "title": "LogEmail",
+      "type": "object",
+      "properties": {
+        "campaignId": { "type": "string" },
+        "adherentId": { "type": "string" },
+        "email": { "type": "string" },
+        "ouvert": { "type": "boolean" },
+        "dateOuverture": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "auth": {
@@ -89,6 +119,14 @@
     "/logs_admin/{logId}": {
       "schema": "#/backend/entities/LogAdmin",
       "description": "Audit des actions."
+    },
+    "/email_campaigns/{campaignId}": {
+      "schema": "#/backend/entities/CampagneEmail",
+      "description": "Historique des campagnes e-mailing."
+    },
+    "/email_logs/{logId}": {
+      "schema": "#/backend/entities/LogEmail",
+      "description": "Logs individuels d'envoi et tracking."
     }
   }
 }
