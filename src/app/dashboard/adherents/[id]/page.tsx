@@ -14,7 +14,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Trash2, Save, Copy, CheckCircle2, ChevronLeft, Loader2 } from "lucide-react";
+import { PlusCircle, Trash2, Save, Copy, CheckCircle2, ChevronLeft, Loader2, Phone, MapPin } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
@@ -157,6 +157,29 @@ export default function AdherentDetailPage() {
           </Link>
         </Button>
         <h1 className="text-3xl font-bold tracking-tight">Profil Adhérent</h1>
+      </div>
+
+      {/* Actions Rapides Mobiles */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {adherent.telephone && (
+          <Button asChild size="lg" className="w-full h-16 text-lg shadow-md focus-visible:ring-2 focus-visible:ring-primary">
+            <a href={`tel:${adherent.telephone.replace(/\s+/g, '')}`} aria-label={`Appeler ${adherent.prenom}`}>
+              <Phone className="mr-2 h-6 w-6" /> Appeler l'adhérent
+            </a>
+          </Button>
+        )}
+        {adherent.adresse && (
+          <Button asChild variant="outline" size="lg" className="w-full h-16 text-lg shadow-sm border-2 focus-visible:ring-2 focus-visible:ring-primary">
+            <a 
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adherent.adresse)}`} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              aria-label={`Ouvrir l'itinéraire vers l'adresse de ${adherent.prenom}`}
+            >
+              <MapPin className="mr-2 h-6 w-6 text-primary" /> Voir l'itinéraire
+            </a>
+          </Button>
+        )}
       </div>
 
       <Card>
