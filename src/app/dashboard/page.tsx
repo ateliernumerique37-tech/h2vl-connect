@@ -1,12 +1,13 @@
+
 'use client';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Users, BadgeCheck, Cake, Heart, Milestone, Loader2 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
-import type { Adherent } from '@/lib/types';
+import type { Adherent, LogAnniversaire } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, query, where, addDoc } from 'firebase/firestore';
 import { DashboardTips } from '@/components/dashboard/dashboard-tips';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -85,11 +86,27 @@ function DashboardSkeleton() {
 export default function DashboardHomePage() {
     const db = useFirestore();
     const { toast } = useToast();
+    
+    // Date du jour pour les logs
+    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
     const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
     const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
 
+    const birthdayLogsQuery = useMemoFirebase(() => query(
+        collection(db, 'logs_anniversaires'),
+        where('date_envoi', '==', todayStr)
+    ), [db, todayStr]);
+    const { data: birthdayLogs } = useCollection<LogAnniversaire>(birthdayLogsQuery);
+
     const [birthdayAdherents, setBirthdayAdherents] = useState<Adherent[]>([]);
     const [sendingIds, setSendingIds] = useState<string[]>([]);
+
+    // IDs des adhérents auxquels on a déjà souhaité l'anniversaire aujourd'hui
+    const sentAdherentIds = useMemo(() => {
+        if (!birthdayLogs) return new Set<string>();
+        return new Set(birthdayLogs.map(log => log.id_adherent));
+    }, [birthdayLogs]);
 
     // Calcul des statistiques
     const stats = useMemo(() => {
@@ -125,7 +142,7 @@ export default function DashboardHomePage() {
     }, [adherents]);
 
     const handleSendBirthday = async (adherent: Adherent) => {
-        if (sendingIds.includes(adherent.id)) return;
+        if (sendingIds.includes(adherent.id) || sentAdherentIds.has(adherent.id)) return;
         
         setSendingIds(prev => [...prev, adherent.id]);
         
@@ -148,6 +165,13 @@ export default function DashboardHomePage() {
             const result = await response.json();
 
             if (result.success) {
+                // Enregistrement du log de sécurité
+                await addDoc(collection(db, 'logs_anniversaires'), {
+                    id_adherent: adherent.id,
+                    date_envoi: todayStr,
+                    statut: "envoyé"
+                });
+
                 toast({
                     title: "Email envoyé !",
                     description: `Message d'anniversaire envoyé à ${adherent.prenom}.`,
@@ -241,28 +265,33 @@ export default function DashboardHomePage() {
                 <CardContent>
                     {birthdayAdherents.length > 0 ? (
                         <ul className="space-y-3" aria-live="polite">
-                            {birthdayAdherents.map(adherent => (
-                                <li key={adherent.id} className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 rounded-lg border border-primary/10 bg-card/50">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xl" aria-hidden="true">🎂</span>
-                                        <span>C'est l'anniversaire de <span className="font-bold">{adherent.prenom} {adherent.nom}</span> aujourd'hui !</span>
-                                    </div>
-                                    <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="shrink-0 min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
-                                        onClick={() => handleSendBirthday(adherent)}
-                                        disabled={sendingIds.includes(adherent.id)}
-                                        aria-label={`Envoyer un email d'anniversaire à ${adherent.prenom}`}
-                                    >
-                                        {sendingIds.includes(adherent.id) ? (
-                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                        ) : (
-                                            "🎂 Souhaiter l'anniversaire"
-                                        )}
-                                    </Button>
-                                </li>
-                            ))}
+                            {birthdayAdherents.map(adherent => {
+                                const isSent = sentAdherentIds.has(adherent.id);
+                                return (
+                                    <li key={adherent.id} className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 rounded-lg border border-primary/10 bg-card/50">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xl" aria-hidden="true">🎂</span>
+                                            <span>C'est l'anniversaire de <span className="font-bold">{adherent.prenom} {adherent.nom}</span> aujourd'hui !</span>
+                                        </div>
+                                        <Button 
+                                            size="sm" 
+                                            variant={isSent ? "secondary" : "outline"}
+                                            className="shrink-0 min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                                            onClick={() => handleSendBirthday(adherent)}
+                                            disabled={sendingIds.includes(adherent.id) || isSent}
+                                            aria-label={isSent ? `Anniversaire déjà souhaité à ${adherent.prenom}` : `Envoyer un email d'anniversaire à ${adherent.prenom}`}
+                                        >
+                                            {sendingIds.includes(adherent.id) ? (
+                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            ) : isSent ? (
+                                                "Anniversaire souhaité ✅"
+                                            ) : (
+                                                "🎂 Souhaiter l'anniversaire"
+                                            )}
+                                        </Button>
+                                    </li>
+                                );
+                            })}
                         </ul>
                     ) : (
                         <p className="text-muted-foreground italic">Aucun anniversaire aujourd'hui.</p>

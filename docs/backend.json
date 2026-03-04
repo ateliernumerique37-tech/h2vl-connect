@@ -90,6 +90,15 @@
         "ouvert": { "type": "boolean" },
         "dateOuverture": { "type": "string", "format": "date-time" }
       }
+    },
+    "LogAnniversaire": {
+      "title": "LogAnniversaire",
+      "type": "object",
+      "properties": {
+        "id_adherent": { "type": "string" },
+        "date_envoi": { "type": "string" },
+        "statut": { "type": "string", "enum": ["envoyé"] }
+      }
     }
   },
   "auth": {
@@ -127,6 +136,10 @@
     "/email_logs/{logId}": {
       "schema": "#/backend/entities/LogEmail",
       "description": "Logs individuels d'envoi et tracking."
+    },
+    "/logs_anniversaires/{logId}": {
+      "schema": "#/backend/entities/LogAnniversaire",
+      "description": "Suivi des envois d'emails d'anniversaire."
     }
   }
 }

@@ -38,8 +38,12 @@ service cloud.firestore {
 
     match /email_logs/{logId} {
       allow read, write: if isAuthenticated();
-      // Tracking pixel can update without full auth context if needed, but here we stay simple
       allow update: if true; 
+    }
+
+    match /logs_anniversaires/{logId} {
+      allow read, create: if isAuthenticated();
+      allow update, delete: if false;
     }
   }
 }

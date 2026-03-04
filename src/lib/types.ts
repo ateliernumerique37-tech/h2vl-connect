@@ -1,3 +1,4 @@
+
 export interface Adherent {
   id: string;
   prenom: string;
@@ -71,4 +72,11 @@ export interface LogAdmin {
   nomAdmin: string;
   actionRealisee: string;
   dateAction: string; // ISO string
+}
+
+export interface LogAnniversaire {
+  id: string;
+  id_adherent: string;
+  date_envoi: string; // YYYY-MM-DD
+  statut: 'envoyé';
 }
