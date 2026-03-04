@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Adherent": {
@@ -94,19 +95,19 @@
         },
         "evenementId": {
           "type": "string",
-          "description": "Reference to the Evenement this registration is for. (Relationship: Evenement 1:N Inscription)"
+          "description": "Reference to the Evenement this registration is for."
         },
         "adherentId": {
           "type": "string",
-          "description": "Reference to the Adherent who made this registration. (Relationship: Adherent 1:N Inscription)"
+          "description": "Reference to the Adherent who made this registration."
         },
         "aPaye": {
           "type": "boolean",
-          "description": "Indicates whether the payment for the event registration has been made."
+          "description": "Indicates whether the payment has been made."
         },
         "dateInscription": {
           "type": "string",
-          "description": "The date and time when the member registered for the event.",
+          "description": "The date and time of registration.",
           "format": "date-time"
         }
       },
@@ -117,6 +118,29 @@
         "aPaye",
         "dateInscription"
       ]
+    },
+    "CampagneEmail": {
+      "title": "CampagneEmail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sujet": { "type": "string" },
+        "corps": { "type": "string" },
+        "dateEnvoi": { "type": "string", "format": "date-time" },
+        "nbDestinataires": { "type": "number" }
+      }
+    },
+    "EmailTracking": {
+      "title": "EmailTracking",
+      "type": "object",
+      "properties": {
+        "jeton": { "type": "string" },
+        "adherentId": { "type": "string" },
+        "campagneId": { "type": "string" },
+        "statut": { "type": "string", "enum": ["envoyé", "confirmé"] },
+        "dateEnvoi": { "type": "string", "format": "date-time" },
+        "dateLecture": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "auth": {
@@ -128,74 +152,51 @@
   "firestore": {
     "structure": [
       {
+        "path": "/admins/{adminId}",
+        "definition": {
+          "entityName": "AdminProfile",
+          "description": "Administrator profiles.",
+          "params": [{ "name": "adminId", "description": "UID of the admin." }]
+        }
+      },
+      {
         "path": "/adherents/{adherentId}",
         "definition": {
           "entityName": "Adherent",
-          "schema": {
-            "$ref": "#/backend/entities/Adherent"
-          },
-          "description": "Represents individual members of the H2vl association. The `adherentId` document ID corresponds to the Firebase Authentication UID of the member. Users can read/update their own profile. Includes denormalized 'adherentId' in the path for authorization independence.",
-          "params": [
-            {
-              "name": "adherentId",
-              "description": "The unique Firebase Authentication User ID of the Adherent."
-            }
-          ]
+          "description": "Member profiles.",
+          "params": [{ "name": "adherentId", "description": "UID or unique ID." }]
         }
       },
       {
         "path": "/evenements/{evenementId}",
         "definition": {
           "entityName": "Evenement",
-          "schema": {
-            "$ref": "#/backend/entities/Evenement"
-          },
-          "description": "Stores all events organized by the H2vl association. All authenticated users can read. Only administrators have write access.",
-          "params": [
-            {
-              "name": "evenementId",
-              "description": "The unique identifier for the Evenement."
-            }
-          ]
+          "description": "Association events.",
+          "params": [{ "name": "evenementId", "description": "Unique ID." }]
         }
       },
       {
-        "path": "/adherents/{adherentId}/inscriptions/{inscriptionId}",
+        "path": "/inscriptions/{inscriptionId}",
         "definition": {
           "entityName": "Inscription",
-          "schema": {
-            "$ref": "#/backend/entities/Inscription"
-          },
-          "description": "Represents an Adherent's registration for an Evenement. Subcollection under the owning Adherent. Includes denormalized 'adherentId' in the path and as a field for authorization independence and querying. The 'evenementId' is also denormalized as a field to facilitate collection group queries for events. This path is primarily for individual user's access to their own inscriptions.",
-          "params": [
-            {
-              "name": "adherentId",
-              "description": "The unique Firebase Authentication User ID of the Adherent who made the inscription."
-            },
-            {
-              "name": "inscriptionId",
-              "description": "The unique identifier for the Inscription."
-            }
-          ]
+          "description": "Event registrations.",
+          "params": [{ "name": "inscriptionId", "description": "Unique ID." }]
         }
       },
       {
-        "path": "/roles_admins/{adminId}",
+        "path": "/email_campaigns/{campaignId}",
         "definition": {
-          "entityName": "AdminRole",
-          "schema": {
-            "$ref": "#/backend/entities/AdminRole"
-          },
-          "description": "Dedicated collection for identifying users with administrative privileges. The `adminId` document ID corresponds to the Firebase Authentication UID. The existence of a document in this collection signifies an administrative role. Note: This assumes a minimal `AdminRole` schema will be defined, or its purpose is to exist for a `get()` operation in security rules.",
-          "params": [
-            {
-              "name": "adminId",
-              "description": "The unique Firebase Authentication User ID of an administrator."
-            }
-          ]
+          "entityName": "CampagneEmail",
+          "description": "History of sent email campaigns."
+        }
+      },
+      {
+        "path": "/email_tracking/{jeton}",
+        "definition": {
+          "entityName": "EmailTracking",
+          "description": "Tracking documents for email confirmations."
         }
       }
-    ],
-    "reasoning": "The Firestore data structure for 'H2vl Connect' is designed with a strong emphasis on Authorization Independence, Structural Segregation, and consistent Access Modeling, adhering strictly to the provided core design principles and mandates.\n\n**Authorization Independence & Denormalization (Mandate A):**\n1.  **`/adherents/{adherentId}`**: User profiles are stored in a top-level collection where the document ID (`adherentId`) is explicitly the Firebase Authentication UID (`request.auth.uid`). This inherently denormalizes the ownership information directly into the path, making authorization rules for personal profiles simple (`allow read, update: if request.auth.uid == adherentId;`). No hierarchical `get()` calls are needed to determine ownership, ensuring atomic operations and clear intent.\n2.  **`/adherents/{adherentId}/inscriptions/{inscriptionId}`**: Event registrations (Inscriptions) are structured as a subcollection under the respective Adherent. The `adherentId` in the path explicitly links the `Inscription` to its owner. Additionally, the `inscription` document itself contains an `adherentId` field, which further reinforces this ownership and aids in robust querying. This eliminates the need for rules to perform a `get()` on the parent `adherent` document to ascertain ownership of an `inscription`, fulfilling the authorization independence mandate.\n\n**Structural Segregation & QAPs (Mandate B & C):**\n1.  **`/evenements/{evenementId}`**: Events are stored in a top-level collection. All events share a homogeneous security posture: they are publicly readable by any authenticated user for discovery, and only administrators can create, update, or delete them. This clear segregation ensures that `list` operations (QAPs) for events are straightforward and performant for all users, as no complex filtering is required within the security rules.\n2.  **`/adherents/{adherentId}`**: Adherent profiles are segregated to ensure individual members can manage their own data while admins can manage all. QAPs for members allow them to query their single profile. Admins can query all profiles.\n3.  **`/adherents/{adherentId}/inscriptions/{inscriptionId}`**: By placing `inscriptions` as a subcollection, individual members can securely and efficiently `list` their *own* registrations (`/adherents/{request.auth.uid}/inscriptions`). This aligns perfectly with QAPs. For administrators, a `collectionGroup` query on `inscriptions` can be enabled, allowing them to `list` all registrations across all adherents, for example, to view all registrations for a particular event. This leverages Firestore's capabilities for both user-specific and aggregate queries while maintaining strict security boundaries.\n4.  **`/roles_admins/{adminId}`**: A dedicated collection is used to store administrator UIDs. The *existence* of a document with a user's UID in this collection grants administrative privileges. This design (DBAC - Database Access Control) ensures global roles are managed within Firestore, are easily auditable, and security rules can check admin status efficiently via a simple `get()` on this collection, avoiding reliance on custom claims or complex rule logic.\n\n**Consistency and Predictability (Mandate D):**\n*   Wildcards like `adherentId`, `evenementId`, and `inscriptionId` are consistently descriptive.\n*   The use of standard Firebase Auth UIDs as document IDs for `adherents` and `roles_admins` ensures predictability.\n*   Explicit field names like `evenementId` and `adherentId` in the `Inscription` document maintain clarity and support flexible querying."
+    ]
   }
 }

@@ -1,121 +1,95 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
      * H2vl Connect Security Rules
-     *
-     * CORE PHILOSOPHY:
-     * This ruleset implements a dual-layered authorization model: strict user-ownership for personal 
-     * data and a robust role-based system (Admin) for organizational management. It prioritizes 
-     * "Authorization Independence" by ensuring the data required for a security decision is 
-     * immediately available in the document path or fields, minimizing cross-document lookups.
-     *
-     * DATA STRUCTURE:
-     * - /adherents/{userId}: User profiles where document ID equals Firebase Auth UID.
-     * - /evenements/{eventId}: Public event catalog accessible to all authenticated members.
-     * - /adherents/{userId}/inscriptions/{id}: Private subcollection for a user's event registrations.
-     * - /roles_admins/{userId}: A lookup collection defining administrative privileges.
-     *
-     * KEY SECURITY DECISIONS:
-     * 1. DBAC (Database Access Control): Admin status is determined by the presence of a 
-     *    user's UID within the `/roles_admins` collection.
-     * 2. Path-Based Ownership: User-specific data is nested under the user's UID path, 
-     *    making ownership checks highly performant and secure.
-     * 3. Denormalization: The 'adherentId' is enforced as an internal field on registration 
-     *    documents to allow for future aggregate reporting via Collection Group queries.
-     * 4. Immutable Identity: Relational fields (like the owner's ID) are made immutable after 
-     *    creation to prevent data hijacking.
      */
 
     // --- GLOBAL HELPER FUNCTIONS ---
 
-    /** Checks if the request is coming from a signed-in user. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** Checks if the authenticated user's UID matches the provided userId. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** Checks if the user is an owner and the document already exists (for updates/deletes). */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /** 
-     * Checks if the authenticated user is registered in the admins collection. 
-     * This is a "lookup-based" authorization pattern.
-     */
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admins/$(request.auth.uid));
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     // --- COLLECTION RULES ---
 
-    /**
-     * @description Rules for the admin roles registry. Only existing admins can view or manage roles.
-     * @path /roles_admins/{adminId}
-     * @allow (get) If the user is an admin checking their own status or another admin.
-     * @deny (create, update, delete) Restricted to manual database intervention or specific backend logic.
-     * @principle Role-Based Access Control (RBAC).
-     */
-    match /roles_admins/{adminId} {
+    /** Profils administrateurs */
+    match /admins/{adminId} {
       allow get: if isSignedIn() && (isOwner(adminId) || isAdmin());
       allow list: if isAdmin();
-      allow create, update, delete: if false; // Managed via privileged environment
-    }
-
-    /**
-     * @description Manages member profiles. Users control their own profile; admins have full oversight.
-     * @path /adherents/{adherentId}
-     * @allow (create) If the document ID matches the user's Auth UID.
-     * @deny (update) If the user attempts to change the internal 'id' field.
-     * @principle Ownership pattern with administrative override.
-     */
-    match /adherents/{adherentId} {
-      allow get, list: if isOwner(adherentId) || isAdmin();
-      allow create: if isOwner(adherentId) && request.resource.data.id == adherentId;
-      allow update: if (isExistingOwner(adherentId) || isAdmin()) && request.resource.data.id == resource.data.id;
+      allow create: if isSignedIn() && isOwner(adminId);
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
-    /**
-     * @description Event registrations stored as a subcollection of the Adherent.
-     * @path /adherents/{adherentId}/inscriptions/{inscriptionId}
-     * @allow (list) The owner listing their own registrations.
-     * @deny (create) If the internal 'adherentId' field does not match the parent path ID.
-     * @principle Relational integrity and path-based authorization.
-     */
-    match /adherents/{adherentId}/inscriptions/{inscriptionId} {
-      allow get, list: if isOwner(adherentId) || isAdmin();
-      allow create: if isOwner(adherentId) && request.resource.data.adherentId == adherentId;
-      allow update: if (isExistingOwner(adherentId) || isAdmin()) && request.resource.data.adherentId == resource.data.adherentId;
-      allow delete: if isExistingOwner(adherentId) || isAdmin();
+    /** Membres de l'association */
+    match /adherents/{adherentId} {
+      allow read, write: if isAdmin();
     }
 
-    /**
-     * @description Collection Group access for Inscriptions. Allows admins to query registrations across all users.
-     * @path /{path=**}/inscriptions/{inscriptionId}
-     * @allow (list) Only for administrators.
-     * @principle Administrative oversight for aggregate data.
-     */
-    match /{path=**}/inscriptions/{inscriptionId} {
-      allow read: if isAdmin();
-    }
-
-    /**
-     * @description Publicly readable association events.
-     * @path /evenements/{evenementId}
-     * @allow (get, list) All authenticated users to see upcoming events.
-     * @deny (write) Any non-admin user attempting to modify event details.
-     * @principle Public Read / Admin Write.
-     */
+    /** Événements */
     match /evenements/{evenementId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /** Inscriptions aux événements */
+    match /inscriptions/{inscriptionId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    /** Cotisations des membres */
+    match /cotisations/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    /** Campagnes d'e-mails */
+    match /email_campaigns/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    /** Suivi des e-mails (Tracking) */
+    match /email_tracking/{jeton} {
+      // Lecture autorisée pour la page de confirmation et les admins
+      allow get: if true; 
+      allow list: if isAdmin();
+      
+      // Création par l'admin (via API route ou dashboard)
+      allow create: if isAdmin();
+      
+      // Mise à jour publique limitée pour la confirmation de lecture
+      allow update: if (isAdmin()) || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'dateLecture'])
+        && request.resource.data.statut == 'confirmé'
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    /** Logs d'anniversaires */
+    match /logs_anniversaires/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    /** Logs d'administration */
+    match /logs_admin/{id} {
+      allow read, write: if isAdmin();
+    }
+    
+    /** Ancienne collection roles_admins (compatibilité) */
+    match /roles_admins/{id} {
+      allow read: if isSignedIn();
     }
   }
 }
