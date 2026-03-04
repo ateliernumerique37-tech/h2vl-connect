@@ -6,6 +6,18 @@ import { doc, setDoc } from 'firebase/firestore';
 
 export async function POST(request: Request) {
   try {
+    // 1. Vérification des variables d'environnement obligatoires
+    const requiredEnvVars = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASS'];
+    const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+    
+    if (missingVars.length > 0) {
+      console.error('SMTP Configuration Error: Missing variables:', missingVars.join(', '));
+      return NextResponse.json({ 
+        success: false, 
+        error: `Configuration SMTP incomplète. Variables manquantes : ${missingVars.join(', ')}` 
+      }, { status: 500 });
+    }
+
     const data = await request.json();
     const { 
       to, 
@@ -20,11 +32,15 @@ export async function POST(request: Request) {
       eventLocation, 
       price, 
       menuChoices,
-      logId, 
       campaignSubject,
       campaignBody
     } = data;
 
+    if (!to) {
+      return NextResponse.json({ success: false, error: "Destinataire manquant." }, { status: 400 });
+    }
+
+    // 2. Configuration du transporteur avec timeouts
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT),
@@ -33,22 +49,29 @@ export async function POST(request: Request) {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      connectionTimeout: 10000, // 10 secondes
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     const { firestore } = initializeFirebase();
     const jeton = crypto.randomUUID();
     const dateEnvoi = new Date().toISOString();
 
-    // Enregistrement du tracking dans Firestore
+    // 3. Enregistrement du tracking dans Firestore
     if (adherentId) {
-      await setDoc(doc(firestore, 'email_tracking', jeton), {
-        jeton,
-        adherentId,
-        campagneId: campaignId || 'direct',
-        statut: 'envoyé',
-        dateEnvoi,
-        dateLecture: null
-      });
+      try {
+        await setDoc(doc(firestore, 'email_tracking', jeton), {
+          jeton,
+          adherentId,
+          campagneId: campaignId || 'direct',
+          statut: 'envoyé',
+          dateEnvoi,
+          dateLecture: null
+        });
+      } catch (fsError) {
+        console.warn("Firestore Tracking Error (Non-blocking):", fsError);
+      }
     }
 
     const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://h2vl-connect.web.app';
@@ -58,7 +81,7 @@ export async function POST(request: Request) {
     let subject = providedSubject || `H2VL : Message`;
 
     const commonFooter = `
-      <div style="margin-top: 40px; padding: 20px; border-top: 2px solid #eee; text-align: center;">
+      <div style="margin-top: 40px; padding: 20px; border-top: 2px solid #eee; text-align: center; font-family: sans-serif;">
         <p style="font-size: 14px; color: #666; margin-bottom: 20px;">
           Afin de nous aider à mieux gérer nos communications, merci de confirmer la réception :
         </p>
@@ -87,7 +110,7 @@ export async function POST(request: Request) {
         </div>
       `;
     } else if (type === 'campaign') {
-      subject = campaignSubject;
+      subject = campaignSubject || subject;
       html = `
         <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #1A75D1; padding: 20px; text-align: center;">
@@ -121,17 +144,21 @@ export async function POST(request: Request) {
     }
 
     const mailOptions = {
-      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.EMAIL_FROM_NAME || 'H2VL'}" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       html,
     };
 
+    // 4. Envoi effectif
     await transporter.sendMail(mailOptions);
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {
-    console.error('Erreur API Email:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('API Email Error:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message || "Erreur lors de l'envoi de l'e-mail." 
+    }, { status: 500 });
   }
 }
