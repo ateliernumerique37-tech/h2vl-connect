@@ -156,6 +156,8 @@ export default function DashboardHomePage() {
                 body: JSON.stringify({
                     to: adherent.email,
                     firstName: adherent.prenom,
+                    adherentId: adherent.id,
+                    campaignId: 'anniversaire',
                     type: 'birthday',
                     subject: `Joyeux anniversaire ${adherent.prenom} ! 🎉`,
                     customMessage

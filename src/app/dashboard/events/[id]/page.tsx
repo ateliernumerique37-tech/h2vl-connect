@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
@@ -406,7 +407,7 @@ export default function EventDetailPage() {
       if (event && adherent) {
         await addLog(db, auth, `Inscription : ${adherent.prenom} ${adherent.nom} à ${event.titre}`);
         
-        // Envoi de l'email de confirmation via l'API Nodemailer
+        // Envoi de l'email de confirmation via l'API Nodemailer avec tracking
         try {
           const formattedEventDate = new Date(event.date).toLocaleDateString("fr-FR", {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -418,6 +419,8 @@ export default function EventDetailPage() {
             body: JSON.stringify({
               to: adherent.email,
               firstName: adherent.prenom,
+              adherentId: adherent.id,
+              campaignId: `inscription_${event.id}`,
               eventTitle: event.titre,
               eventDate: formattedEventDate,
               eventLocation: event.lieu,
