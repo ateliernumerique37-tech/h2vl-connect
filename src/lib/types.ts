@@ -80,3 +80,20 @@ export interface LogAnniversaire {
   date_envoi: string; // YYYY-MM-DD
   statut: 'envoyé';
 }
+
+export interface CampagneEmail {
+  id: string;
+  sujet: string;
+  corps: string;
+  dateEnvoi: string;
+  nbDestinataires: number;
+}
+
+export interface EmailTracking {
+  jeton: string;
+  adherentId: string;
+  campagneId: string;
+  statut: 'envoyé' | 'confirmé';
+  dateEnvoi: string;
+  dateLecture: string | null;
+}
