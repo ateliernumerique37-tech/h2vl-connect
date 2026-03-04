@@ -4,10 +4,13 @@ import { useState, useMemo } from 'react';
 import type { Adherent, Evenement, Inscription } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
+import { AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--chart-3))', 'hsl(var(--muted-foreground))'];
 
@@ -79,7 +82,7 @@ export default function StatsPage() {
   }, [evenements, currentYear]);
 
   /**
-   * Nettoyage et agrégation des données (Logicielle & Accessibilité).
+   * Nettoyage et agrégation des données.
    */
   const stats = useMemo(() => {
     if (!adherents || !evenements || !inscriptions) return null;
@@ -102,7 +105,7 @@ export default function StatsPage() {
       { name: 'Non renseigné', value: genreCounts['Non renseigné'] || 0 },
     ].filter(d => d.value > 0);
 
-    // 2. Pyramide des âges (filtrage strict)
+    // 2. Pyramide des âges
     const validAges = adherents
       .map(a => getAge(a.dateNaissance))
       .filter((age): age is number => age !== null && age >= 0);
@@ -143,6 +146,7 @@ export default function StatsPage() {
       totalEvenements: yearEvenements.length,
       avgInscriptions,
       cotisationsAJour: adherents.filter(a => a.cotisationAJour).length,
+      validAgesCount: validAges.length
     };
   }, [adherents, evenements, inscriptions, selectedYear]);
 
@@ -157,7 +161,7 @@ export default function StatsPage() {
     );
   }
 
-  if (!stats) return null;
+  if (!stats || typeof stats === 'string') return null;
 
   return (
     <div className="space-y-6">
@@ -166,7 +170,13 @@ export default function StatsPage() {
           <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Analyse Statistique</h1>
           <p className="text-muted-foreground">Données consolidées basées sur l'intégralité des 13 champs adhérents.</p>
         </div>
-        <div className="w-full sm:w-auto">
+        <div className="w-full sm:w-auto flex items-center gap-3">
+          <Button variant="outline" asChild className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+            <Link href="/dashboard/stats/inactifs">
+              <AlertCircle className="mr-2 h-4 w-4" />
+              Diagnostic Inactivité
+            </Link>
+          </Button>
           <Select onValueChange={setSelectedYear} defaultValue={selectedYear}>
             <SelectTrigger className="w-full sm:w-[180px] min-h-[40px] focus-visible:ring-2" aria-label="Choisir l'année de référence">
               <SelectValue placeholder="Année" />
@@ -225,7 +235,6 @@ export default function StatsPage() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            {/* Tableau sr-only pour WCAG 2.2 */}
             <div className="sr-only">
               <table>
                 <caption>Répartition par Genre</caption>
@@ -256,7 +265,6 @@ export default function StatsPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            {/* Tableau sr-only pour WCAG 2.2 */}
             <div className="sr-only">
               <table>
                 <caption>Engagement Associatif</caption>
@@ -272,7 +280,7 @@ export default function StatsPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Pyramide des Âges</CardTitle>
-            <CardDescription>Distribution des adhérents par tranches d'âge (Calcul basé sur {validAges.length} dates valides).</CardDescription>
+            <CardDescription>Distribution des adhérents par tranches d'âge (Calcul basé sur {stats.validAgesCount} dates valides).</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[300px] w-full" aria-hidden="true">
@@ -286,7 +294,6 @@ export default function StatsPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            {/* Tableau sr-only pour WCAG 2.2 */}
             <div className="sr-only">
               <table>
                 <caption>Distribution par tranches d'âge</caption>
@@ -302,5 +309,3 @@ export default function StatsPage() {
     </div>
   );
 }
-
-const validAges: number[] = []; // Variable locale pour le message d'audit ci-dessus
