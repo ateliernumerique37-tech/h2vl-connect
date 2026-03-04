@@ -98,20 +98,30 @@ export default function CommunicationPage() {
       return;
     }
 
+    if (isLoadingAdherents) {
+      toast({ variant: 'destructive', title: 'Attente', description: 'La liste des adhérents n\'est pas encore disponible.' });
+      return;
+    }
+
     setIsSending(true);
     setSendProgress(0);
 
     try {
-      // 1. Création de la campagne dans Firestore
+      // 1. Récupération précise des adhérents ciblés AVANT de créer la campagne
+      const targetAdherents = adherents?.filter(a => selectedIds.has(a.id)) || [];
+      
+      if (targetAdherents.length === 0) {
+        throw new Error("Aucun destinataire valide trouvé pour l'envoi.");
+      }
+
+      // 2. Création de la campagne dans Firestore
       const campaignRef = await addDoc(collection(db, 'email_campaigns'), {
         sujet: subject,
         corps: body,
         dateEnvoi: new Date().toISOString(),
-        nbDestinataires: selectedIds.size
+        nbDestinataires: targetAdherents.length
       });
 
-      // 2. Récupération précise des adhérents ciblés
-      const targetAdherents = adherents?.filter(a => selectedIds.has(a.id)) || [];
       let successCount = 0;
 
       // 3. Boucle d'envoi
@@ -136,10 +146,11 @@ export default function CommunicationPage() {
           if (res.ok) {
             successCount++;
           } else {
-            console.error(`Erreur pour ${adherent.email}:`, await res.text());
+            const errorText = await res.text();
+            console.error(`Erreur d'envoi pour ${adherent.email}:`, errorText);
           }
         } catch (e) {
-          console.error(`Echec critique pour ${adherent.email}:`, e);
+          console.error(`Echec critique lors de l'appel API pour ${adherent.email}:`, e);
         }
 
         setSendProgress(Math.round(((i + 1) / targetAdherents.length) * 100));
@@ -148,17 +159,28 @@ export default function CommunicationPage() {
       await addLog(db, auth, `Envoi campagne : ${subject} (${successCount}/${targetAdherents.length} mails réussis)`);
       
       if (successCount > 0) {
-        toast({ title: 'Campagne terminée', description: `${successCount} e-mails envoyés avec succès.` });
+        toast({ 
+          title: 'Campagne terminée', 
+          description: `${successCount} e-mail${successCount > 1 ? 's' : ''} envoyé${successCount > 1 ? 's' : ''} avec succès.` 
+        });
         setSubject('');
         setBody('');
         setSelectedIds(new Set());
       } else {
-        toast({ variant: 'destructive', title: 'Échec de l\'envoi', description: "Aucun e-mail n'a pu être envoyé. Vérifiez la configuration SMTP." });
+        toast({ 
+          variant: 'destructive', 
+          title: 'Échec de l\'envoi', 
+          description: "Aucun e-mail n'a pu être envoyé. Vérifiez la configuration SMTP." 
+        });
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erreur lors du traitement de la campagne:", error);
-      toast({ variant: 'destructive', title: 'Erreur système', description: "Impossible d'initier la campagne." });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Erreur système', 
+        description: error.message || "Impossible d'initier la campagne." 
+      });
     } finally {
       setIsSending(false);
     }
@@ -370,7 +392,7 @@ export default function CommunicationPage() {
                 )}
                 <Button 
                   className="w-full h-12 text-base" 
-                  disabled={isSending || selectedIds.size === 0}
+                  disabled={isSending || selectedIds.size === 0 || isLoadingAdherents}
                   onClick={handleSendCampaign}
                 >
                   {isSending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}

@@ -7,6 +7,10 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   buildExcludes: [/public\/.*$/], // Exclure les routes publiques dynamiques du SW
+  // NavigateFallbackDenylist empêche le Service Worker de gérer ces URLs comme des requêtes de navigation.
+  // Crucial pour les pages publiques dynamiques qui ne doivent pas être gérées par la logique PWA.
+  // @ts-ignore
+  navigateFallbackDenylist: [/^\/public/],
 });
 
 const nextConfig: NextConfig = {
