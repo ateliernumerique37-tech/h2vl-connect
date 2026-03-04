@@ -1,6 +1,8 @@
 
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { initializeFirebase } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 export async function POST(request: Request) {
   try {
@@ -8,6 +10,8 @@ export async function POST(request: Request) {
     const { 
       to, 
       firstName, 
+      adherentId,
+      campaignId,
       type, 
       customMessage, 
       subject: providedSubject, 
@@ -16,7 +20,7 @@ export async function POST(request: Request) {
       eventLocation, 
       price, 
       menuChoices,
-      logId, // ID de tracking unique
+      logId, 
       campaignSubject,
       campaignBody
     } = data;
@@ -31,97 +35,86 @@ export async function POST(request: Request) {
       },
     });
 
-    let html = '';
-    let subject = providedSubject || `Confirmation d'inscription : ${eventTitle}`;
+    const { firestore } = initializeFirebase();
+    const jeton = crypto.randomUUID();
+    const dateEnvoi = new Date().toISOString();
 
-    // Base URL pour le pixel de tracking (détection automatique de l'host si possible)
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://h2vl-connect.web.app';
-    const trackingPixel = logId ? `<img src="${origin}/api/track/${logId}" width="1" height="1" style="display:none;" />` : '';
+    // Enregistrement du tracking dans Firestore
+    if (adherentId) {
+      await setDoc(doc(firestore, 'email_tracking', jeton), {
+        jeton,
+        adherentId,
+        campagneId: campaignId || 'direct',
+        statut: 'envoyé',
+        dateEnvoi,
+        dateLecture: null
+      });
+    }
+
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://h2vl-connect.web.app';
+    const confirmationUrl = `${origin}/public/confirmation/${jeton}`;
+    
+    let html = '';
+    let subject = providedSubject || `H2VL : Message`;
+
+    const commonFooter = `
+      <div style="margin-top: 40px; padding: 20px; border-top: 2px solid #eee; text-align: center;">
+        <p style="font-size: 14px; color: #666; margin-bottom: 20px;">
+          Afin de nous aider à mieux gérer nos communications, merci de confirmer la réception :
+        </p>
+        <a href="${confirmationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #1A75D1; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+          Accuser réception de cet e-mail
+        </a>
+        <p style="margin-top: 30px; font-size: 14px; color: #666;">
+          Cordialement,<br/>
+          <strong>EVA</strong>, la petite mascotte de h2vl qui veille sur vous ✨
+        </p>
+      </div>
+    `;
 
     if (type === 'birthday') {
+      subject = subject || `Joyeux Anniversaire ! 🎂`;
       html = `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+        <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #1A75D1; padding: 20px; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 24px;">Joyeux Anniversaire ! 🎂</h1>
           </div>
           <div style="padding: 30px;">
             <p style="font-size: 16px; color: #1e40af; font-weight: bold;">Bonjour ${firstName},</p>
             <p style="font-size: 16px; color: #333;">${customMessage}</p>
-            <p style="margin-top: 30px;">Nous nous réjouissons de vous revoir très bientôt parmi nous !</p>
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="font-size: 14px; color: #666;">
-              Cordialement,<br/>
-              <strong>EVA</strong>, la petite mascotte de h2vl qui veille sur vous ✨
-            </p>
-          </div>
-          <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
-            Ceci est un message de l'association H2VL.
+            ${commonFooter}
           </div>
         </div>
       `;
     } else if (type === 'campaign') {
       subject = campaignSubject;
       html = `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+        <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #1A75D1; padding: 20px; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 20px;">H2VL : Information</h1>
           </div>
           <div style="padding: 30px;">
             <p style="font-size: 16px; font-weight: bold;">Bonjour ${firstName},</p>
             <div style="font-size: 16px; color: #333; white-space: pre-wrap;">${campaignBody}</div>
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="font-size: 14px; color: #666;">
-              Cordialement,<br/>
-              <strong>EVA</strong>, la petite mascotte de h2vl qui veille sur vous ✨
-            </p>
-          </div>
-          ${trackingPixel}
-          <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
-            Ceci est un message de l'association H2VL.
+            ${commonFooter}
           </div>
         </div>
       `;
     } else {
-      let menuHtml = '';
-      if (menuChoices && Object.values(menuChoices).some(v => v)) {
-        menuHtml = `
-          <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-left: 4px solid #1A75D1; border-radius: 4px;">
-            <h3 style="margin-top: 0; color: #1A75D1;">Vos choix de menu :</h3>
-            <ul style="list-style: none; padding: 0;">
-              ${menuChoices.aperitifChoisi ? `<li style="margin-bottom: 8px;"><strong>Apéritif :</strong> ${menuChoices.aperitifChoisi}</li>` : ''}
-              ${menuChoices.entreeChoisie ? `<li style="margin-bottom: 8px;"><strong>Entrée :</strong> ${menuChoices.entreeChoisie}</li>` : ''}
-              ${menuChoices.platChoisi ? `<li style="margin-bottom: 8px;"><strong>Plat principal :</strong> ${menuChoices.platChoisi}</li>` : ''}
-              ${menuChoices.fromageChoisi ? `<li style="margin-bottom: 8px;"><strong>Fromage :</strong> ${menuChoices.fromageChoisi}</li>` : ''}
-              ${menuChoices.dessertChoisi ? `<li style="margin-bottom: 8px;"><strong>Dessert :</strong> ${menuChoices.dessertChoisi}</li>` : ''}
-            </ul>
-          </div>
-        `;
-      }
-
+      subject = subject || `Confirmation d'inscription : ${eventTitle}`;
       html = `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+        <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #1A75D1; padding: 20px; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 24px;">Confirmation d'Inscription</h1>
           </div>
           <div style="padding: 30px;">
             <p style="font-size: 16px;">Bonjour <strong>${firstName}</strong>,</p>
-            <p>Nous avons le plaisir de vous confirmer votre inscription à l'événement :</p>
             <div style="margin: 25px 0; padding: 20px; background-color: #eff6ff; border-radius: 8px; border: 1px solid #dbeafe;">
               <h2 style="margin-top: 0; color: #1e40af; font-size: 20px;">${eventTitle}</h2>
-              <p style="margin-bottom: 5px;">📅 <strong>Date :</strong> ${eventDate}</p>
-              <p style="margin-bottom: 5px;">📍 <strong>Lieu :</strong> ${eventLocation}</p>
-              <p style="margin: 0;">💰 <strong>Participation :</strong> ${price > 0 ? `${price.toFixed(2)} €` : 'Gratuit'}</p>
+              <p>📅 <strong>Date :</strong> ${eventDate}</p>
+              <p>📍 <strong>Lieu :</strong> ${eventLocation}</p>
             </div>
-            ${menuHtml}
-            <p style="margin-top: 30px;">Nous nous réjouissons de vous retrouver pour ce moment de partage !</p>
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="font-size: 14px; color: #666;">
-              Cordialement,<br/>
-              <strong>EVA</strong>, la petite mascotte de h2vl qui veille sur vous ✨
-            </p>
-          </div>
-          <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
-            Ceci est un message automatique de l'association H2VL.
+            ${commonFooter}
           </div>
         </div>
       `;
@@ -138,7 +131,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {
-    console.error('Erreur Nodemailer:', error);
+    console.error('Erreur API Email:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

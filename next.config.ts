@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 import withPWAInit from "@ducanh2912/next-pwa";
 
@@ -5,6 +6,7 @@ const withPWA = withPWAInit({
   dest: "public",
   register: true,
   skipWaiting: true,
+  buildExcludes: [/public\/.*$/], // Exclure les routes publiques dynamiques du SW
 });
 
 const nextConfig: NextConfig = {

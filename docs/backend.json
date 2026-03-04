@@ -99,6 +99,18 @@
         "date_envoi": { "type": "string" },
         "statut": { "type": "string", "enum": ["envoyé"] }
       }
+    },
+    "EmailTracking": {
+      "title": "EmailTracking",
+      "type": "object",
+      "properties": {
+        "jeton": { "type": "string" },
+        "adherentId": { "type": "string" },
+        "campagneId": { "type": "string" },
+        "statut": { "type": "string", "enum": ["envoyé", "confirmé"] },
+        "dateEnvoi": { "type": "string", "format": "date-time" },
+        "dateLecture": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "auth": {
@@ -140,6 +152,10 @@
     "/logs_anniversaires/{logId}": {
       "schema": "#/backend/entities/LogAnniversaire",
       "description": "Suivi des envois d'emails d'anniversaire."
+    },
+    "/email_tracking/{jeton}": {
+      "schema": "#/backend/entities/EmailTracking",
+      "description": "Suivi manuel de réception des e-mails."
     }
   }
 }
