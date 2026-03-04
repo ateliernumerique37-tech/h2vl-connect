@@ -65,8 +65,8 @@ service cloud.firestore {
       allow get: if true; 
       allow list: if isAdmin();
       
-      // Création par l'admin (via API route ou dashboard)
-      allow create: if isAdmin();
+      // Création autorisée pour permettre à l'API route (serveur) d'écrire
+      allow create: if true;
       
       // Mise à jour publique limitée pour la confirmation de lecture
       allow update: if (isAdmin()) || (

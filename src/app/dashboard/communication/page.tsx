@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Search, Send, MailCheck, Filter, Users, BarChart3, ChevronRight, CheckCircle2, Clock, Calendar } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase, useAuth } from '@/firebase';
-import { collection, query, orderBy, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc } from 'firebase/firestore';
 import { addLog } from '@/services/logsService';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -102,6 +102,7 @@ export default function CommunicationPage() {
     setSendProgress(0);
 
     try {
+      // 1. Création de la campagne dans Firestore
       const campaignRef = await addDoc(collection(db, 'email_campaigns'), {
         sujet: subject,
         corps: body,
@@ -109,38 +110,55 @@ export default function CommunicationPage() {
         nbDestinataires: selectedIds.size
       });
 
-      const selectedAdherents = adherents?.filter(a => selectedIds.has(a.id)) || [];
+      // 2. Récupération précise des adhérents ciblés
+      const targetAdherents = adherents?.filter(a => selectedIds.has(a.id)) || [];
       let successCount = 0;
 
-      for (let i = 0; i < selectedAdherents.length; i++) {
-        const adherent = selectedAdherents[i];
+      // 3. Boucle d'envoi
+      for (let i = 0; i < targetAdherents.length; i++) {
+        const adherent = targetAdherents[i];
         
-        const res = await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: adherent.email,
-            firstName: adherent.prenom,
-            adherentId: adherent.id,
-            campaignId: campaignRef.id,
-            type: 'campaign',
-            campaignSubject: subject,
-            campaignBody: body
-          }),
-        });
+        try {
+          const res = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: adherent.email,
+              firstName: adherent.prenom,
+              adherentId: adherent.id,
+              campaignId: campaignRef.id,
+              type: 'campaign',
+              campaignSubject: subject,
+              campaignBody: body
+            }),
+          });
 
-        if (res.ok) successCount++;
-        setSendProgress(Math.round(((i + 1) / selectedAdherents.length) * 100));
+          if (res.ok) {
+            successCount++;
+          } else {
+            console.error(`Erreur pour ${adherent.email}:`, await res.text());
+          }
+        } catch (e) {
+          console.error(`Echec critique pour ${adherent.email}:`, e);
+        }
+
+        setSendProgress(Math.round(((i + 1) / targetAdherents.length) * 100));
       }
 
-      await addLog(db, auth, `Envoi campagne : ${subject} (${successCount} mails)`);
-      toast({ title: 'Campagne terminée', description: `${successCount} e-mails envoyés avec succès.` });
+      await addLog(db, auth, `Envoi campagne : ${subject} (${successCount}/${targetAdherents.length} mails réussis)`);
       
-      setSubject('');
-      setBody('');
-      setSelectedIds(new Set());
+      if (successCount > 0) {
+        toast({ title: 'Campagne terminée', description: `${successCount} e-mails envoyés avec succès.` });
+        setSubject('');
+        setBody('');
+        setSelectedIds(new Set());
+      } else {
+        toast({ variant: 'destructive', title: 'Échec de l\'envoi', description: "Aucun e-mail n'a pu être envoyé. Vérifiez la configuration SMTP." });
+      }
+      
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Erreur d\'envoi', description: "Une erreur est survenue." });
+      console.error("Erreur lors du traitement de la campagne:", error);
+      toast({ variant: 'destructive', title: 'Erreur système', description: "Impossible d'initier la campagne." });
     } finally {
       setIsSending(false);
     }
@@ -198,7 +216,6 @@ export default function CommunicationPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* --- ONGLET ENVOI --- */}
         <TabsContent value="envoi" className="space-y-6">
           <div className="grid gap-8 lg:grid-cols-2">
             <Card className="h-fit">
@@ -364,10 +381,8 @@ export default function CommunicationPage() {
           </div>
         </TabsContent>
 
-        {/* --- ONGLET SUIVI --- */}
         <TabsContent value="suivi" className="space-y-6">
           <div className="grid gap-8 lg:grid-cols-3">
-            {/* Liste des campagnes */}
             <div className="lg:col-span-1 space-y-4">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-primary" /> Historique
@@ -418,7 +433,6 @@ export default function CommunicationPage() {
               )}
             </div>
 
-            {/* Détail de la campagne sélectionnée */}
             <div className="lg:col-span-2">
               {selectedCampaignId ? (
                 <Card className="h-full">

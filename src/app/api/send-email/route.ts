@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Destinataire manquant." }, { status: 400 });
     }
 
-    // 2. Configuration du transporteur avec timeouts
+    // 2. Configuration du transporteur avec timeouts robustes
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT),
@@ -49,18 +49,18 @@ export async function POST(request: Request) {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
-      connectionTimeout: 10000, // 10 secondes
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 30000,
     });
 
-    const { firestore } = initializeFirebase();
     const jeton = crypto.randomUUID();
     const dateEnvoi = new Date().toISOString();
 
-    // 3. Enregistrement du tracking dans Firestore
+    // 3. Enregistrement du tracking dans Firestore (Non-bloquant pour l'envoi)
     if (adherentId) {
       try {
+        const { firestore } = initializeFirebase();
         await setDoc(doc(firestore, 'email_tracking', jeton), {
           jeton,
           adherentId,
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
           dateLecture: null
         });
       } catch (fsError) {
-        console.warn("Firestore Tracking Error (Non-blocking):", fsError);
+        console.warn("Firestore Tracking Error (Envoi maintenu) :", fsError);
       }
     }
 
