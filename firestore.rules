@@ -42,8 +42,7 @@ service cloud.firestore {
     }
 
     match /logs_anniversaires/{logId} {
-      allow read, create: if isAuthenticated();
-      allow update, delete: if false;
+      allow read, write: if isAuthenticated();
     }
   }
 }
