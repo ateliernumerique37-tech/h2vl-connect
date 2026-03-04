@@ -29,9 +29,7 @@ export async function POST(request: Request) {
       subject: providedSubject, 
       eventTitle, 
       eventDate, 
-      eventLocation, 
-      price, 
-      menuChoices,
+      eventLocation,
       campaignSubject,
       campaignBody
     } = data;
@@ -74,7 +72,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://h2vl-connect.web.app';
+    // URL réelle de l'application en production
+    const origin = 'https://studio--studio-6079106449-cf583.us-central1.hosted.app';
     const confirmationUrl = `${origin}/public/confirmation/${jeton}`;
     
     let html = '';

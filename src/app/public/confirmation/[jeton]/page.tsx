@@ -1,124 +1,116 @@
 
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useParams } from 'next/navigation';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, Loader2, MailCheck, AlertTriangle } from 'lucide-react';
-import { Logo } from '@/components/icons';
+/**
+ * @fileOverview Page de confirmation publique pour l'accusé de réception des e-mails.
+ * Cette page est accessible sans authentification via un jeton unique.
+ */
 
 export const dynamic = 'force-dynamic';
+
+import { Suspense, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { initializeFirebase } from '@/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Logo } from '@/components/icons';
 
 function ConfirmationContent() {
   const params = useParams();
   const jeton = params?.jeton as string;
-  const db = useFirestore();
-  
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('Validation de votre lecture...');
 
   useEffect(() => {
-    if (!jeton || !db) return;
+    if (!jeton) return;
 
-    const validateTracking = async () => {
+    const confirmReading = async () => {
       try {
-        const docRef = doc(db, 'email_tracking', jeton);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          
-          if (data.statut === 'confirmé') {
-            setStatus('success');
-            setMessage('Votre réception était déjà confirmée. Merci !');
-            return;
-          }
-
-          // Mise à jour du statut
-          await updateDoc(docRef, {
-            statut: 'confirmé',
-            dateLecture: new Date().toISOString()
-          });
-
-          setStatus('success');
-          setMessage('Merci ! Nous avons bien enregistré votre lecture. À bientôt chez H2VL.');
-        } else {
-          setStatus('error');
-          setMessage('Lien de confirmation invalide ou expiré.');
-        }
+        const { firestore } = initializeFirebase();
+        const trackingRef = doc(firestore, 'email_tracking', jeton);
+        
+        // Mise à jour du statut dans Firestore
+        await updateDoc(trackingRef, {
+          statut: 'confirmé',
+          dateLecture: new Date().toISOString()
+        });
+        
+        setStatus('success');
       } catch (error) {
-        console.error("Confirmation error:", error);
+        console.error("Erreur de confirmation:", error);
         setStatus('error');
-        setMessage('Une erreur est survenue lors de la confirmation.');
       }
     };
 
-    validateTracking();
-  }, [jeton, db]);
+    confirmReading();
+  }, [jeton]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="mx-auto w-full max-w-md shadow-xl border-2">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="rounded-full bg-primary/10 p-3">
-              <Logo className="h-12 w-12 text-primary" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">H2VL Connect</CardTitle>
-        </CardHeader>
-        <CardContent className="text-center py-8">
-          {status === 'loading' && (
-            <div className="space-y-4">
-              <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary opacity-50" />
-              <p className="text-muted-foreground font-medium">{message}</p>
-            </div>
-          )}
+  if (status === 'loading') {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-muted-foreground animate-pulse">Validation de votre lecture...</p>
+      </div>
+    );
+  }
 
-          {status === 'success' && (
-            <div className="space-y-4 animate-in fade-in zoom-in duration-300">
-              <CheckCircle2 className="mx-auto h-16 w-16 text-green-500" />
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold">Réception confirmée</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  {message}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {status === 'error' && (
-            <div className="space-y-4 animate-in fade-in zoom-in duration-300">
-              <AlertTriangle className="mx-auto h-16 w-16 text-destructive" />
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-destructive">Oups !</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  {message}
-                </p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-        <div className="p-6 border-t bg-muted/30 text-center">
-          <p className="text-xs text-muted-foreground">
-            Ceci est un message automatique de l'association H2VL.
+  if (status === 'error') {
+    return (
+      <div className="flex flex-col items-center gap-6 text-center max-w-md">
+        <div className="rounded-full bg-destructive/10 p-4">
+          <XCircle className="h-12 w-12 text-destructive" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold">Lien invalide</h1>
+          <p className="text-muted-foreground">
+            Nous n'avons pas pu valider cet accusé de réception. Le lien est peut-être expiré ou a déjà été utilisé.
           </p>
         </div>
-      </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-8 text-center animate-in fade-in zoom-in duration-700 max-w-lg">
+      <div className="rounded-full bg-green-50 p-6 border-4 border-green-100">
+        <CheckCircle2 className="h-20 w-20 text-green-500" />
+      </div>
+      <div className="space-y-4">
+        <h1 className="text-4xl font-extrabold text-primary tracking-tight">Merci !</h1>
+        <div className="space-y-2">
+          <p className="text-xl text-muted-foreground leading-relaxed">
+            Nous avons bien enregistré votre lecture. Votre confirmation aide l'association dans sa gestion quotidienne.
+          </p>
+          <p className="text-2xl font-bold text-primary/90 mt-4 italic">
+            À bientôt chez H2VL ✨
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function ConfirmationPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary opacity-20" />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6">
+      <div className="mb-12 flex items-center gap-3">
+        <Logo className="h-10 w-10 text-primary" />
+        <span className="text-2xl font-bold text-primary">H2VL Connect</span>
       </div>
-    }>
-      <ConfirmationContent />
-    </Suspense>
+      
+      <main className="w-full max-w-xl bg-white rounded-3xl shadow-xl border border-slate-100 p-10 md:p-16">
+        <Suspense fallback={
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="text-muted-foreground">Chargement...</p>
+          </div>
+        }>
+          <ConfirmationContent />
+        </Suspense>
+      </main>
+      
+      <footer className="mt-12 text-slate-400 text-sm">
+        © {new Date().getFullYear()} Association H2VL - Tous droits réservés.
+      </footer>
+    </div>
   );
 }
