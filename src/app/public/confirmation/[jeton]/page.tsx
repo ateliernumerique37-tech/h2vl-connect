@@ -2,128 +2,121 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useParams } from 'next/navigation';
+import { useFirestore } from '@/firebase';
+import { collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { Logo } from '@/components/icons';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Composant de contenu pour la confirmation.
- * Extrait du layout racine pour bénéficier de Suspense et éviter les erreurs Next.js 15.
- */
 function ConfirmationContent() {
   const params = useParams();
-  const jeton = params?.jeton as string;
+  const db = useFirestore();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
-    async function validateToken() {
-      if (!jeton) {
-        setStatus('error');
-        setMessage("Le lien est incomplet (jeton manquant dans l'URL).");
+    const confirmRead = async () => {
+      const jeton = params?.jeton as string;
+      
+      if (!jeton || !db) {
+        if (!jeton) setErrorMessage("Jeton manquant dans l'URL.");
         return;
       }
 
       try {
-        // On appelle l'API interne qui gère la communication avec Firestore
-        const response = await fetch('/api/confirm-read', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jeton }),
+        console.log('[Confirmation] Tentative de validation pour:', jeton);
+        
+        // 1. Recherche du document par le champ 'jeton'
+        const q = query(collection(db, 'email_tracking'), where('jeton', '==', jeton));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          console.error('[Confirmation] Jeton inconnu:', jeton);
+          setStatus('error');
+          setErrorMessage("Lien invalide ou expiré (Document non trouvé).");
+          setDebugInfo({ jeton, reason: 'NOT_FOUND' });
+          return;
+        }
+
+        // 2. Mise à jour du document (on prend le premier trouvé)
+        const docRef = querySnapshot.docs[0].ref;
+        await updateDoc(docRef, {
+          statut: 'confirmé',
+          dateLecture: serverTimestamp()
         });
 
-        const data = await response.json();
-
-        if (response.ok) {
-          setStatus('success');
-        } else {
-          setStatus('error');
-          setMessage(data.error || "Une erreur est survenue lors de la validation.");
-          setDebugInfo({ 
-            httpCode: response.status, 
-            jeton,
-            serverError: data.details || data.error,
-            stack: data.stack 
-          });
-        }
-      } catch (err: any) {
-        console.error("Fetch error:", err);
+        console.log('[Confirmation] Succès pour:', jeton);
+        setStatus('success');
+      } catch (error: any) {
+        console.error('[Confirmation] Erreur Firestore:', error);
         setStatus('error');
-        setMessage("Erreur technique de connexion au serveur : " + err.message);
-        setDebugInfo({ error: err.message, stack: err.stack });
+        setErrorMessage(error.message || "Une erreur technique est survenue.");
+        setDebugInfo({ 
+          jeton, 
+          code: error.code, 
+          message: error.message 
+        });
       }
-    }
+    };
 
-    // Un léger délai peut être utile si Firestore vient juste de créer le doc via l'API d'envoi
-    const timer = setTimeout(validateToken, 500);
-    return () => clearTimeout(timer);
-  }, [jeton]);
+    confirmRead();
+  }, [params?.jeton, db]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="mx-auto w-full max-w-md shadow-lg border-2">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+      <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
         <CardHeader className="text-center pb-2">
-          <div className="mb-4 flex justify-center">
+          <div className="flex justify-center mb-4">
             <Logo className="h-12 w-12 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">Accusé de réception</CardTitle>
+          <CardTitle className="text-2xl font-bold">H2VL Connect</CardTitle>
         </CardHeader>
-        <CardContent className="text-center space-y-6 pt-4">
+        <CardContent className="pt-6">
           {status === 'loading' && (
-            <div className="flex flex-col items-center gap-4 py-8">
-              <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <p className="text-muted-foreground animate-pulse font-medium">Validation de votre message en cours...</p>
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <Loader2 className="h-12 w-12 animate-spin text-primary opacity-50" />
+              <p className="text-muted-foreground animate-pulse">Validation de votre message...</p>
             </div>
           )}
 
           {status === 'success' && (
-            <div className="flex flex-col items-center gap-4 py-6">
-              <div className="rounded-full bg-green-100 p-3">
+            <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+              <div className="bg-green-100 p-3 rounded-full">
                 <CheckCircle2 className="h-12 w-12 text-green-600" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-foreground">Merci !</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Nous avons bien enregistré votre lecture. <br/>
-                  À bientôt chez <strong>H2VL</strong>. ✨
+                <h3 className="text-xl font-bold text-slate-900">Merci !</h3>
+                <p className="text-slate-600 leading-relaxed">
+                  Nous avons bien enregistré votre lecture.<br />
+                  À bientôt chez <strong>H2VL</strong>.
                 </p>
               </div>
             </div>
           )}
 
           {status === 'error' && (
-            <div className="flex flex-col items-center gap-4 py-4">
-              <div className="rounded-full bg-red-100 p-3">
-                <AlertCircle className="h-10 w-10 text-red-600" />
-              </div>
-              <div className="space-y-3">
-                <p className="text-foreground font-semibold leading-tight px-4">{message}</p>
-                <p className="text-sm text-muted-foreground">
-                  Si le problème persiste, vous pouvez simplement fermer cette page. <br/>
-                  Votre lecture sera peut-être validée manuellement ultérieurement.
-                </p>
-              </div>
-              
-              {/* Panneau de Diagnostic Technique */}
-              <div className="mt-6 w-full text-left bg-muted p-4 rounded-lg border text-[10px] font-mono overflow-hidden max-h-[200px] overflow-y-auto shadow-inner">
-                <div className="flex items-center gap-2 mb-2 text-primary border-b pb-1">
-                  <Info className="h-3 w-3" />
-                  <span className="font-bold uppercase tracking-wider">Diagnostic Technique (Debug)</span>
+            <div className="space-y-6 py-4">
+              <div className="flex flex-col items-center justify-center text-center space-y-4">
+                <div className="bg-red-100 p-3 rounded-full">
+                  <AlertCircle className="h-12 w-12 text-red-600" />
                 </div>
-                <div className="space-y-1 text-muted-foreground break-all whitespace-pre-wrap">
-                  <div>CODE_HTTP: {debugInfo?.httpCode || 'N/A'}</div>
-                  <div>JETON_ID: {debugInfo?.jeton || jeton || 'Inconnu'}</div>
-                  <div>MESSAGE: {debugInfo?.serverError || 'Aucun détail fourni par le serveur.'}</div>
-                  {debugInfo?.stack && (
-                    <div className="mt-2 pt-2 border-t border-muted-foreground/20 text-[8px] opacity-50">
-                      STACK_TRACE: {debugInfo.stack}
-                    </div>
-                  )}
+                <div className="space-y-2">
+                  <h3 className="text-lg font-bold text-red-900">Oups !</h3>
+                  <p className="text-sm text-red-700">{errorMessage}</p>
                 </div>
               </div>
+
+              {debugInfo && (
+                <div className="mt-8 rounded-lg bg-slate-900 p-4 font-mono text-[10px] text-slate-300 overflow-hidden">
+                  <p className="text-slate-500 mb-2 border-b border-slate-800 pb-1 uppercase tracking-widest font-bold">Diagnostic Technique</p>
+                  <pre className="whitespace-pre-wrap break-all">
+                    {JSON.stringify(debugInfo, null, 2)}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -132,11 +125,11 @@ function ConfirmationContent() {
   );
 }
 
-export default function TokenConfirmationPage() {
+export default function ConfirmationPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-primary opacity-50" />
       </div>
     }>
       <ConfirmationContent />
