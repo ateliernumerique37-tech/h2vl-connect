@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { initializeFirebase } from '@/firebase';
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Destinataire manquant." }, { status: 400 });
     }
 
-    // 2. Configuration du transporteur avec timeouts robustes
+    // 2. Configuration du transporteur
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT),
@@ -47,20 +46,18 @@ export async function POST(request: Request) {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 30000,
+      connectionTimeout: 10000,
     });
 
     const jeton = crypto.randomUUID();
     const dateEnvoi = new Date().toISOString();
 
-    // 3. Enregistrement du tracking dans Firestore (Non-bloquant pour l'envoi)
+    // 3. Enregistrement du tracking dans Firestore (Crucial: le document ID est le jeton)
     if (adherentId) {
       try {
         const { firestore } = initializeFirebase();
         await setDoc(doc(firestore, 'email_tracking', jeton), {
-          jeton,
+          jeton, // On garde aussi le champ jeton pour les requêtes where si besoin
           adherentId,
           campagneId: campaignId || 'direct',
           statut: 'envoyé',

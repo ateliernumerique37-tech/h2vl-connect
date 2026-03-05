@@ -1,25 +1,25 @@
 'use client';
 
-import { useEffect, useState, use, Suspense } from 'react';
-import { Logo } from '@/components/icons';
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { useEffect, useState, Suspense } from 'react';
+import { useParams } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckCircle2, Loader2, XCircle, MailCheck } from "lucide-react";
+import { Logo } from "@/components/icons";
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Composant interne gérant la logique de confirmation.
- */
-function ConfirmationContent({ jeton }: { jeton: string }) {
+function ConfirmationContent() {
+  const params = useParams();
+  const jeton = params?.jeton as string;
+  
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    if (!jeton) return;
+    async function validateJeton() {
+      if (!jeton) return;
 
-    const confirmRead = async () => {
       try {
-        console.log('Client: Tentative de confirmation pour le jeton:', jeton);
-        
         const response = await fetch('/api/confirm-read', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -28,87 +28,83 @@ function ConfirmationContent({ jeton }: { jeton: string }) {
 
         const data = await response.json();
 
-        if (data.success) {
-          console.log('Client: Confirmation réussie');
+        if (response.ok && data.success) {
           setStatus('success');
         } else {
-          console.error('Client: Erreur retournée par l\'API:', data.error);
           setStatus('error');
-          setErrorMsg(data.error || 'Lien invalide ou expiré.');
+          setErrorMessage(data.error || "Lien invalide ou expiré.");
         }
       } catch (err) {
-        console.error('Client: Erreur lors de l\'appel API:', err);
+        console.error("Erreur confirmation:", err);
         setStatus('error');
-        setErrorMsg('Une erreur technique est survenue.');
+        setErrorMessage("Impossible de joindre le serveur de validation.");
       }
-    };
+    }
 
-    // Petit délai pour laisser à Firestore le temps de propager l'écriture initiale du jeton
-    const timer = setTimeout(confirmRead, 500);
-    return () => clearTimeout(timer);
+    validateJeton();
   }, [jeton]);
 
   return (
-    <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-xl">
-      {status === 'loading' && (
-        <div className="space-y-4">
-          <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary opacity-20" />
-          <p className="text-muted-foreground">Vérification de votre message...</p>
-        </div>
-      )}
-
-      {status === 'success' && (
-        <div className="space-y-4 animate-in fade-in zoom-in duration-500">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <CheckCircle2 className="h-10 w-10 text-green-600" />
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-md shadow-xl border-2">
+        <CardHeader className="text-center pb-2">
+          <div className="flex justify-center mb-4">
+            <Logo className="h-12 w-12 text-primary" />
           </div>
-          <h2 className="text-xl font-bold text-foreground">Merci !</h2>
-          <p className="text-muted-foreground">
-            Nous avons bien enregistré votre lecture.<br />
-            À bientôt chez <strong>H2VL</strong>.
-          </p>
-          <p className="text-[10px] text-muted-foreground pt-6 italic uppercase tracking-wider">
-            Vous pouvez maintenant fermer cette fenêtre.
-          </p>
-        </div>
-      )}
+          <CardTitle className="text-2xl font-bold tracking-tight">H2VL Connect</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6 text-center space-y-6">
+          {status === 'loading' && (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+              <p className="text-muted-foreground font-medium">Validation de votre message...</p>
+            </div>
+          )}
 
-      {status === 'error' && (
-        <div className="space-y-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-            <XCircle className="h-10 w-10 text-red-600" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground">Oups...</h2>
-          <p className="text-muted-foreground">{errorMsg}</p>
-          <p className="text-xs text-muted-foreground pt-4">
-            Si vous avez déjà cliqué sur ce lien, votre lecture est déjà enregistrée.
-          </p>
-        </div>
-      )}
+          {status === 'success' && (
+            <div className="flex flex-col items-center gap-4 py-4 animate-in fade-in zoom-in duration-300">
+              <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle2 className="h-12 w-12 text-green-600" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-foreground">Réception confirmée !</h2>
+                <p className="text-muted-foreground leading-relaxed">
+                  Merci d'avoir pris connaissance de notre message.<br />
+                  Votre lecture a bien été enregistrée.
+                </p>
+              </div>
+              <p className="text-sm font-medium text-primary pt-4">À bientôt chez H2VL ✨</p>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="flex flex-col items-center gap-4 py-4 animate-in fade-in zoom-in duration-300">
+              <div className="h-20 w-20 bg-red-100 rounded-full flex items-center justify-center">
+                <XCircle className="h-12 w-12 text-red-600" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-foreground">Oups !</h2>
+                <p className="text-red-600 font-medium">{errorMessage}</p>
+                <p className="text-sm text-muted-foreground pt-2">
+                  Si vous pensez qu'il s'agit d'une erreur, merci de contacter le Bureau.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-/**
- * Page de destination publique pour l'accusé de réception des e-mails.
- */
-export default function ConfirmationPage({ params }: { params: Promise<{ jeton: string }> }) {
-  const resolvedParams = use(params);
-  
+export default function PublicConfirmationPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
-      <div className="mb-8">
-        <Logo className="mx-auto h-12 w-12 text-primary" />
-        <h1 className="mt-4 text-2xl font-bold text-primary tracking-tight">H2VL Connect</h1>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+        <Loader2 className="h-12 w-12 text-primary animate-spin" />
       </div>
-
-      <Suspense fallback={<div className="p-8"><Loader2 className="animate-spin mx-auto h-8 w-8 text-primary opacity-20" /></div>}>
-        <ConfirmationContent jeton={resolvedParams.jeton} />
-      </Suspense>
-      
-      <footer className="mt-8 text-[10px] text-muted-foreground uppercase tracking-widest opacity-50">
-        &copy; {new Date().getFullYear()} Association H2VL
-      </footer>
-    </div>
+    }>
+      <ConfirmationContent />
+    </Suspense>
   );
 }
