@@ -59,22 +59,9 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    /** Suivi des e-mails (Tracking) */
-    match /email_tracking/{jeton} {
-      // Lecture autorisée pour la page de confirmation et les admins
-      allow get: if true; 
-      allow list: if isAdmin();
-      
-      // Création autorisée pour permettre à l'API route (serveur) d'écrire
-      allow create: if true;
-      
-      // Mise à jour publique limitée pour la confirmation de lecture
-      allow update: if (isAdmin()) || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'dateLecture'])
-        && request.resource.data.statut == 'confirmé'
-      );
-      
-      allow delete: if isAdmin();
+    /** Suivi des e-mails (Tracking) - ACCÈS PUBLIC POUR LA VALIDATION */
+    match /email_tracking/{document} {
+      allow read, write: if true;
     }
 
     /** Logs d'anniversaires */
