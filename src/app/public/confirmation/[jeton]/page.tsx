@@ -1,119 +1,114 @@
-
 'use client';
 
-import { useEffect, useState, use } from 'react';
-import { initializeFirebase } from '@/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useState, use, Suspense } from 'react';
+import { Logo } from '@/components/icons';
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-interface PageProps {
-  params: Promise<{ jeton: string }>;
-}
-
-export default function ConfirmationPage({ params }: PageProps) {
-  const { jeton } = use(params);
+/**
+ * Composant interne gérant la logique de confirmation.
+ */
+function ConfirmationContent({ jeton }: { jeton: string }) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jeton) return;
 
-    const validateJeton = async (retryCount = 0) => {
-      console.log(`[Diagnostic] Tentative de validation #${retryCount + 1} - Jeton:`, jeton);
-      
+    const confirmRead = async () => {
       try {
-        const { firestore } = initializeFirebase();
-        // Le jeton est utilisé comme ID de document dans la collection email_tracking
-        const docRef = doc(firestore, 'email_tracking', jeton);
-        const docSnap = await getDoc(docRef);
+        console.log('Client: Tentative de confirmation pour le jeton:', jeton);
+        
+        const response = await fetch('/api/confirm-read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jeton }),
+        });
 
-        console.log(`[Diagnostic] Document trouvé dans Firestore:`, docSnap.exists());
+        const data = await response.json();
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          console.log(`[Diagnostic] Données du document:`, data);
-
-          // On met à jour le statut sur 'confirmé'
-          // On ne bloque pas si c'est déjà confirmé pour éviter les erreurs de double-clic ou rafraîchissement
-          await updateDoc(docRef, {
-            statut: 'confirmé',
-            dateLecture: new Date().toISOString()
-          });
-          
-          console.log(`[Diagnostic] Mise à jour réussie.`);
+        if (data.success) {
+          console.log('Client: Confirmation réussie');
           setStatus('success');
-        } else if (retryCount < 2) {
-          // Si pas trouvé immédiatement, on réessaie après un délai (cas de latence d'écriture Firestore)
-          console.log(`[Diagnostic] Document non trouvé, nouvel essai dans 1.5s...`);
-          setTimeout(() => validateJeton(retryCount + 1), 1500);
         } else {
-          console.error(`[Diagnostic] Erreur fatale: Document inexistant pour le jeton ${jeton}`);
+          console.error('Client: Erreur retournée par l\'API:', data.error);
           setStatus('error');
-          setErrorMessage('Lien invalide ou expiré.');
+          setErrorMsg(data.error || 'Lien invalide ou expiré.');
         }
-      } catch (error: any) {
-        console.error(`[Diagnostic] Erreur système lors de la lecture Firestore:`, error);
+      } catch (err) {
+        console.error('Client: Erreur lors de l\'appel API:', err);
         setStatus('error');
-        setErrorMessage('Une erreur technique est survenue.');
+        setErrorMsg('Une erreur technique est survenue.');
       }
     };
 
-    validateJeton();
+    // Petit délai pour laisser à Firestore le temps de propager l'écriture initiale du jeton
+    const timer = setTimeout(confirmRead, 500);
+    return () => clearTimeout(timer);
   }, [jeton]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4 sm:p-6">
-      <Card className="w-full max-w-md border-2 shadow-xl overflow-hidden">
-        <CardHeader className="text-center border-b bg-primary/5 py-6">
-          <CardTitle className="text-2xl font-bold text-primary tracking-tight">H2VL Connect</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center py-12 px-6 text-center">
-          {status === 'loading' && (
-            <div className="space-y-6">
-              <Loader2 className="h-16 w-16 animate-spin text-primary mx-auto opacity-40" />
-              <div className="space-y-2">
-                <p className="text-xl font-semibold text-foreground">Traitement de votre demande...</p>
-                <p className="text-sm text-muted-foreground">Merci de patienter un instant.</p>
-              </div>
-            </div>
-          )}
+    <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-xl">
+      {status === 'loading' && (
+        <div className="space-y-4">
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary opacity-20" />
+          <p className="text-muted-foreground">Vérification de votre message...</p>
+        </div>
+      )}
 
-          {status === 'success' && (
-            <div className="space-y-6 animate-in fade-in zoom-in duration-700">
-              <div className="rounded-full bg-green-50 p-5 mx-auto w-fit border border-green-100 shadow-sm">
-                <CheckCircle2 className="h-16 w-16 text-green-600" />
-              </div>
-              <div className="space-y-3">
-                <h2 className="text-3xl font-extrabold text-foreground tracking-tight">Merci !</h2>
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Votre lecture a été enregistrée avec succès. <br />
-                  À très bientôt chez <strong>H2VL</strong>.
-                </p>
-              </div>
-            </div>
-          )}
+      {status === 'success' && (
+        <div className="space-y-4 animate-in fade-in zoom-in duration-500">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+            <CheckCircle2 className="h-10 w-10 text-green-600" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Merci !</h2>
+          <p className="text-muted-foreground">
+            Nous avons bien enregistré votre lecture.<br />
+            À bientôt chez <strong>H2VL</strong>.
+          </p>
+          <p className="text-[10px] text-muted-foreground pt-6 italic uppercase tracking-wider">
+            Vous pouvez maintenant fermer cette fenêtre.
+          </p>
+        </div>
+      )}
 
-          {status === 'error' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className="rounded-full bg-red-50 p-5 mx-auto w-fit border border-red-100 shadow-sm">
-                <AlertCircle className="h-16 w-16 text-red-600" />
-              </div>
-              <div className="space-y-3">
-                <h2 className="text-2xl font-bold text-red-600">Lien invalide</h2>
-                <p className="text-muted-foreground font-medium">{errorMessage}</p>
-              </div>
-              <div className="pt-6 border-t w-full">
-                <p className="text-xs text-muted-foreground leading-relaxed italic">
-                  Si vous pensez qu'il s'agit d'une erreur, merci de signaler le problème au Bureau de l'association lors de votre prochaine visite.
-                </p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {status === 'error' && (
+        <div className="space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+            <XCircle className="h-10 w-10 text-red-600" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Oups...</h2>
+          <p className="text-muted-foreground">{errorMsg}</p>
+          <p className="text-xs text-muted-foreground pt-4">
+            Si vous avez déjà cliqué sur ce lien, votre lecture est déjà enregistrée.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Page de destination publique pour l'accusé de réception des e-mails.
+ */
+export default function ConfirmationPage({ params }: { params: Promise<{ jeton: string }> }) {
+  const resolvedParams = use(params);
+  
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
+      <div className="mb-8">
+        <Logo className="mx-auto h-12 w-12 text-primary" />
+        <h1 className="mt-4 text-2xl font-bold text-primary tracking-tight">H2VL Connect</h1>
+      </div>
+
+      <Suspense fallback={<div className="p-8"><Loader2 className="animate-spin mx-auto h-8 w-8 text-primary opacity-20" /></div>}>
+        <ConfirmationContent jeton={resolvedParams.jeton} />
+      </Suspense>
+      
+      <footer className="mt-8 text-[10px] text-muted-foreground uppercase tracking-widest opacity-50">
+        &copy; {new Date().getFullYear()} Association H2VL
+      </footer>
     </div>
   );
 }
