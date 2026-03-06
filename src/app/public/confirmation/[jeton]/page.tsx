@@ -1,122 +1,95 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useParams } from 'next/navigation';
-import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Logo } from '@/components/icons';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-
 export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useParams } from 'next/navigation';
+import { initializeFirebase } from '@/firebase';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { CheckCircle2, AlertCircle, Loader2, Mail } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 function ConfirmationContent() {
   const params = useParams();
-  const db = useFirestore();
+  const jeton = params?.jeton as string;
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   useEffect(() => {
-    const confirmRead = async () => {
-      const jeton = params?.jeton as string;
-      
-      if (!jeton || !db) {
-        if (!jeton) setErrorMessage("Jeton manquant dans l'URL.");
-        return;
-      }
+    if (!jeton) return;
 
+    const validateToken = async () => {
       try {
-        console.log('[Confirmation] Tentative de validation pour:', jeton);
+        const { firestore: db } = initializeFirebase();
         
-        // 1. Recherche du document par le champ 'jeton'
-        const q = query(collection(db, 'email_tracking'), where('jeton', '==', jeton));
-        const querySnapshot = await getDocs(q);
+        // On cherche le document dont l'ID est le jeton
+        const docRef = doc(db, 'email_tracking', jeton);
+        const docSnap = await getDoc(docRef);
 
-        if (querySnapshot.empty) {
-          console.error('[Confirmation] Jeton inconnu:', jeton);
+        if (docSnap.exists()) {
+          // Mise à jour du statut
+          await updateDoc(docRef, {
+            statut: 'confirmé',
+            dateLecture: serverTimestamp()
+          });
+          setStatus('success');
+        } else {
+          console.warn(`Jeton non trouvé dans Firestore: ${jeton}`);
           setStatus('error');
-          setErrorMessage("Lien invalide ou expiré (Document non trouvé).");
-          setDebugInfo({ jeton, reason: 'NOT_FOUND' });
-          return;
+          setErrorDetails('NOT_FOUND');
         }
-
-        // 2. Mise à jour du document (on prend le premier trouvé)
-        const docRef = querySnapshot.docs[0].ref;
-        await updateDoc(docRef, {
-          statut: 'confirmé',
-          dateLecture: serverTimestamp()
-        });
-
-        console.log('[Confirmation] Succès pour:', jeton);
-        setStatus('success');
-      } catch (error: any) {
-        console.error('[Confirmation] Erreur Firestore:', error);
+      } catch (err: any) {
+        console.error("Validation error:", err);
         setStatus('error');
-        setErrorMessage(error.message || "Une erreur technique est survenue.");
-        setDebugInfo({ 
-          jeton, 
-          code: error.code, 
-          message: error.message 
-        });
+        setErrorDetails(err.message);
       }
     };
 
-    confirmRead();
-  }, [params?.jeton, db]);
+    // Délai de 1.5s pour laisser le temps à Firestore de propager l'écriture
+    const timer = setTimeout(validateToken, 1500);
+    return () => clearTimeout(timer);
+  }, [jeton]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md shadow-xl border-2">
         <CardHeader className="text-center pb-2">
-          <div className="flex justify-center mb-4">
-            <Logo className="h-12 w-12 text-primary" />
-          </div>
-          <CardTitle className="text-2xl font-bold">H2VL Connect</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {status === 'loading' && (
-            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <Loader2 className="h-12 w-12 animate-spin text-primary opacity-50" />
-              <p className="text-muted-foreground animate-pulse">Validation de votre message...</p>
+          <div className="flex justify-center mb-6">
+            <div className="relative">
+              <Mail className="h-16 w-16 text-primary/20" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                {status === 'loading' && <Loader2 className="h-8 w-8 text-primary animate-spin" />}
+                {status === 'success' && <CheckCircle2 className="h-10 w-10 text-green-500 animate-in zoom-in duration-300" />}
+                {status === 'error' && <AlertCircle className="h-10 w-10 text-destructive animate-in shake duration-300" />}
+              </div>
             </div>
-          )}
+          </div>
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            {status === 'loading' && "Vérification..."}
+            {status === 'success' && "Réception confirmée !"}
+            {status === 'error' && "Lien invalide"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-center space-y-6 pt-4">
+          <p className="text-muted-foreground text-lg leading-relaxed">
+            {status === 'loading' && "Nous validons votre accusé de réception, merci de patienter un instant."}
+            {status === 'success' && "Merci ! Nous avons bien enregistré votre lecture. À bientôt chez H2VL."}
+            {status === 'error' && "Désolé, ce lien de confirmation n'est pas valide ou n'a pas encore été synchronisé."}
+          </p>
 
           {status === 'success' && (
-            <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
-              <div className="bg-green-100 p-3 rounded-full">
-                <CheckCircle2 className="h-12 w-12 text-green-600" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-slate-900">Merci !</h3>
-                <p className="text-slate-600 leading-relaxed">
-                  Nous avons bien enregistré votre lecture.<br />
-                  À bientôt chez <strong>H2VL</strong>.
-                </p>
-              </div>
+            <div className="bg-green-50 text-green-700 p-4 rounded-lg text-sm font-medium border border-green-100 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              Votre participation nous aide à mieux organiser la vie de l'association.
             </div>
           )}
 
           {status === 'error' && (
-            <div className="space-y-6 py-4">
-              <div className="flex flex-col items-center justify-center text-center space-y-4">
-                <div className="bg-red-100 p-3 rounded-full">
-                  <AlertCircle className="h-12 w-12 text-red-600" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-bold text-red-900">Oups !</h3>
-                  <p className="text-sm text-red-700">{errorMessage}</p>
-                </div>
+            <div className="mt-8 p-4 bg-muted/50 rounded-lg text-left">
+              <p className="font-bold text-xs mb-2 uppercase tracking-widest text-muted-foreground">Diagnostic Technique</p>
+              <div className="space-y-1 font-mono text-[10px] break-all">
+                <p><span className="text-primary">JETON:</span> {jeton || 'manquant'}</p>
+                <p><span className="text-primary">STATUS:</span> {errorDetails || 'N/A'}</p>
               </div>
-
-              {debugInfo && (
-                <div className="mt-8 rounded-lg bg-slate-900 p-4 font-mono text-[10px] text-slate-300 overflow-hidden">
-                  <p className="text-slate-500 mb-2 border-b border-slate-800 pb-1 uppercase tracking-widest font-bold">Diagnostic Technique</p>
-                  <pre className="whitespace-pre-wrap break-all">
-                    {JSON.stringify(debugInfo, null, 2)}
-                  </pre>
-                </div>
-              )}
             </div>
           )}
         </CardContent>
@@ -128,8 +101,8 @@ function ConfirmationContent() {
 export default function ConfirmationPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-primary opacity-50" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-12 w-12 text-primary animate-spin" />
       </div>
     }>
       <ConfirmationContent />

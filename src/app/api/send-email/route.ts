@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { initializeFirebase } from '@/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { firebaseConfig } from '@/firebase/config';
+
+// Initialisation de Firebase côté serveur pour éviter les conflits 'use client'
+function getDb() {
+  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  return getFirestore(app);
+}
 
 export async function POST(request: Request) {
   try {
-    // 1. Vérification des variables d'environnement obligatoires
     const requiredEnvVars = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASS'];
     const missingVars = requiredEnvVars.filter(v => !process.env[v]);
     
     if (missingVars.length > 0) {
-      console.error('SMTP Configuration Error: Missing variables:', missingVars.join(', '));
       return NextResponse.json({ 
         success: false, 
-        error: `Configuration SMTP incomplète. Variables manquantes : ${missingVars.join(', ')}` 
+        error: `Configuration SMTP incomplète : ${missingVars.join(', ')}` 
       }, { status: 500 });
     }
 
@@ -37,7 +42,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Destinataire manquant." }, { status: 400 });
     }
 
-    // 2. Configuration du transporteur
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT),
@@ -52,12 +56,12 @@ export async function POST(request: Request) {
     const jeton = crypto.randomUUID();
     const dateEnvoi = new Date().toISOString();
 
-    // 3. Enregistrement du tracking dans Firestore (Crucial: le document ID est le jeton)
+    // 1. Enregistrement du tracking dans Firestore AVANT l'envoi (Crucial)
     if (adherentId) {
       try {
-        const { firestore } = initializeFirebase();
-        await setDoc(doc(firestore, 'email_tracking', jeton), {
-          jeton, // On garde aussi le champ jeton pour les requêtes where si besoin
+        const db = getDb();
+        await setDoc(doc(db, 'email_tracking', jeton), {
+          jeton,
           adherentId,
           campagneId: campaignId || 'direct',
           statut: 'envoyé',
@@ -65,11 +69,11 @@ export async function POST(request: Request) {
           dateLecture: null
         });
       } catch (fsError) {
-        console.warn("Firestore Tracking Error (Envoi maintenu) :", fsError);
+        console.error("Firestore Save Error:", fsError);
+        // On continue quand même l'envoi, mais on log l'erreur
       }
     }
 
-    // URL réelle de l'application en production
     const origin = 'https://studio--studio-6079106449-cf583.us-central1.hosted.app';
     const confirmationUrl = `${origin}/public/confirmation/${jeton}`;
     
@@ -146,7 +150,6 @@ export async function POST(request: Request) {
       html,
     };
 
-    // 4. Envoi effectif
     await transporter.sendMail(mailOptions);
 
     return NextResponse.json({ success: true }, { status: 200 });
