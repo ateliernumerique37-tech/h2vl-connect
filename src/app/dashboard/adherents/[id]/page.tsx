@@ -7,11 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMemo } from 'react';
-import { Pencil, ChevronLeft, Phone, MapPin, Mail, Calendar, User, CreditCard, CheckCircle2, XCircle } from "lucide-react";
+import { useMemo, useState } from 'react';
+import { Pencil, ChevronLeft, Phone, MapPin, Mail, Calendar, User, CreditCard, CheckCircle2, XCircle, Copy, Check, PhoneCall } from "lucide-react";
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,10 +47,19 @@ export default function AdherentDetailPage() {
   ) : null, [db, id]);
   const { data: rawCotisations, isLoading: isLoadingCotisations } = useCollection<Cotisation>(cotisationsQuery);
 
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
   const adherentCotisations = useMemo(() => {
     if (!rawCotisations) return [];
     return [...rawCotisations].sort((a, b) => new Date(b.datePaiement).getTime() - new Date(a.datePaiement).getTime());
   }, [rawCotisations]);
+
+  const handleCopy = (text: string, fieldName: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   if (adherentError) {
     return (
@@ -60,7 +70,6 @@ export default function AdherentDetailPage() {
     );
   }
 
-  // On attend que l'ID soit présent ET que le chargement soit fini avant de juger du 404
   if (!id || isLoadingAdherent || isLoadingCotisations) {
       return <ProfileSkeleton />;
   }
@@ -81,13 +90,13 @@ export default function AdherentDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild>
-            <Link href="/dashboard/adherents" aria-label="Retour à la liste">
+            <Link href="/dashboard/adherents" aria-label="Retour à la liste des adhérents">
                 <ChevronLeft className="h-6 w-6" />
             </Link>
             </Button>
             <h1 className="text-3xl font-bold tracking-tight">{adherent.prenom} {adherent.nom}</h1>
         </div>
-        <Button asChild className="min-h-[44px]">
+        <Button asChild className="min-h-[44px] shadow-sm">
             <Link href={`/dashboard/adherents/${id}/edit`}>
                 <Pencil className="mr-2 h-4 w-4" /> Modifier le profil
             </Link>
@@ -103,27 +112,97 @@ export default function AdherentDetailPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Email Section */}
                 <div className="space-y-1">
                     <p className="text-xs font-bold uppercase text-muted-foreground">Email</p>
-                    <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{adherent.email}</span>
+                    <div className="flex items-center justify-between group rounded-md hover:bg-muted/30 p-1 -ml-1 transition-colors">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                            <Mail className="h-4 w-4 text-primary shrink-0" />
+                            <span className="font-medium truncate">{adherent.email}</span>
+                        </div>
+                        <Button 
+                            type="button"
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 px-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            onClick={() => handleCopy(adherent.email, 'email')}
+                            aria-label={`Copier l'adresse email de ${adherent.prenom} ${adherent.nom}`}
+                        >
+                            {copiedField === 'email' ? (
+                                <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold"><Check className="h-3 w-3" /> Copié !</span>
+                            ) : (
+                                <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
+                        </Button>
                     </div>
                 </div>
+
+                {/* Telephone Section */}
                 <div className="space-y-1">
                     <p className="text-xs font-bold uppercase text-muted-foreground">Téléphone</p>
-                    <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{adherent.telephone || 'Non renseigné'}</span>
+                    <div className="flex items-center justify-between group rounded-md hover:bg-muted/30 p-1 -ml-1 transition-colors">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                            <Phone className="h-4 w-4 text-primary shrink-0" />
+                            <span className="font-medium">{adherent.telephone || 'Non renseigné'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            {adherent.telephone && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-8 px-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    asChild
+                                >
+                                    <a href={`tel:${adherent.telephone}`} aria-label={`Appeler ${adherent.prenom} ${adherent.nom}`}>
+                                        <PhoneCall className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </a>
+                                </Button>
+                            )}
+                            <Button 
+                                type="button"
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 px-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                onClick={() => handleCopy(adherent.telephone, 'tel')}
+                                aria-label={`Copier le numéro de téléphone de ${adherent.prenom} ${adherent.nom}`}
+                                disabled={!adherent.telephone}
+                            >
+                                {copiedField === 'tel' ? (
+                                    <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold"><Check className="h-3 w-3" /> Copié !</span>
+                                ) : (
+                                    <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </div>
+
+                {/* Adresse Section */}
                 <div className="space-y-1 sm:col-span-2">
                     <p className="text-xs font-bold uppercase text-muted-foreground">Adresse postale</p>
-                    <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{adherent.adresse || 'Non renseignée'}</span>
+                    <div className="flex items-center justify-between group rounded-md hover:bg-muted/30 p-1 -ml-1 transition-colors">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                            <MapPin className="h-4 w-4 text-primary shrink-0" />
+                            <span className="font-medium truncate">{adherent.adresse || 'Non renseignée'}</span>
+                        </div>
+                        <Button 
+                            type="button"
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 px-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            onClick={() => handleCopy(adherent.adresse, 'adresse')}
+                            aria-label={`Copier l'adresse de ${adherent.prenom} ${adherent.nom}`}
+                            disabled={!adherent.adresse}
+                        >
+                            {copiedField === 'adresse' ? (
+                                <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold"><Check className="h-3 w-3" /> Copié !</span>
+                            ) : (
+                                <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
+                        </Button>
                     </div>
                 </div>
+
                 <div className="space-y-1">
                     <p className="text-xs font-bold uppercase text-muted-foreground">Date de naissance</p>
                     <div className="flex items-center gap-2">
