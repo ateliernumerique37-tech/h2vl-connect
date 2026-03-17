@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
@@ -24,6 +23,8 @@ import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 const MENU_ORDER = [
   { key: 'aperitifChoisi', label: 'Apéritif' },
@@ -353,7 +354,7 @@ export default function EventDetailPage() {
   const auth = useAuth();
   
   const eventRef = useMemoFirebase(() => id ? doc(db, 'evenements', id) : null, [db, id]);
-  const { data: event, isLoading: isLoadingEvent } = useDoc<Evenement>(eventRef);
+  const { data: event, isLoading: isLoadingEvent, error: eventError } = useDoc<Evenement>(eventRef);
 
   const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
   const { data: rawAdherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
@@ -510,6 +511,15 @@ export default function EventDetailPage() {
     
     toast({ title: "Export CSV prêt", description: "Le fichier a été téléchargé." });
   };
+
+  if (eventError) {
+    return (
+      <div className="p-8 text-center bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
+        <p className="font-bold">Une erreur technique est survenue lors du chargement de l'événement.</p>
+        <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Réessayer</Button>
+      </div>
+    );
+  }
 
   if (isLoadingEvent) return <EventDetailSkeleton />;
   if (!event) return notFound();

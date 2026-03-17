@@ -20,6 +20,8 @@ import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase
 import { doc, collection, query, where } from 'firebase/firestore';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 function AdherentDetailSkeleton() {
     return (
         <div className="space-y-6">
@@ -49,7 +51,7 @@ export default function AdherentDetailPage() {
   const id = params?.id as string;
   
   const adherentRef = useMemoFirebase(() => id ? doc(db, 'adherents', id) : null, [db, id]);
-  const { data: adherent, isLoading: isLoadingAdherent } = useDoc<Adherent>(adherentRef);
+  const { data: adherent, isLoading: isLoadingAdherent, error: adherentError } = useDoc<Adherent>(adherentRef);
 
   const cotisationsQuery = useMemoFirebase(() => id ? query(
     collection(db, 'cotisations'), 
@@ -73,11 +75,24 @@ export default function AdherentDetailPage() {
     }
   }, [adherent]);
 
+  // Sécurité : Si l'ID est manquant ou si une erreur Firestore survient
+  if (adherentError) {
+    console.error("Erreur Firestore lors de la récupération de l'adhérent:", adherentError);
+    return (
+      <div className="p-8 text-center bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
+        <p className="font-bold">Une erreur technique est survenue.</p>
+        <p className="text-sm">Impossible de charger la fiche adhérent.</p>
+        <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Réessayer</Button>
+      </div>
+    );
+  }
+
   if (!id || isLoadingAdherent || isLoadingCotisations) {
       return <AdherentDetailSkeleton />;
   }
 
   if (!adherent && !isLoadingAdherent) {
+    console.warn(`Adhérent non trouvé pour l'ID: ${id}`);
     return notFound();
   }
   
@@ -145,8 +160,6 @@ export default function AdherentDetailPage() {
         setIsSaving(false);
     }
   };
-
-  if (!adherent) return null;
 
   return (
     <div className="space-y-6 pb-12">
