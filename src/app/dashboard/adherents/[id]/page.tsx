@@ -1,52 +1,39 @@
 'use client';
 
-import { useParams, notFound, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import type { Adherent, Cotisation } from '@/lib/types';
-import { updateAdherent, deleteAdherent, addCotisation } from '@/services/adherentsService';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState, useEffect, useMemo } from 'react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Trash2, Save, Copy, CheckCircle2, ChevronLeft, Loader2, Phone, MapPin } from "lucide-react";
-import { useToast } from '@/hooks/use-toast';
+import { useMemo } from 'react';
+import { Pencil, ChevronLeft, Phone, MapPin, Mail, Calendar, User, CreditCard, CheckCircle2, XCircle } from "lucide-react";
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-function AdherentDetailSkeleton() {
+function ProfileSkeleton() {
     return (
         <div className="space-y-6">
-             <Card>
-                <CardHeader>
-                    <CardTitle><Skeleton className="h-8 w-1/2" /></CardTitle>
-                    <CardDescription><Skeleton className="h-4 w-3/4" /></CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
-                        <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
-                    </div>
-                    <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
-                </CardContent>
-            </Card>
+            <div className="flex items-center gap-4">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <Skeleton className="h-8 w-64" />
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+                <Skeleton className="h-[300px] w-full" />
+                <Skeleton className="h-[300px] w-full" />
+            </div>
         </div>
-    )
+    );
 }
 
 export default function AdherentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const db = useFirestore();
-  const { toast } = useToast();
   
   const id = params?.id as string;
   
@@ -64,289 +51,129 @@ export default function AdherentDetailPage() {
     return [...rawCotisations].sort((a, b) => new Date(b.datePaiement).getTime() - new Date(a.datePaiement).getTime());
   }, [rawCotisations]);
 
-  const [formData, setFormData] = useState<Partial<Adherent>>({});
-  const [isSaving, setIsSaving] = useState(false);
-  const [showAddCotisationDialog, setShowAddCotisationDialog] = useState(false);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (adherent) {
-        setFormData(adherent);
-    }
-  }, [adherent]);
-
-  // Sécurité : Si l'ID est manquant ou si une erreur Firestore survient
   if (adherentError) {
-    console.error("Erreur Firestore lors de la récupération de l'adhérent:", adherentError);
     return (
       <div className="p-8 text-center bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
-        <p className="font-bold">Une erreur technique est survenue.</p>
-        <p className="text-sm">Impossible de charger la fiche adhérent.</p>
+        <p className="font-bold">Erreur de chargement.</p>
         <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Réessayer</Button>
       </div>
     );
   }
 
+  // On attend que l'ID soit présent ET que le chargement soit fini avant de juger du 404
   if (!id || isLoadingAdherent || isLoadingCotisations) {
-      return <AdherentDetailSkeleton />;
+      return <ProfileSkeleton />;
   }
 
-  if (!adherent && !isLoadingAdherent) {
-    console.warn(`Adhérent non trouvé pour l'ID: ${id}`);
-    return notFound();
+  if (!adherent) {
+    return (
+        <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+            <User className="h-16 w-16 text-muted-foreground opacity-20" />
+            <h2 className="text-xl font-semibold">Adhérent introuvable</h2>
+            <p className="text-muted-foreground">La fiche que vous recherchez n'existe pas ou a été supprimée.</p>
+            <Button asChild><Link href="/dashboard/adherents">Retour à la liste</Link></Button>
+        </div>
+    );
   }
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({...prev, [name]: value}));
-  };
-
-  const handleGenreChange = (value: Adherent['genre']) => {
-    setFormData(prev => ({...prev, genre: value}));
-  };
-
-  const handleCopy = (text: string | undefined, fieldName: string) => {
-    if (!text) return;
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(() => {
-            setCopiedField(fieldName);
-            toast({ title: "Copié !" });
-            setTimeout(() => setCopiedField(null), 2000);
-        }).catch(() => {
-            toast({ variant: "destructive", title: "Erreur de copie" });
-        });
-    } else {
-        toast({ variant: "destructive", title: "API Presse-papier non disponible" });
-    }
-  };
-
-  const handleSwitchChange = async (field: keyof Adherent, checked: boolean) => {
-    try {
-        await updateAdherent(db, id, { [field]: checked });
-        toast({ title: "Statut mis à jour" });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Erreur de mise à jour' });
-    }
-  };
-  
-  const handleDelete = async () => {
-    try {
-        await deleteAdherent(db, id);
-        toast({ title: "Adhérent supprimé définitivement (RGPD)" });
-        router.push('/dashboard/adherents');
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Erreur de suppression' });
-    }
-  };
-
-  const handleAddCotisation = async () => {
-    try {
-        await addCotisation(db, id);
-        setShowAddCotisationDialog(false);
-        toast({ title: "Cotisation ajoutée" });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Erreur système' });
-    }
-  };
-
-  const handleSaveChanges = async () => {
-    setIsSaving(true);
-    try {
-        await updateAdherent(db, id, formData);
-        toast({ title: "Modifications enregistrées" });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Échec de l\'enregistrement' });
-    } finally {
-        setIsSaving(false);
-    }
-  };
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/adherents" aria-label="Retour à la liste">
-            <ChevronLeft className="h-6 w-6" />
-          </Link>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" asChild>
+            <Link href="/dashboard/adherents" aria-label="Retour à la liste">
+                <ChevronLeft className="h-6 w-6" />
+            </Link>
+            </Button>
+            <h1 className="text-3xl font-bold tracking-tight">{adherent.prenom} {adherent.nom}</h1>
+        </div>
+        <Button asChild className="min-h-[44px]">
+            <Link href={`/dashboard/adherents/${id}/edit`}>
+                <Pencil className="mr-2 h-4 w-4" /> Modifier le profil
+            </Link>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">Profil Adhérent</h1>
       </div>
 
-      {/* Actions Rapides Mobiles */}
-      <div className="grid grid-cols-1 gap-4 md:hidden">
-        {adherent.telephone && (
-          <Button asChild size="lg" className="w-full h-16 text-lg shadow-md focus-visible:ring-2 focus-visible:ring-primary">
-            <a href={`tel:${adherent.telephone.replace(/\s+/g, '')}`} aria-label={`Appeler ${adherent.prenom}`}>
-              <Phone className="mr-2 h-6 w-6" /> Appeler l'adhérent
-            </a>
-          </Button>
-        )}
-        {adherent.adresse && (
-          <Button asChild variant="outline" size="lg" className="w-full h-16 text-lg shadow-sm border-2 focus-visible:ring-2 focus-visible:ring-primary">
-            <a 
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adherent.adresse)}`} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              aria-label={`Ouvrir l'itinéraire vers l'adresse de ${adherent.prenom}`}
-            >
-              <MapPin className="mr-2 h-6 w-6 text-primary" /> Voir l'itinéraire
-            </a>
-          </Button>
-        )}
-      </div>
+      <div className="grid gap-6 md:grid-cols-3">
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" /> Informations Personnelles
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase text-muted-foreground">Email</p>
+                    <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{adherent.email}</span>
+                    </div>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase text-muted-foreground">Téléphone</p>
+                    <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{adherent.telephone || 'Non renseigné'}</span>
+                    </div>
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                    <p className="text-xs font-bold uppercase text-muted-foreground">Adresse postale</p>
+                    <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{adherent.adresse || 'Non renseignée'}</span>
+                    </div>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase text-muted-foreground">Date de naissance</p>
+                    <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-primary" />
+                        <span className="font-medium">
+                            {adherent.dateNaissance ? new Date(adherent.dateNaissance).toLocaleDateString('fr-FR') : 'Non renseignée'}
+                        </span>
+                    </div>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase text-muted-foreground">Genre</p>
+                    <Badge variant="outline" className="mt-1">{adherent.genre === 'H' ? 'Homme' : adherent.genre === 'F' ? 'Femme' : 'Autre'}</Badge>
+                </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations Personnelles</CardTitle>
-          <CardDescription>Données complètes de l'adhérent (13 champs gérés).</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="prenom">Prénom</Label>
-              <Input id="prenom" name="prenom" value={formData.prenom || ''} onChange={handleInputChange} maxLength={50} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="nom">Nom</Label>
-              <Input id="nom" name="nom" value={formData.nom || ''} onChange={handleInputChange} maxLength={50} />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="flex gap-2">
-                  <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} className="flex-1" maxLength={255} />
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    type="button" 
-                    onClick={() => handleCopy(formData.email, "Email")}
-                    disabled={!formData.email}
-                    aria-label="Copier l'adresse mail dans le presse-papier"
-                  >
-                      {copiedField === "Email" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="telephone">Téléphone</Label>
-              <div className="flex gap-2">
-                  <Input id="telephone" name="telephone" type="tel" value={formData.telephone || ''} onChange={handleInputChange} className="flex-1" maxLength={20} />
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    type="button" 
-                    onClick={() => handleCopy(formData.telephone, "Téléphone")}
-                    disabled={!formData.telephone}
-                    aria-label="Copier le numéro de téléphone dans le presse-papier"
-                  >
-                      {copiedField === "Téléphone" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="adresse">Adresse postale</Label>
-            <div className="flex gap-2">
-                <Input id="adresse" name="adresse" value={formData.adresse || ''} onChange={handleInputChange} className="flex-1" maxLength={500} />
-                <Button 
-                    variant="outline" 
-                    size="icon" 
-                    type="button" 
-                    onClick={() => handleCopy(formData.adresse, "Adresse")}
-                    disabled={!formData.adresse}
-                    aria-label="Copier l'adresse postale dans le presse-papier"
-                >
-                    {copiedField === "Adresse" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-             <div className="space-y-2">
-                <Label htmlFor="dateNaissance">Date de naissance</Label>
-                <Input id="dateNaissance" name="dateNaissance" type="date" value={formData.dateNaissance ? formData.dateNaissance.split('T')[0] : ''} onChange={handleInputChange} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="genre">Genre</Label>
-                <Select value={formData.genre} onValueChange={handleGenreChange}>
-                  <SelectTrigger id="genre" className="w-full">
-                    <SelectValue placeholder="Genre" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="H">Homme</SelectItem>
-                    <SelectItem value="F">Femme</SelectItem>
-                    <SelectItem value="Autre">Autre</SelectItem>
-                  </SelectContent>
-                </Select>
-            </div>
-             <div className="space-y-2">
-                <Label htmlFor="dateInscription">Date d'inscription</Label>
-                <Input id="dateInscription" name="dateInscription" type="date" value={formData.dateInscription ? formData.dateInscription.split('T')[0] : ''} disabled className="bg-muted" />
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-wrap justify-start gap-4 border-t pt-6">
-          <Button onClick={handleSaveChanges} disabled={isSaving} className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 min-h-[44px]">
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Enregistrer les modifications
-          </Button>
-           <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="min-h-[44px]">
-                <Trash2 className="mr-2 h-4 w-4" /> Supprimer (Droit à l'oubli)
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Confirmer la suppression RGPD</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Cette action supprimera TOUTES les données (profil, cotisations, inscriptions) de manière irréversible.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Confirmer la suppression
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-            <CardTitle>Statuts Associatifs</CardTitle>
-            <CardDescription>Gérez les autorisations, l'engagement et les droits.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-primary" /> Statuts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             {[
-              { id: 'estMembreBureau', label: 'Membre du bureau' },
-              { id: 'estBenevole', label: 'Bénévole actif' },
-              { id: 'estMembreFaaf', label: 'Membre FAAF' },
-              { id: 'accordeDroitImage', label: 'Droit à l\'image accordé' },
-              { id: 'cotisationAJour', label: 'Cotisation à jour' },
-            ].map((item) => (
-              <div key={item.id} className="flex items-center justify-between rounded-lg border p-4 bg-card hover:border-primary/20 transition-colors">
-                <Label htmlFor={`switch-${item.id}`} className="font-bold cursor-pointer">{item.label}</Label>
-                <Switch 
-                    id={`switch-${item.id}`} 
-                    checked={adherent[item.id as keyof Adherent] as boolean}
-                    onCheckedChange={(checked) => handleSwitchChange(item.id as keyof Adherent, checked)}
-                    aria-label={`Changer le statut : ${item.label}`}
-                />
-              </div>
+                { label: 'Cotisation à jour', value: adherent.cotisationAJour },
+                { label: 'Membre du bureau', value: adherent.estMembreBureau },
+                { label: 'Bénévole actif', value: adherent.estBenevole },
+                { label: 'Membre FAAF', value: adherent.estMembreFaaf },
+                { label: 'Droit à l\'image', value: adherent.accordeDroitImage },
+            ].map((statut, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                    <span className="text-sm font-medium">{statut.label}</span>
+                    {statut.value ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    ) : (
+                        <XCircle className="h-5 w-5 text-muted-foreground/30" />
+                    )}
+                </div>
             ))}
-        </CardContent>
-      </Card>
-      
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Historique Financier</CardTitle>
-          <CardDescription>Suivi des cotisations annuelles (Cotisation à jour : {adherent.cotisationAJour ? "Oui" : "Non"}).</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-primary" /> Historique des Cotisations
+          </CardTitle>
+          <CardDescription>Suivi des règlements annuels.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -358,7 +185,7 @@ export default function AdherentDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {adherentCotisations && adherentCotisations.length > 0 ? (
+              {adherentCotisations.length > 0 ? (
                 adherentCotisations.map((cotisation) => (
                   <TableRow key={cotisation.id}>
                     <TableCell className="font-medium">{cotisation.annee}</TableCell>
@@ -369,34 +196,13 @@ export default function AdherentDetailPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-6 text-muted-foreground italic">
-                    Aucun historique financier enregistré.
+                    Aucun historique financier.
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
-         <CardFooter className="border-t pt-6">
-          <Dialog open={showAddCotisationDialog} onOpenChange={setShowAddCotisationDialog}>
-            <DialogTrigger asChild>
-              <Button className="min-h-[44px]">
-                <PlusCircle className="mr-2 h-4 w-4" /> Valider une cotisation ({new Date().getFullYear()})
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Valider le paiement</DialogTitle>
-                <DialogDescription>
-                  Enregistrer le paiement de la cotisation (15€) pour l'année {new Date().getFullYear()} ?
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAddCotisationDialog(false)}>Annuler</Button>
-                <Button onClick={handleAddCotisation}>Confirmer le paiement</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardFooter>
       </Card>
     </div>
   );
