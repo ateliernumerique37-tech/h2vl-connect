@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -20,30 +19,38 @@ const BIRTHDAY_MESSAGES = [
 ];
 
 /**
- * Calcule l'âge exact à partir d'une chaîne de date ISO.
+ * Calcule l'âge exact à partir d'une chaîne de date ISO avec protection contre les erreurs.
  */
-const calculateAge = (dateString: string): number | null => {
+const calculateAge = (dateString: string | undefined | null): number | null => {
     if (!dateString) return null;
-    const birthDate = new Date(dateString);
-    if (isNaN(birthDate.getTime())) return null;
-    
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
+    try {
+        const birthDate = new Date(dateString);
+        if (isNaN(birthDate.getTime())) return null;
+        
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        
+        // Sécurité : Un âge négatif ou aberrant (ex: > 120) est considéré comme invalide
+        return (age >= 0 && age < 120) ? age : null;
+    } catch (e) {
+        return null;
     }
-    return age;
 };
 
 /**
- * Vérifie si c'est l'anniversaire d'un adhérent aujourd'hui.
+ * Vérifie si c'est l'anniversaire d'un adhérent aujourd'hui (Jour et Mois uniquement).
  */
-const isBirthdayToday = (dateString: string) => {
+const isBirthdayToday = (dateString: string | undefined | null): boolean => {
     if (!dateString) return false;
     try {
         const birthDate = new Date(dateString);
         if (isNaN(birthDate.getTime())) return false;
+        
         const today = new Date();
         return birthDate.getMonth() === today.getMonth() && birthDate.getDate() === today.getDate();
     } catch (e) {
@@ -87,20 +94,38 @@ export default function DashboardHomePage() {
     const db = useFirestore();
     const { toast } = useToast();
     
-    // Date du jour pour les logs
-    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+    // État pour la date du jour (pour éviter les mismatches d'hydratation)
+    const [currentDate, setCurrentDate] = useState<Date | null>(null);
+
+    useEffect(() => {
+        setCurrentDate(new Date());
+    }, []);
+
+    const todayStr = useMemo(() => {
+        if (!currentDate) return '';
+        return currentDate.toISOString().split('T')[0];
+    }, [currentDate]);
 
     const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
     const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
 
-    const birthdayLogsQuery = useMemoFirebase(() => query(
-        collection(db, 'logs_anniversaires'),
-        where('date_envoi', '==', todayStr)
-    ), [db, todayStr]);
+    const birthdayLogsQuery = useMemoFirebase(() => {
+        if (!todayStr) return null;
+        return query(
+            collection(db, 'logs_anniversaires'),
+            where('date_envoi', '==', todayStr)
+        );
+    }, [db, todayStr]);
+    
     const { data: birthdayLogs } = useCollection<LogAnniversaire>(birthdayLogsQuery);
 
-    const [birthdayAdherents, setBirthdayAdherents] = useState<Adherent[]>([]);
     const [sendingIds, setSendingIds] = useState<string[]>([]);
+
+    // Calcul des anniversaires du jour
+    const birthdayAdherents = useMemo(() => {
+        if (!adherents) return [];
+        return adherents.filter(adherent => isBirthdayToday(adherent.dateNaissance));
+    }, [adherents]);
 
     // IDs des adhérents auxquels on a déjà souhaité l'anniversaire aujourd'hui
     const sentAdherentIds = useMemo(() => {
@@ -108,7 +133,7 @@ export default function DashboardHomePage() {
         return new Set(birthdayLogs.map(log => log.id_adherent));
     }, [birthdayLogs]);
 
-    // Calcul des statistiques
+    // Calcul des statistiques avec sécurité anti-données-vides
     const stats = useMemo(() => {
         if (!adherents) return {
             total: 0,
@@ -119,12 +144,12 @@ export default function DashboardHomePage() {
         };
 
         const total = adherents.length;
-        const aJour = adherents.filter(a => a.cotisationAJour).length;
+        const aJour = adherents.filter(a => a?.cotisationAJour === true).length;
         const tauxCotisation = total > 0 ? Math.round((aJour / total) * 100) : 0;
-        const benevoles = adherents.filter(a => a.estBenevole).length;
+        const benevoles = adherents.filter(a => a?.estBenevole === true).length;
 
         const validAges = adherents
-            .map(a => calculateAge(a.dateNaissance))
+            .map(a => calculateAge(a?.dateNaissance))
             .filter((age): age is number => age !== null);
         
         const moyenneAge = validAges.length > 0 
@@ -134,15 +159,8 @@ export default function DashboardHomePage() {
         return { total, aJour, tauxCotisation, benevoles, moyenneAge };
     }, [adherents]);
 
-    useEffect(() => {
-        if (adherents) {
-            const todayBirthdays = adherents.filter(adherent => isBirthdayToday(adherent.dateNaissance));
-            setBirthdayAdherents(todayBirthdays);
-        }
-    }, [adherents]);
-
     const handleSendBirthday = async (adherent: Adherent) => {
-        if (sendingIds.includes(adherent.id) || sentAdherentIds.has(adherent.id)) return;
+        if (!adherent.email || sendingIds.includes(adherent.id) || sentAdherentIds.has(adherent.id)) return;
         
         setSendingIds(prev => [...prev, adherent.id]);
         
@@ -167,7 +185,6 @@ export default function DashboardHomePage() {
             const result = await response.json();
 
             if (result.success) {
-                // Enregistrement du log de sécurité
                 await addDoc(collection(db, 'logs_anniversaires'), {
                     id_adherent: adherent.id,
                     date_envoi: todayStr,
@@ -176,7 +193,7 @@ export default function DashboardHomePage() {
 
                 toast({
                     title: "Email envoyé !",
-                    description: `Message d'anniversaire envoyé à ${adherent.prenom}.`,
+                    description: ` Message d'anniversaire envoyé à ${adherent.prenom}.`,
                 });
             } else {
                 throw new Error(result.error);
@@ -192,7 +209,7 @@ export default function DashboardHomePage() {
         }
     };
     
-    if (isLoading) {
+    if (isLoading || !currentDate) {
         return <DashboardSkeleton />;
     }
 
@@ -257,7 +274,7 @@ export default function DashboardHomePage() {
 
             <DashboardTips />
             
-            <Card className="border-primary/20 bg-primary/5">
+            <Card className="border-primary/20 bg-primary/5 shadow-md">
                 <CardHeader>
                     <CardTitle role="heading" aria-level={2} className="flex items-center gap-2">
                         <Cake className="h-6 w-6 text-primary" aria-hidden="true" />
@@ -270,7 +287,7 @@ export default function DashboardHomePage() {
                             {birthdayAdherents.map(adherent => {
                                 const isSent = sentAdherentIds.has(adherent.id);
                                 return (
-                                    <li key={adherent.id} className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 rounded-lg border border-primary/10 bg-card/50">
+                                    <li key={adherent.id} className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 rounded-lg border border-primary/10 bg-card/50 hover:bg-card transition-colors">
                                         <div className="flex items-center gap-2">
                                             <span className="text-xl" aria-hidden="true">🎂</span>
                                             <span>C'est l'anniversaire de <span className="font-bold">{adherent.prenom} {adherent.nom}</span> aujourd'hui !</span>
@@ -278,7 +295,7 @@ export default function DashboardHomePage() {
                                         <Button 
                                             size="sm" 
                                             variant={isSent ? "secondary" : "outline"}
-                                            className="shrink-0 min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                                            className="shrink-0 min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary shadow-sm"
                                             onClick={() => handleSendBirthday(adherent)}
                                             disabled={sendingIds.includes(adherent.id) || isSent}
                                             aria-label={isSent ? `Anniversaire déjà souhaité à ${adherent.prenom}` : `Envoyer un email d'anniversaire à ${adherent.prenom}`}
@@ -286,9 +303,9 @@ export default function DashboardHomePage() {
                                             {sendingIds.includes(adherent.id) ? (
                                                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                             ) : isSent ? (
-                                                "Anniversaire souhaité ✅"
+                                                "Souhaité ✅"
                                             ) : (
-                                                "🎂 Souhaiter l'anniversaire"
+                                                "🎂 Souhaiter"
                                             )}
                                         </Button>
                                     </li>
@@ -296,7 +313,7 @@ export default function DashboardHomePage() {
                             })}
                         </ul>
                     ) : (
-                        <p className="text-muted-foreground italic">Aucun anniversaire aujourd'hui.</p>
+                        <p className="text-muted-foreground italic py-4">Aucun anniversaire aujourd'hui.</p>
                     )}
                 </CardContent>
             </Card>
