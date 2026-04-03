@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     const host = request.headers.get('host') || 'localhost:9002';
     const protocol = forwardedProto || (host.includes('localhost') ? 'http' : 'https');
     const origin = `${protocol}://${host}`;
-    const confirmationUrl = `${origin}/public/confirmation/${jeton}`;
+    const confirmationUrl = `${origin}/lien/confirmation/${jeton}`;
     
     let html = '';
     let subject = providedSubject || `H2VL : Message`;

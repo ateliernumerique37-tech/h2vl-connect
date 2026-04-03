@@ -6,11 +6,9 @@ const withPWA = withPWAInit({
   dest: "public",
   register: true,
   skipWaiting: true,
-  buildExcludes: [/public\/.*$/], // Exclure les routes publiques dynamiques du SW
-  // NavigateFallbackDenylist empêche le Service Worker de gérer ces URLs comme des requêtes de navigation.
-  // Crucial pour les pages publiques dynamiques qui ne doivent pas être gérées par la logique PWA.
+  buildExcludes: [/lien\/.*$/], // Exclure les routes de liens dynamiques du SW
   // @ts-ignore
-  navigateFallbackDenylist: [/^\/public/], // couvre /public/confirmation/* ET /public/inscription-invitation/*
+  navigateFallbackDenylist: [/^\/lien/], // couvre /lien/confirmation/* ET /lien/inscription-invitation/*
 });
 
 const nextConfig: NextConfig = {

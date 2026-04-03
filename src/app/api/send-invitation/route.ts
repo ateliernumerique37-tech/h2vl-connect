@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const host = request.headers.get('host') || 'localhost:9002';
     const protocol = forwardedProto || (host.includes('localhost') ? 'http' : 'https');
     const origin = `${protocol}://${host}`;
-    const inscriptionUrl = `${origin}/public/inscription-invitation/${jeton}`;
+    const inscriptionUrl = `${origin}/lien/inscription-invitation/${jeton}`;
 
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
