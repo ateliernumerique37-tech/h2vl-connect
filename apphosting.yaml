@@ -3,6 +3,7 @@
 
 runConfig:
   maxInstances: 1
+  invoker: public
 
 env:
   - variable: EMAIL_HOST
