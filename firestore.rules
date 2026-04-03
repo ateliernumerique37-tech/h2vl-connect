@@ -27,9 +27,11 @@ service cloud.firestore {
     match /admins/{adminId} {
       allow get: if isSignedIn() && (isOwner(adminId) || isAdmin());
       allow list: if isAdmin();
-      allow create: if isSignedIn() && isOwner(adminId);
+      // La création et suppression passent par l'API Firebase Admin SDK (serveur)
+      // qui contourne les règles. Les clients ne peuvent jamais écrire directement.
+      allow create: if false;
       allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow delete: if false;
     }
 
     /** Membres de l'association */

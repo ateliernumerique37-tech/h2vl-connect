@@ -10,23 +10,27 @@ import { Loader2 } from 'lucide-react';
 
 interface AdminFormProps {
   initialData?: Admin;
-  onSubmit: (data: Omit<Admin, 'id' | 'dateCreation'>) => Promise<void>;
+  onSubmit: (data: Omit<Admin, 'id' | 'dateCreation'> & { password?: string }) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
 }
 
 export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: AdminFormProps) {
+  const isEditing = !!initialData;
+
   const [formData, setFormData] = useState({
     prenom: initialData?.prenom || '',
     nom: initialData?.nom || '',
     email: initialData?.email || '',
     role: (initialData?.role || 'Administrateur') as Admin['role'],
+    password: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    await onSubmit(formData);
+    const { password, ...rest } = formData;
+    await onSubmit(isEditing ? rest : { ...rest, password });
   };
 
   return (
@@ -68,11 +72,32 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
           placeholder="jean.dupont@example.com"
           required
           aria-required="true"
-          disabled={!!initialData}
+          disabled={isEditing}
           maxLength={255}
           autoComplete="email"
         />
       </div>
+
+      {!isEditing && (
+        <div className="space-y-2">
+          <Label htmlFor="password">Mot de passe initial</Label>
+          <Input
+            id="password"
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            placeholder="Minimum 6 caractères"
+            required
+            aria-required="true"
+            minLength={6}
+            maxLength={100}
+            autoComplete="new-password"
+          />
+          <p className="text-xs text-muted-foreground">
+            Communiquez ce mot de passe à l'administrateur. Il pourra le modifier depuis son profil.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="role">Rôle</Label>
@@ -97,7 +122,7 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
         </Button>
         <Button type="submit" disabled={isSubmitting} className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {initialData ? "Enregistrer les modifications" : "Créer le compte"}
+          {isEditing ? "Enregistrer les modifications" : "Créer le compte"}
         </Button>
       </div>
     </form>

@@ -1,59 +1,84 @@
 'use client';
-import { collection, doc, deleteDoc, updateDoc, type Firestore, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, type Firestore } from 'firebase/firestore';
 import { updateProfile, type Auth } from 'firebase/auth';
 import type { Admin } from '@/lib/types';
 
-const ADMINS_COLLECTION = 'admins';
-
 /**
- * Crée un profil administrateur dans Firestore.
+ * Récupère le token d'authentification de l'utilisateur courant.
  */
-export async function createAdminProfile(db: Firestore, adminData: Omit<Admin, 'id' | 'dateCreation'>): Promise<string> {
-    const { prenom, nom, email, role } = adminData;
-    
-    const adminRef = collection(db, ADMINS_COLLECTION);
-    const newDoc = await addDoc(adminRef, {
-        prenom,
-        nom,
-        email,
-        role,
-        dateCreation: new Date().toISOString()
-    });
-    return newDoc.id;
+async function getIdToken(auth: Auth): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Utilisateur non connecté.');
+  return user.getIdToken();
 }
 
 /**
- * Met à jour un profil administrateur existant avec protection contre le Mass Assignment.
+ * Crée un compte Firebase Auth + profil Firestore via l'API sécurisée.
+ * Le doc Firestore est créé avec l'UID Firebase Auth comme identifiant.
+ */
+export async function createAdminProfile(
+  auth: Auth,
+  adminData: Omit<Admin, 'id' | 'dateCreation'> & { password: string }
+): Promise<void> {
+  const token = await getIdToken(auth);
+
+  const res = await fetch('/api/create-admin', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(adminData),
+  });
+
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+}
+
+/**
+ * Met à jour un profil administrateur existant (nom, prénom, rôle uniquement).
  */
 export async function updateAdminProfile(db: Firestore, auth: Auth, id: string, updates: Partial<Admin>): Promise<void> {
-    const adminDocRef = doc(db, ADMINS_COLLECTION, id);
-    
-    const allowedUpdates: any = {};
-    if (updates.prenom !== undefined) allowedUpdates.prenom = updates.prenom;
-    if (updates.nom !== undefined) allowedUpdates.nom = updates.nom;
-    if (updates.role !== undefined) allowedUpdates.role = updates.role;
+  const adminDocRef = doc(db, 'admins', id);
 
-    await updateDoc(adminDocRef, allowedUpdates);
+  const allowedUpdates: any = {};
+  if (updates.prenom !== undefined) allowedUpdates.prenom = updates.prenom;
+  if (updates.nom !== undefined) allowedUpdates.nom = updates.nom;
+  if (updates.role !== undefined) allowedUpdates.role = updates.role;
 
-    try {
-        const currentUser = auth.currentUser;
-        if (currentUser && currentUser.uid === id) {
-            const prenom = allowedUpdates.prenom !== undefined ? allowedUpdates.prenom : (currentUser.displayName?.split(' ')[0] || '');
-            const nom = allowedUpdates.nom !== undefined ? allowedUpdates.nom : (currentUser.displayName?.split(' ').slice(1).join(' ') || '');
-            const newDisplayName = `${prenom} ${nom}`.trim();
-            
-            if (newDisplayName && newDisplayName !== currentUser.displayName) {
-                await updateProfile(currentUser, { displayName: newDisplayName });
-            }
-        }
-    } catch (authError) {
-        // Log interne uniquement, pas d'exposition front-end
+  await updateDoc(adminDocRef, allowedUpdates);
+
+  try {
+    const currentUser = auth.currentUser;
+    if (currentUser && currentUser.uid === id) {
+      const prenom = allowedUpdates.prenom ?? currentUser.displayName?.split(' ')[0] ?? '';
+      const nom = allowedUpdates.nom ?? currentUser.displayName?.split(' ').slice(1).join(' ') ?? '';
+      const newDisplayName = `${prenom} ${nom}`.trim();
+      if (newDisplayName && newDisplayName !== currentUser.displayName) {
+        await updateProfile(currentUser, { displayName: newDisplayName });
+      }
     }
+  } catch {
+    // Erreur non bloquante sur le displayName Auth
+  }
 }
 
 /**
- * Supprime un profil administrateur.
+ * Supprime le compte Firebase Auth + le profil Firestore via l'API sécurisée.
+ * Refuse la suppression si c'est le dernier admin.
  */
-export async function deleteAdminProfile(db: Firestore, id: string): Promise<void> {
-    await deleteDoc(doc(db, ADMINS_COLLECTION, id));
+export async function deleteAdminProfile(auth: Auth, uid: string): Promise<void> {
+  const token = await getIdToken(auth);
+
+  const res = await fetch('/api/delete-admin', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ uid }),
+  });
+
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
 }

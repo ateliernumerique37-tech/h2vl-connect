@@ -76,7 +76,7 @@ export default function AdminPage() {
     setIsFormDialogOpen(true);
   };
 
-  const handleSubmitAdmin = async (formData: Omit<Admin, 'id' | 'dateCreation'>) => {
+  const handleSubmitAdmin = async (formData: Omit<Admin, 'id' | 'dateCreation'> & { password?: string }) => {
     setIsSubmitting(true);
     try {
         if (editingAdmin) {
@@ -84,9 +84,9 @@ export default function AdminPage() {
             await addLog(db, auth, `Modification de l'admin : ${formData.prenom} ${formData.nom}`);
             toast({ title: "Modifications enregistrées" });
         } else {
-            await createAdminProfile(db, formData);
-            await addLog(db, auth, `Création du profil admin : ${formData.prenom} ${formData.nom}`);
-            toast({ title: "Profil administrateur créé", description: "L'utilisateur peut maintenant s'inscrire avec cet email." });
+            await createAdminProfile(auth, formData as Omit<Admin, 'id' | 'dateCreation'> & { password: string });
+            await addLog(db, auth, `Création du compte admin : ${formData.prenom} ${formData.nom}`);
+            toast({ title: "Compte créé", description: "Le compte Firebase Auth et le profil ont été créés." });
         }
         setIsFormDialogOpen(false);
     } catch (error: any) {
@@ -98,7 +98,7 @@ export default function AdminPage() {
 
   const handleDeleteAdmin = async (admin: Admin) => {
     try {
-        await deleteAdminProfile(db, admin.id);
+        await deleteAdminProfile(auth, admin.id);
         await addLog(db, auth, `Suppression de l'admin : ${admin.prenom} ${admin.nom}`);
         toast({ title: "Administrateur supprimé" });
     } catch (error: any) {
