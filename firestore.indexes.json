@@ -1,0 +1,53 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "inscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "id_evenement", "order": "ASCENDING" },
+        { "fieldPath": "id_adherent", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "inscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "id_evenement", "order": "ASCENDING" },
+        { "fieldPath": "a_paye", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "email_tracking",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campagneId", "order": "ASCENDING" },
+        { "fieldPath": "adherentId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "email_tracking",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campagneId", "order": "ASCENDING" },
+        { "fieldPath": "statut", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invitations_evenement",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "evenementId", "order": "ASCENDING" },
+        { "fieldPath": "statut", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "cotisations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "adherentId", "order": "ASCENDING" },
+        { "fieldPath": "annee", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

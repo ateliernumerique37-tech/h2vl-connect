@@ -74,6 +74,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
+    /** Invitations événements - ACCÈS PUBLIC EN LECTURE/ÉCRITURE POUR L'AUTO-INSCRIPTION */
+    match /invitations_evenement/{jeton} {
+      allow read, write: if true;
+    }
+
     /** Ancienne collection roles_admins (compatibilité) */
     match /roles_admins/{id} {
       allow read: if isSignedIn();
