@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { initializeFirebase } from '@/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { CheckCircle2, AlertCircle, Loader2, Mail } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -30,7 +30,7 @@ function ConfirmationContent() {
           // Mise à jour du statut
           await updateDoc(docRef, {
             statut: 'confirmé',
-            dateLecture: serverTimestamp()
+            dateLecture: new Date().toISOString()
           });
           setStatus('success');
         } else {
@@ -45,9 +45,7 @@ function ConfirmationContent() {
       }
     };
 
-    // Délai de 1.5s pour laisser le temps à Firestore de propager l'écriture
-    const timer = setTimeout(validateToken, 1500);
-    return () => clearTimeout(timer);
+    validateToken();
   }, [jeton]);
 
   return (

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,7 @@ import { addInscription, updateInscription, deleteInscription } from '@/services
 import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query } from 'firebase/firestore';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -389,6 +390,52 @@ export default function EventDetailPage() {
       .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [rawAdherents, eventInscriptions]);
 
+  const [isSendingInvitations, setIsSendingInvitations] = useState(false);
+  const [invitationProgress, setInvitationProgress] = useState(0);
+
+  const handleSendInvitations = async () => {
+    if (!event || nonRegisteredAdherents.length === 0) return;
+    setIsSendingInvitations(true);
+    setInvitationProgress(0);
+
+    const formattedEventDate = new Date(event.date).toLocaleDateString('fr-FR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+    let successCount = 0;
+    for (let i = 0; i < nonRegisteredAdherents.length; i++) {
+      const adherent = nonRegisteredAdherents[i];
+      if (!adherent.email) {
+        setInvitationProgress(Math.round(((i + 1) / nonRegisteredAdherents.length) * 100));
+        continue;
+      }
+      try {
+        const res = await fetch('/api/send-invitation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: adherent.email,
+            firstName: adherent.prenom,
+            adherentId: adherent.id,
+            eventId: event.id,
+            eventTitle: event.titre,
+            eventDate: formattedEventDate,
+            eventLocation: event.lieu,
+            eventPrix: event.prix,
+          }),
+        });
+        if (res.ok) successCount++;
+      } catch (e) {
+        console.error(`Echec invitation ${adherent.email}:`, e);
+      }
+      setInvitationProgress(Math.round(((i + 1) / nonRegisteredAdherents.length) * 100));
+    }
+
+    await addLog(db, auth, `Invitations envoyées pour "${event.titre}" (${successCount}/${nonRegisteredAdherents.length})`);
+    toast({ title: 'Invitations envoyées', description: `${successCount} invitation(s) envoyée(s).` });
+    setIsSendingInvitations(false);
+  };
+
   const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
     try {
       await updateInscription(db, inscriptionId, { a_paye: hasPaid });
@@ -422,6 +469,7 @@ export default function EventDetailPage() {
               firstName: adherent.prenom,
               adherentId: adherent.id,
               campaignId: `inscription_${event.id}`,
+              subject: `Confirmation d'inscription : ${event.titre}`,
               eventTitle: event.titre,
               eventDate: formattedEventDate,
               eventLocation: event.lieu,
@@ -617,13 +665,75 @@ export default function EventDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <RegisterMemberDialog 
-            event={event} 
-            adherentsList={nonRegisteredAdherents} 
-            onRegister={handleNewRegistration} 
+          <RegisterMemberDialog
+            event={event}
+            adherentsList={nonRegisteredAdherents}
+            onRegister={handleNewRegistration}
             isLoading={isLoadingAdherents || isLoadingInscriptions}
             currentCount={eventInscriptions.length}
           />
+
+          <Card className="shadow-sm border-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Mail className="h-4 w-4 text-primary" aria-hidden="true" />
+                Invitations par e-mail
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground" id="invitation-desc">
+                Envoie une invitation avec un lien d'auto-inscription à chaque adhérent non encore inscrit ({nonRegisteredAdherents.length} adhérent{nonRegisteredAdherents.length > 1 ? 's' : ''}).
+              </p>
+              <div aria-live="polite" aria-atomic="true">
+                {isSendingInvitations && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Envoi en cours…</span>
+                      <span aria-label={`${invitationProgress} pourcent`}>{invitationProgress}%</span>
+                    </div>
+                    <Progress
+                      value={invitationProgress}
+                      className="h-2"
+                      aria-label="Progression de l'envoi des invitations"
+                      aria-valuenow={invitationProgress}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    />
+                  </div>
+                )}
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    className="w-full min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                    variant="outline"
+                    disabled={isSendingInvitations || nonRegisteredAdherents.length === 0 || isLoadingAdherents || isLoadingInscriptions}
+                    aria-describedby="invitation-desc"
+                    aria-label={`Envoyer les invitations à ${nonRegisteredAdherents.length} adhérent${nonRegisteredAdherents.length > 1 ? 's' : ''} non inscrits à ${event.titre}`}
+                  >
+                    {isSendingInvitations
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Envoi…</>
+                      : <><Mail className="mr-2 h-4 w-4" aria-hidden="true" /> Envoyer les invitations</>
+                    }
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Envoyer les invitations ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {nonRegisteredAdherents.length} adhérent{nonRegisteredAdherents.length > 1 ? 's' : ''} recevront un e-mail avec un lien personnel pour confirmer leur inscription à <strong>{event.titre}</strong>.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleSendInvitations} className="focus-visible:ring-2 focus-visible:ring-primary">
+                      Confirmer l'envoi
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
 
           <Card className="shadow-sm border-2 overflow-hidden">
             <CardHeader className="bg-muted/30 border-b">

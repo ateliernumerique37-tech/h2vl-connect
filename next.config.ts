@@ -10,7 +10,7 @@ const withPWA = withPWAInit({
   // NavigateFallbackDenylist empêche le Service Worker de gérer ces URLs comme des requêtes de navigation.
   // Crucial pour les pages publiques dynamiques qui ne doivent pas être gérées par la logique PWA.
   // @ts-ignore
-  navigateFallbackDenylist: [/^\/public/],
+  navigateFallbackDenylist: [/^\/public/], // couvre /public/confirmation/* ET /public/inscription-invitation/*
 });
 
 const nextConfig: NextConfig = {

@@ -4,6 +4,15 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Initialisation de Firebase côté serveur pour éviter les conflits 'use client'
 function getDb() {
   const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -61,7 +70,6 @@ export async function POST(request: Request) {
       try {
         const db = getDb();
         await setDoc(doc(db, 'email_tracking', jeton), {
-          jeton,
           adherentId,
           campagneId: campaignId || 'direct',
           statut: 'envoyé',
@@ -74,7 +82,10 @@ export async function POST(request: Request) {
       }
     }
 
-    const origin = 'https://studio--studio-6079106449-cf583.us-central1.hosted.app';
+    const forwardedProto = request.headers.get('x-forwarded-proto');
+    const host = request.headers.get('host') || 'localhost:9002';
+    const protocol = forwardedProto || (host.includes('localhost') ? 'http' : 'https');
+    const origin = `${protocol}://${host}`;
     const confirmationUrl = `${origin}/public/confirmation/${jeton}`;
     
     let html = '';
@@ -118,7 +129,7 @@ export async function POST(request: Request) {
           </div>
           <div style="padding: 30px;">
             <p style="font-size: 16px; font-weight: bold;">Bonjour ${firstName},</p>
-            <div style="font-size: 16px; color: #333; white-space: pre-wrap;">${campaignBody}</div>
+            <div style="font-size: 16px; color: #333; white-space: pre-wrap;">${escapeHtml(campaignBody || '')}</div>
             ${commonFooter}
           </div>
         </div>

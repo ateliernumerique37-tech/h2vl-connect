@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { Adherent, Inscription, LogEmail } from '@/lib/types';
+import type { Adherent, Inscription, EmailTracking } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -17,11 +17,11 @@ export default function InactiveMembersPage() {
   // Chargement des données nécessaires au diagnostic
   const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
   const inscriptionsQuery = useMemoFirebase(() => collection(db, 'inscriptions'), [db]);
-  const emailLogsQuery = useMemoFirebase(() => collection(db, 'email_logs'), [db]);
+  const emailLogsQuery = useMemoFirebase(() => collection(db, 'email_tracking'), [db]);
 
   const { data: adherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
   const { data: inscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
-  const { data: emailLogs, isLoading: isLoadingLogs } = useCollection<LogEmail>(emailLogsQuery);
+  const { data: emailLogs, isLoading: isLoadingLogs } = useCollection<EmailTracking>(emailLogsQuery);
 
   const isLoading = isLoadingAdherents || isLoadingInscriptions || isLoadingLogs;
 
@@ -38,10 +38,10 @@ export default function InactiveMembersPage() {
         ? new Date(Math.max(...memberInscriptions.map(i => new Date(i.date_inscription).getTime())))
         : null;
 
-      // 2. Trouver la dernière ouverture d'email
-      const memberLogs = emailLogs.filter(l => l.adherentId === adherent.id && l.ouvert);
+      // 2. Trouver la dernière confirmation de lecture d'email
+      const memberLogs = emailLogs.filter(l => l.adherentId === adherent.id && l.statut === 'confirmé');
       const lastEmailOpenDate = memberLogs.length > 0
-        ? new Date(Math.max(...memberLogs.map(l => new Date(l.dateOuverture!).getTime())))
+        ? new Date(Math.max(...memberLogs.map(l => new Date(l.dateLecture!).getTime())))
         : null;
 
       // Détermination de l'inactivité (si les deux sont < 6 mois ou inexistants)
@@ -53,13 +53,13 @@ export default function InactiveMembersPage() {
       // Calcul du dernier contact global
       let lastContact = "Aucun contact enregistré";
       if (lastInscriptionDate && lastEmailOpenDate) {
-        lastContact = lastInscriptionDate > lastEmailOpenDate 
+        lastContact = lastInscriptionDate > lastEmailOpenDate
           ? `Dernière inscription : ${lastInscriptionDate.toLocaleDateString('fr-FR')}`
-          : `Dernier e-mail ouvert : ${lastEmailOpenDate.toLocaleDateString('fr-FR')}`;
+          : `Dernier e-mail confirmé : ${lastEmailOpenDate.toLocaleDateString('fr-FR')}`;
       } else if (lastInscriptionDate) {
         lastContact = `Dernière inscription : ${lastInscriptionDate.toLocaleDateString('fr-FR')}`;
       } else if (lastEmailOpenDate) {
-        lastContact = `Dernier e-mail ouvert : ${lastEmailOpenDate.toLocaleDateString('fr-FR')}`;
+        lastContact = `Dernier e-mail confirmé : ${lastEmailOpenDate.toLocaleDateString('fr-FR')}`;
       }
 
       return {

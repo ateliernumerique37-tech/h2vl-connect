@@ -97,3 +97,12 @@ export interface EmailTracking {
   dateEnvoi: string;
   dateLecture: string | null;
 }
+
+export interface InvitationEvenement {
+  evenementId: string;
+  eventTitle: string;
+  adherentId: string;
+  statut: 'envoyé' | 'inscrit';
+  dateEnvoi: string;
+  dateInscription: string | null;
+}

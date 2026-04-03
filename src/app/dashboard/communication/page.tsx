@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { Adherent, CampagneEmail, EmailTracking } from '@/lib/types';
+import type { Adherent, CampagneEmail, EmailTracking, InvitationEvenement } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 
 const ITEMS_PER_PAGE = 10;
 
-type TrackingType = 'manual' | 'inscription' | 'birthday';
+type TrackingType = 'manual' | 'inscription' | 'birthday' | 'invitation';
 
 export default function CommunicationPage() {
   const db = useFirestore();
@@ -38,6 +38,9 @@ export default function CommunicationPage() {
 
   const trackingQuery = useMemoFirebase(() => collection(db, 'email_tracking'), [db]);
   const { data: allTracking } = useCollection<EmailTracking>(trackingQuery);
+
+  const invitationsQuery = useMemoFirebase(() => collection(db, 'invitations_evenement'), [db]);
+  const { data: allInvitations } = useCollection<InvitationEvenement>(invitationsQuery);
 
   // Filtres Envoi
   const [searchTerm, setSearchTerm] = useState('');
@@ -170,53 +173,75 @@ export default function CommunicationPage() {
 
   // --- Logique Suivi ---
   const filteredCampaignList = useMemo(() => {
-    if (!allTracking) return [];
-
     if (trackingTypeFilter === 'manual') {
       return campaigns || [];
     }
 
-    // Pour les inscriptions et anniversaires, on groupe par campaignId virtuel
+    if (trackingTypeFilter === 'invitation') {
+      if (!allInvitations) return [];
+      const groupMap: Record<string, { id: string, sujet: string, dateEnvoi: string, nbDestinataires: number }> = {};
+      allInvitations.forEach(inv => {
+        if (!groupMap[inv.evenementId]) {
+          groupMap[inv.evenementId] = {
+            id: inv.evenementId,
+            sujet: inv.eventTitle || 'Événement',
+            dateEnvoi: inv.dateEnvoi,
+            nbDestinataires: 0,
+          };
+        }
+        groupMap[inv.evenementId].nbDestinataires += 1;
+        // Conserver la date d'envoi la plus récente pour le groupe
+        if (inv.dateEnvoi > groupMap[inv.evenementId].dateEnvoi) {
+          groupMap[inv.evenementId].dateEnvoi = inv.dateEnvoi;
+        }
+      });
+      return Object.values(groupMap).sort((a, b) => new Date(b.dateEnvoi).getTime() - new Date(a.dateEnvoi).getTime());
+    }
+
+    // Inscriptions et anniversaires : groupés par campagneId depuis email_tracking
+    if (!allTracking) return [];
     const groupMap: Record<string, { id: string, sujet: string, dateEnvoi: string, nbDestinataires: number }> = {};
-    
     allTracking.forEach(t => {
       const isMatch = (trackingTypeFilter === 'inscription' && t.campagneId.startsWith('inscription')) ||
                       (trackingTypeFilter === 'birthday' && t.campagneId === 'anniversaire');
-      
       if (isMatch) {
         if (!groupMap[t.campagneId]) {
           groupMap[t.campagneId] = {
             id: t.campagneId,
-            sujet: trackingTypeFilter === 'inscription' ? 'Confirmation d\'inscription' : 'Vœux d\'anniversaire',
-            dateEnvoi: t.dateEnvoi, // Date du premier envoi trouvé
-            nbDestinataires: 0
+            sujet: trackingTypeFilter === 'inscription' ? "Confirmation d'inscription" : 'Vœux d\'anniversaire',
+            dateEnvoi: t.dateEnvoi,
+            nbDestinataires: 0,
           };
         }
         groupMap[t.campagneId].nbDestinataires += 1;
       }
     });
-
     return Object.values(groupMap).sort((a, b) => new Date(b.dateEnvoi).getTime() - new Date(a.dateEnvoi).getTime());
-  }, [campaigns, allTracking, trackingTypeFilter]);
+  }, [campaigns, allTracking, allInvitations, trackingTypeFilter]);
 
   const campaignStats = useMemo(() => {
-    if (!allTracking) return {};
     const stats: Record<string, { confirmed: number, total: number, percentage: number }> = {};
-    
-    // On calcule les stats pour chaque groupe présent dans filteredCampaignList
+
+    if (trackingTypeFilter === 'invitation') {
+      if (!allInvitations) return stats;
+      filteredCampaignList.forEach(c => {
+        const invs = allInvitations.filter(inv => inv.evenementId === c.id);
+        const confirmed = invs.filter(inv => inv.statut === 'inscrit').length;
+        const total = invs.length;
+        stats[c.id] = { confirmed, total, percentage: total > 0 ? Math.round((confirmed / total) * 100) : 0 };
+      });
+      return stats;
+    }
+
+    if (!allTracking) return stats;
     filteredCampaignList.forEach(c => {
       const tracking = allTracking.filter(t => t.campagneId === c.id);
       const confirmed = tracking.filter(t => t.statut === 'confirmé').length;
       const total = tracking.length || c.nbDestinataires || 0;
-      stats[c.id] = {
-        confirmed,
-        total,
-        percentage: total > 0 ? Math.round((confirmed / total) * 100) : 0
-      };
+      stats[c.id] = { confirmed, total, percentage: total > 0 ? Math.round((confirmed / total) * 100) : 0 };
     });
-    
     return stats;
-  }, [filteredCampaignList, allTracking]);
+  }, [filteredCampaignList, allTracking, allInvitations, trackingTypeFilter]);
 
   const selectedCampaignTracking = useMemo(() => {
     if (!selectedCampaignId || !allTracking || !adherents) return [];
@@ -229,6 +254,17 @@ export default function CommunicationPage() {
       .sort((a, b) => a.adherentName.localeCompare(b.adherentName));
   }, [selectedCampaignId, allTracking, adherents]);
 
+  const selectedInvitationTracking = useMemo(() => {
+    if (!selectedCampaignId || !allInvitations || !adherents) return [];
+    return allInvitations
+      .filter(inv => inv.evenementId === selectedCampaignId)
+      .map(inv => {
+        const adherent = adherents.find(a => a.id === inv.adherentId);
+        return { ...inv, adherentName: adherent ? `${adherent.prenom} ${adherent.nom}` : 'Adhérent inconnu' };
+      })
+      .sort((a, b) => a.adherentName.localeCompare(b.adherentName));
+  }, [selectedCampaignId, allInvitations, adherents]);
+
   return (
     <div className="space-y-6 pb-12">
       <header>
@@ -238,8 +274,8 @@ export default function CommunicationPage() {
 
       <Tabs defaultValue="envoi" className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="envoi" className="flex items-center gap-2"><Send className="h-4 w-4" /> Envoi</TabsTrigger>
-          <TabsTrigger value="suivi" className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Suivi</TabsTrigger>
+          <TabsTrigger value="envoi" className="flex items-center gap-2"><Send className="h-4 w-4" aria-hidden="true" /> Envoi</TabsTrigger>
+          <TabsTrigger value="suivi" className="flex items-center gap-2"><BarChart3 className="h-4 w-4" aria-hidden="true" /> Suivi</TabsTrigger>
         </TabsList>
 
         <TabsContent value="envoi" className="space-y-6">
@@ -250,13 +286,20 @@ export default function CommunicationPage() {
                 <CardDescription>Sélectionnez les membres qui recevront votre message.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input placeholder="Rechercher..." className="pl-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <div className="relative" role="search">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    id="adherent-search"
+                    aria-label="Rechercher un adhérent par nom"
+                    placeholder="Rechercher..."
+                    className="pl-9"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <Select value={cotisationFilter} onValueChange={setCotisationFilter}>
-                    <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Cotisation" /></SelectTrigger>
+                    <SelectTrigger className="text-xs h-9" aria-label="Filtrer par statut de cotisation"><SelectValue placeholder="Cotisation" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Tous">Toutes Cotisations</SelectItem>
                       <SelectItem value="Oui">À jour</SelectItem>
@@ -264,7 +307,7 @@ export default function CommunicationPage() {
                     </SelectContent>
                   </Select>
                   <Select value={genreFilter} onValueChange={setGenreFilter}>
-                    <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Genre" /></SelectTrigger>
+                    <SelectTrigger className="text-xs h-9" aria-label="Filtrer par genre"><SelectValue placeholder="Genre" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Tous">Tous Genres</SelectItem>
                       <SelectItem value="H">Hommes</SelectItem>
@@ -272,7 +315,7 @@ export default function CommunicationPage() {
                     </SelectContent>
                   </Select>
                   <Select value={bureauFilter} onValueChange={setBureauFilter}>
-                    <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Statut" /></SelectTrigger>
+                    <SelectTrigger className="text-xs h-9" aria-label="Filtrer par statut bureau ou bénévole"><SelectValue placeholder="Statut" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Tous">Tous Statuts</SelectItem>
                       <SelectItem value="Bureau">Bureau</SelectItem>
@@ -286,7 +329,11 @@ export default function CommunicationPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">
-                          <Checkbox checked={selectedIds.size === filteredAdherents.length && filteredAdherents.length > 0} onCheckedChange={handleSelectAll} />
+                          <Checkbox
+                            checked={selectedIds.size === filteredAdherents.length && filteredAdherents.length > 0}
+                            onCheckedChange={handleSelectAll}
+                            aria-label="Sélectionner tous les adhérents filtrés"
+                          />
                         </TableHead>
                         <TableHead>Nom</TableHead>
                         <TableHead className="hidden md:table-cell">Email</TableHead>
@@ -298,7 +345,13 @@ export default function CommunicationPage() {
                       ) : paginatedAdherents.length > 0 ? (
                         paginatedAdherents.map(a => (
                           <TableRow key={a.id}>
-                            <TableCell><Checkbox checked={selectedIds.has(a.id)} onCheckedChange={() => toggleSelection(a.id)} /></TableCell>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedIds.has(a.id)}
+                                onCheckedChange={() => toggleSelection(a.id)}
+                                aria-label={`Sélectionner ${a.prenom} ${a.nom}`}
+                              />
+                            </TableCell>
                             <TableCell className="text-sm font-medium">{a.prenom} {a.nom}</TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{a.email}</TableCell>
                           </TableRow>
@@ -339,12 +392,24 @@ export default function CommunicationPage() {
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col gap-4 border-t pt-6">
-                {isSending && (
-                  <div className="w-full space-y-1">
-                    <div className="flex justify-between text-xs"><span>Envoi...</span><span>{sendProgress}%</span></div>
-                    <Progress value={sendProgress} className="h-2" />
-                  </div>
-                )}
+                <div aria-live="polite" aria-atomic="true" className="w-full">
+                  {isSending && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span>Envoi en cours…</span>
+                        <span aria-label={`${sendProgress} pourcent`}>{sendProgress}%</span>
+                      </div>
+                      <Progress
+                        value={sendProgress}
+                        className="h-2"
+                        aria-label="Progression de l'envoi de la campagne"
+                        aria-valuenow={sendProgress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      />
+                    </div>
+                  )}
+                </div>
                 <Button className="w-full h-12 text-base" disabled={isSending || selectedIds.size === 0 || isLoadingAdherents} onClick={handleSendCampaign}>
                   {isSending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
                   Envoyer aux {selectedIds.size} sélectionnés
@@ -365,7 +430,8 @@ export default function CommunicationPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="manual">Campagnes Manuelles</SelectItem>
-                    <SelectItem value="inscription">Inscriptions Événements</SelectItem>
+                    <SelectItem value="invitation">Invitations Événements</SelectItem>
+                    <SelectItem value="inscription">Confirmations d'inscription</SelectItem>
                     <SelectItem value="birthday">Anniversaires</SelectItem>
                   </SelectContent>
                 </Select>
@@ -383,22 +449,36 @@ export default function CommunicationPage() {
                   {filteredCampaignList.map(campaign => {
                     const stats = campaignStats[campaign.id] || { confirmed: 0, total: 0, percentage: 0 };
                     const isSelected = selectedCampaignId === campaign.id;
+                    const statLabel = trackingTypeFilter === 'invitation' ? 'inscrits' : 'confirmés';
                     return (
-                      <Card key={campaign.id} className={cn("cursor-pointer transition-all hover:border-primary/50", isSelected ? "border-primary ring-1 ring-primary/20 bg-primary/5" : "")} onClick={() => setSelectedCampaignId(campaign.id)}>
+                      <Card
+                        key={campaign.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isSelected}
+                        aria-label={`${campaign.sujet}, ${stats.confirmed} sur ${stats.total} ${statLabel}, ${stats.percentage}%`}
+                        className={cn("cursor-pointer transition-all hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2", isSelected ? "border-primary ring-1 ring-primary/20 bg-primary/5" : "")}
+                        onClick={() => setSelectedCampaignId(campaign.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedCampaignId(campaign.id); } }}
+                      >
                         <CardHeader className="p-4 pb-2">
                           <div className="flex justify-between items-start gap-2">
                             <CardTitle className="text-sm font-bold line-clamp-1">{campaign.sujet}</CardTitle>
-                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">{new Date(campaign.dateEnvoi).toLocaleDateString('fr-FR')}</span>
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap" aria-hidden="true">{new Date(campaign.dateEnvoi).toLocaleDateString('fr-FR')}</span>
                           </div>
                         </CardHeader>
                         <CardContent className="p-4 pt-0 space-y-3">
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-muted-foreground">{stats.confirmed} / {stats.total} confirmés</span>
+                          <div className="flex justify-between text-xs mb-1" aria-hidden="true">
+                            <span className="text-muted-foreground">{stats.confirmed} / {stats.total} {statLabel}</span>
                             <span className="font-bold text-primary">{stats.percentage}%</span>
                           </div>
-                          <Progress value={stats.percentage} className="h-1.5" />
+                          <Progress
+                            value={stats.percentage}
+                            className="h-1.5"
+                            aria-hidden="true"
+                          />
                         </CardContent>
-                        <CardFooter className="p-2 border-t flex justify-end"><ChevronRight className="h-4 w-4 text-muted-foreground" /></CardFooter>
+                        <CardFooter className="p-2 border-t flex justify-end"><ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" /></CardFooter>
                       </Card>
                     );
                   })}
@@ -414,43 +494,80 @@ export default function CommunicationPage() {
                   <CardHeader className="border-b bg-muted/10">
                     <div className="flex justify-between items-center">
                       <div>
-                        <CardTitle className="text-lg">Détails de réception</CardTitle>
-                        <CardDescription>Destinataires pour : {filteredCampaignList.find(c => c.id === selectedCampaignId)?.sujet}</CardDescription>
+                        <CardTitle className="text-lg">
+                          {trackingTypeFilter === 'invitation' ? "Détails des invitations" : "Détails de réception"}
+                        </CardTitle>
+                        <CardDescription>
+                          {filteredCampaignList.find(c => c.id === selectedCampaignId)?.sujet}
+                        </CardDescription>
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => setSelectedCampaignId(null)}>Fermer</Button>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Adhérent</TableHead>
-                          <TableHead>Statut</TableHead>
-                          <TableHead className="text-right">Confirmation</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedCampaignTracking.length > 0 ? (
-                          selectedCampaignTracking.map((track) => (
-                            <TableRow key={track.jeton}>
-                              <TableCell className="font-medium text-sm">{track.adherentName}</TableCell>
-                              <TableCell>
-                                {track.statut === 'confirmé' ? (
-                                  <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100"><CheckCircle2 className="h-3 w-3" /> Confirmé</span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full border"><Clock className="h-3 w-3" /> Envoyé</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right text-xs text-muted-foreground">
-                                {track.dateLecture ? new Date(track.dateLecture).toLocaleString('fr-FR') : '-'}
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow><TableCell colSpan={3} className="text-center py-12 text-muted-foreground italic">Aucune donnée.</TableCell></TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                    {trackingTypeFilter === 'invitation' ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Adhérent</TableHead>
+                            <TableHead>Statut</TableHead>
+                            <TableHead className="text-right">Date d'inscription</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedInvitationTracking.length > 0 ? (
+                            selectedInvitationTracking.map((inv) => (
+                              <TableRow key={`${inv.evenementId}-${inv.adherentId}`}>
+                                <TableCell className="font-medium text-sm">{inv.adherentName}</TableCell>
+                                <TableCell>
+                                  {inv.statut === 'inscrit' ? (
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100"><CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Inscrit</span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full border"><Clock className="h-3 w-3" aria-hidden="true" /> Invitation envoyée</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {inv.dateInscription ? new Date(inv.dateInscription).toLocaleString('fr-FR') : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow><TableCell colSpan={3} className="text-center py-12 text-muted-foreground italic">Aucune donnée.</TableCell></TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Adhérent</TableHead>
+                            <TableHead>Statut</TableHead>
+                            <TableHead className="text-right">Confirmation</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedCampaignTracking.length > 0 ? (
+                            selectedCampaignTracking.map((track) => (
+                              <TableRow key={track.jeton}>
+                                <TableCell className="font-medium text-sm">{track.adherentName}</TableCell>
+                                <TableCell>
+                                  {track.statut === 'confirmé' ? (
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100"><CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Confirmé</span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full border"><Clock className="h-3 w-3" aria-hidden="true" /> Envoyé</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {track.dateLecture ? new Date(track.dateLecture).toLocaleString('fr-FR') : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow><TableCell colSpan={3} className="text-center py-12 text-muted-foreground italic">Aucune donnée.</TableCell></TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
