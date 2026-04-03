@@ -2,8 +2,6 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
   maxInstances: 1
 
 env:
@@ -19,14 +17,11 @@ env:
     value: ateliernumerique37@gmail.com
     availability:
       - RUNTIME
-  - variable: EMAIL_FROM_NAME
-    value: "Gestion de l'association H2VL"
+  - variable: EMAIL_PASS
+    value: deyqfrobqwyfagsf
     availability:
       - RUNTIME
-  # EMAIL_PASS est stocké dans Firebase Secret Manager.
-  # Crée le secret avec : firebase apphosting:secrets:set email-smtp-password
-  # Puis accorde l'accès : firebase apphosting:secrets:grantaccess email-smtp-password
-  - variable: EMAIL_PASS
-    secret: email-smtp-password
+  - variable: EMAIL_FROM_NAME
+    value: "Gestion de l'association H2VL"
     availability:
       - RUNTIME
