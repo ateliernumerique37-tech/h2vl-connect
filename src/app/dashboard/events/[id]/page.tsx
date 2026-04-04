@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { deleteEvenement } from '@/services/evenementsService';
@@ -101,6 +102,7 @@ function RegisterMemberDialog({
   const [selectedAdherentId, setSelectedAdherentId] = useState<string>("");
   const [isPaid, setIsPaid] = useState(false);
   const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
+  const [bowlingChoices, setBowlingChoices] = useState<Inscription['choixBowling']>({});
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -122,6 +124,7 @@ function RegisterMemberDialog({
       setSelectedAdherentId("");
       setIsPaid(false);
       setMenuChoices({});
+      setBowlingChoices({});
       setSearchTerm("");
       setActiveIndex(-1);
     }
@@ -169,7 +172,8 @@ function RegisterMemberDialog({
         id_evenement: event.id,
         id_adherent: selectedAdherentId,
         a_paye: isPaid,
-        ...(event.necessiteMenu && { choixMenu: menuChoices })
+        ...(event.necessiteMenu && { choixMenu: menuChoices }),
+        ...(event.estSortieBowling && { choixBowling: bowlingChoices }),
       };
       await onRegister(newInscription);
       setIsOpen(false);
@@ -325,6 +329,47 @@ function RegisterMemberDialog({
                 {event.optionsMenu.desserts?.length ? (
                   <MenuChoiceSection category="Dessert" options={event.optionsMenu.desserts} eventId={event.id} selected={menuChoices?.dessertChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, dessertChoisi: value}))} />
                 ) : null}
+              </div>
+            </div>
+          )}
+
+          {event.estSortieBowling && (
+            <div className="space-y-3 rounded-lg border p-4 bg-muted/5">
+              <h4 className="font-bold border-b pb-2 text-sm uppercase text-primary/80">🎳 Options Bowling</h4>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
+                  <Checkbox
+                    id={`bowling-barrieres-${event.id}`}
+                    checked={bowlingChoices?.avecBarrieres ?? false}
+                    onCheckedChange={(checked) => setBowlingChoices(prev => ({ ...prev, avecBarrieres: checked === true, sansBarrieres: checked === true ? false : prev?.sansBarrieres }))}
+                    aria-label="Joue avec barrières"
+                  />
+                  <Label htmlFor={`bowling-barrieres-${event.id}`} className="flex-1 cursor-pointer text-sm font-normal">
+                    Avec barrières
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
+                  <Checkbox
+                    id={`bowling-sans-barrieres-${event.id}`}
+                    checked={bowlingChoices?.sansBarrieres ?? false}
+                    onCheckedChange={(checked) => setBowlingChoices(prev => ({ ...prev, sansBarrieres: checked === true, avecBarrieres: checked === true ? false : prev?.avecBarrieres }))}
+                    aria-label="Joue sans barrières"
+                  />
+                  <Label htmlFor={`bowling-sans-barrieres-${event.id}`} className="flex-1 cursor-pointer text-sm font-normal">
+                    Sans barrières
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
+                  <Checkbox
+                    id={`bowling-gouter-${event.id}`}
+                    checked={bowlingChoices?.prendGouter ?? false}
+                    onCheckedChange={(checked) => setBowlingChoices(prev => ({ ...prev, prendGouter: checked === true }))}
+                    aria-label="Prend le goûter de l'amitié"
+                  />
+                  <Label htmlFor={`bowling-gouter-${event.id}`} className="flex-1 cursor-pointer text-sm font-normal">
+                    Prend le goûter de l'amitié
+                  </Label>
+                </div>
               </div>
             </div>
           )}
@@ -515,12 +560,13 @@ export default function EventDetailPage() {
   const handleExportCSV = () => {
     if (!event || !eventInscriptions.length || !rawAdherents) return;
 
-    const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Montant Payé", "Choix Menu"];
-    
+    const hasBowling = event.estSortieBowling;
+    const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Montant Payé", "Choix Menu", ...(hasBowling ? ["Options Bowling"] : [])];
+
     const rows = eventInscriptions.map(ins => {
       const ad = rawAdherents.find(a => a.id === ins.id_adherent);
-      
-      const menuChoices = ins.choixMenu 
+
+      const menuChoicesStr = ins.choixMenu
         ? MENU_ORDER.map(menuItem => {
             const value = ins.choixMenu?.[menuItem.key as keyof typeof ins.choixMenu];
             return value ? `${menuItem.label}: ${value}` : null;
@@ -528,7 +574,15 @@ export default function EventDetailPage() {
           .filter(Boolean)
           .join(' | ')
         : '';
-      
+
+      const bowlingStr = ins.choixBowling
+        ? [
+            ins.choixBowling.avecBarrieres ? 'Avec barrières' : null,
+            ins.choixBowling.sansBarrieres ? 'Sans barrières' : null,
+            ins.choixBowling.prendGouter ? "Goûter de l'amitié" : null,
+          ].filter(Boolean).join(' | ')
+        : '';
+
       return [
         ad?.prenom || '',
         ad?.nom || '',
@@ -536,7 +590,8 @@ export default function EventDetailPage() {
         ad?.telephone || '',
         ins.a_paye ? "Payé" : "En attente",
         event.prix.toFixed(2),
-        menuChoices
+        menuChoicesStr,
+        ...(hasBowling ? [bowlingStr] : []),
       ];
     });
 
@@ -823,6 +878,23 @@ export default function EventDetailPage() {
                                 </div>
                               );
                             })}
+                          </div>
+                        )}
+
+                        {inscription.choixBowling && Object.values(inscription.choixBowling).some(v => v) && (
+                          <div className="mt-2 border-t pt-3" role="region" aria-label={`Options bowling pour ${adherentName}`}>
+                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-2">🎳 Bowling</span>
+                            <div className="flex flex-wrap gap-2">
+                              {inscription.choixBowling.avecBarrieres && (
+                                <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1">Avec barrières</span>
+                              )}
+                              {inscription.choixBowling.sansBarrieres && (
+                                <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1">Sans barrières</span>
+                              )}
+                              {inscription.choixBowling.prendGouter && (
+                                <span className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-1">Goûter de l'amitié</span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

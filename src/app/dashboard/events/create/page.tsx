@@ -17,6 +17,7 @@ import { useAuth, useFirestore } from '@/firebase';
 
 export default function CreateEventPage() {
     const [necessiteMenu, setNecessiteMenu] = useState(false);
+    const [estSortieBowling, setEstSortieBowling] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
@@ -39,6 +40,7 @@ export default function CreateEventPage() {
                 imageId: `event-${Math.floor(Math.random() * 6) + 1}`, // Temporary random image
                 necessiteMenu: formData.get('necessiteMenu') === 'on',
                 optionsMenu: {},
+                estSortieBowling,
             };
             
             if (newEvent.necessiteMenu) {
@@ -164,6 +166,28 @@ export default function CreateEventPage() {
                                 </div>
                             </div>
                         )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <h2 className="text-2xl font-semibold leading-none tracking-tight">Options bowling</h2>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center justify-between rounded-lg border p-4">
+                            <Label htmlFor="estSortieBowling" className="flex flex-col space-y-1 pr-4">
+                                <span>C'est une sortie bowling</span>
+                                <span className="font-normal leading-snug text-muted-foreground">
+                                    Si coché, lors de l'inscription d'un membre vous pourrez préciser ses préférences bowling.
+                                </span>
+                            </Label>
+                            <Switch
+                                id="estSortieBowling"
+                                checked={estSortieBowling}
+                                onCheckedChange={setEstSortieBowling}
+                                aria-label="Activer les options bowling pour cet événement"
+                            />
+                        </div>
                     </CardContent>
                 </Card>
 

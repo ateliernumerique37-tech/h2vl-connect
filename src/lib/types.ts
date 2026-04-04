@@ -33,6 +33,7 @@ export interface Evenement {
     fromages?: string[];
     desserts?: string[];
   };
+  estSortieBowling?: boolean;
 }
 
 export interface Inscription {
@@ -47,6 +48,11 @@ export interface Inscription {
     platChoisi?: string;
     fromageChoisi?: string;
     dessertChoisi?: string;
+  };
+  choixBowling?: {
+    avecBarrieres?: boolean;
+    sansBarrieres?: boolean;
+    prendGouter?: boolean;
   };
 }
 

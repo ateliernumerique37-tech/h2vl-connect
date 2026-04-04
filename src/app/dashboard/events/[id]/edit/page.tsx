@@ -66,6 +66,7 @@ export default function EditEventPage() {
     const [prix, setPrix] = useState('0');
     const [nombrePlacesMax, setNombrePlacesMax] = useState('50');
     const [necessiteMenu, setNecessiteMenu] = useState(false);
+    const [estSortieBowling, setEstSortieBowling] = useState(false);
     const [aperitifs, setAperitifs] = useState('');
     const [entrees, setEntrees] = useState('');
     const [plats, setPlats] = useState('');
@@ -89,6 +90,7 @@ export default function EditEventPage() {
                     setPrix(foundEvent.prix.toString());
                     setNombrePlacesMax((foundEvent.nombrePlacesMax || 50).toString());
                     setNecessiteMenu(foundEvent.necessiteMenu || false);
+                    setEstSortieBowling(foundEvent.estSortieBowling || false);
                     if (foundEvent.optionsMenu) {
                         setAperitifs(foundEvent.optionsMenu.aperitifs?.join(', ') || '');
                         setEntrees(foundEvent.optionsMenu.entrees?.join(', ') || '');
@@ -125,6 +127,7 @@ export default function EditEventPage() {
                 prix: parseFloat(prix),
                 nombrePlacesMax: parseInt(nombrePlacesMax, 10),
                 necessiteMenu,
+                estSortieBowling,
             };
 
             if (necessiteMenu) {
@@ -247,6 +250,28 @@ export default function EditEventPage() {
                             </div>
                         </div>
                     )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <h2 className="text-2xl font-semibold leading-none tracking-tight">Options bowling</h2>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                        <Label htmlFor="estSortieBowling" className="flex flex-col space-y-1 pr-4">
+                            <span>C'est une sortie bowling</span>
+                            <span className="font-normal leading-snug text-muted-foreground">
+                                Si coché, lors de l'inscription d'un membre vous pourrez préciser ses préférences bowling.
+                            </span>
+                        </Label>
+                        <Switch
+                            id="estSortieBowling"
+                            checked={estSortieBowling}
+                            onCheckedChange={setEstSortieBowling}
+                            aria-label="Activer les options bowling pour cet événement"
+                        />
+                    </div>
                 </CardContent>
             </Card>
 
