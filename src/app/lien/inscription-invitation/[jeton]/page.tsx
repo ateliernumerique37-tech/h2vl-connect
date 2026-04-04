@@ -9,6 +9,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  setDoc,
   collection,
   query,
   where,
@@ -51,6 +52,10 @@ function InscriptionContent() {
   // IDs nécessaires pour créer l'inscription différée
   const [pendingIds, setPendingIds] = useState<{ evenementId: string; adherentId: string } | null>(null);
 
+  // Données de l'adhérent stockées dans l'invitation (pour l'email de confirmation)
+  const [invitationEmail, setInvitationEmail] = useState<string | null>(null);
+  const [invitationFirstName, setInvitationFirstName] = useState<string | null>(null);
+
   // Choix de l'utilisateur
   const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
   const [bowlingChoices, setBowlingChoices] = useState<Inscription['choixBowling']>({});
@@ -73,6 +78,10 @@ function InscriptionContent() {
         }
 
         const invitation = invitationSnap.data();
+
+        // Stocker email et prénom de l'adhérent (présents si envoyé via la nouvelle version)
+        if (invitation.adherentEmail) setInvitationEmail(invitation.adherentEmail);
+        if (invitation.adherentFirstName) setInvitationFirstName(invitation.adherentFirstName);
 
         // 2. Déjà inscrit via ce lien
         if (invitation.statut === 'inscrit') {
@@ -135,18 +144,50 @@ function InscriptionContent() {
           return;
         }
 
-        // 7. Sinon, inscription directe (comportement original)
-        await addInscription(db, {
+        // 7. Sinon, inscription directe (pas de choix à faire)
+        const inscriptionDate = new Date().toISOString();
+        const inscriptionId = await addInscription(db, {
           id_evenement: evenementId,
           id_adherent: adherentId,
           a_paye: false,
-          date_inscription: new Date().toISOString(),
+          date_inscription: inscriptionDate,
+        });
+
+        // Jeton d'annulation
+        const jetonAnnulation = crypto.randomUUID();
+        await setDoc(doc(db, 'annulations_inscription', jetonAnnulation), {
+          inscriptionId,
+          evenementId,
+          eventTitle: event.titre || '',
+          utilisé: false,
+          createdAt: inscriptionDate,
         });
 
         await updateDoc(invitationRef, {
           statut: 'inscrit',
-          dateInscription: new Date().toISOString(),
+          dateInscription: inscriptionDate,
         });
+
+        // Email de confirmation
+        if (invitation.adherentEmail) {
+          try {
+            const annulationUrl = `${window.location.origin}/lien/annulation/${jetonAnnulation}`;
+            await fetch('/api/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: invitation.adherentEmail,
+                firstName: invitation.adherentFirstName || '',
+                eventTitle: event.titre,
+                eventDate: formattedDate,
+                eventLocation: event.lieu,
+                annulationUrl,
+              }),
+            });
+          } catch (e) {
+            console.error('Email confirmation failed:', e);
+          }
+        }
 
         setStatus('success');
       } catch (err: any) {
@@ -159,7 +200,7 @@ function InscriptionContent() {
     processInscription();
   }, [jeton]);
 
-  // Soumission différée avec les choix
+  // Soumission différée avec les choix (menu et/ou bowling)
   const handleConfirmWithChoices = async () => {
     if (!pendingIds) return;
     setStatus('submitting');
@@ -167,22 +208,56 @@ function InscriptionContent() {
     try {
       const { firestore: db } = initializeFirebase();
 
+      const inscriptionDate = new Date().toISOString();
       const inscriptionData: Omit<Inscription, 'id'> = {
         id_evenement: pendingIds.evenementId,
         id_adherent: pendingIds.adherentId,
         a_paye: false,
-        date_inscription: new Date().toISOString(),
+        date_inscription: inscriptionDate,
         ...(eventData?.necessiteMenu && { choixMenu: menuChoices }),
         ...(eventData?.estSortieBowling && { choixBowling: bowlingChoices }),
       };
 
-      await addInscription(db, inscriptionData);
+      const inscriptionId = await addInscription(db, inscriptionData);
+
+      // Jeton d'annulation
+      const jetonAnnulation = crypto.randomUUID();
+      await setDoc(doc(db, 'annulations_inscription', jetonAnnulation), {
+        inscriptionId,
+        evenementId: pendingIds.evenementId,
+        eventTitle: eventTitle || '',
+        utilisé: false,
+        createdAt: inscriptionDate,
+      });
 
       const invitationRef = doc(db, 'invitations_evenement', jeton);
       await updateDoc(invitationRef, {
         statut: 'inscrit',
-        dateInscription: new Date().toISOString(),
+        dateInscription: inscriptionDate,
       });
+
+      // Email de confirmation avec les choix
+      if (invitationEmail) {
+        try {
+          const annulationUrl = `${window.location.origin}/lien/annulation/${jetonAnnulation}`;
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: invitationEmail,
+              firstName: invitationFirstName || '',
+              eventTitle,
+              eventDate,
+              eventLocation,
+              menuChoices: eventData?.necessiteMenu ? menuChoices : null,
+              bowlingChoices: eventData?.estSortieBowling ? bowlingChoices : null,
+              annulationUrl,
+            }),
+          });
+        } catch (e) {
+          console.error('Email confirmation failed:', e);
+        }
+      }
 
       setStatus('success');
     } catch (err: any) {

@@ -13,6 +13,60 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+// ── Helpers HTML pour les choix ────────────────────────────────────────────
+
+const MENU_LABELS: Record<string, string> = {
+  aperitifChoisi: 'Apéritif',
+  entreeChoisie: 'Entrée',
+  platChoisi: 'Plat principal',
+  fromageChoisi: 'Fromage',
+  dessertChoisi: 'Dessert',
+};
+const MENU_ORDER = ['aperitifChoisi', 'entreeChoisie', 'platChoisi', 'fromageChoisi', 'dessertChoisi'];
+
+function buildMenuChoicesHtml(choices: Record<string, string> | undefined | null): string {
+  if (!choices) return '';
+  const lines = MENU_ORDER
+    .filter(key => choices[key])
+    .map(key => `<li style="margin: 4px 0;"><strong>${MENU_LABELS[key]} :</strong> ${escapeHtml(choices[key])}</li>`)
+    .join('');
+  if (!lines) return '';
+  return `
+    <div style="margin-top: 16px; padding: 14px; background-color: #eff6ff; border-radius: 6px; border-left: 3px solid #1A75D1;">
+      <p style="font-weight: bold; margin: 0 0 8px 0; color: #1e40af; font-size: 14px;">🍽️ Vos choix de menu</p>
+      <ul style="margin: 0; padding-left: 18px; color: #333; font-size: 14px;">${lines}</ul>
+    </div>`;
+}
+
+function buildBowlingChoicesHtml(choices: Record<string, boolean> | undefined | null): string {
+  if (!choices) return '';
+  const items: string[] = [];
+  if (choices.avecBarrieres) items.push('Avec barrières');
+  if (choices.sansBarrieres) items.push('Sans barrières');
+  if (choices.prendGouter) items.push("Goûter de l'amitié");
+  if (!items.length) return '';
+  return `
+    <div style="margin-top: 16px; padding: 14px; background-color: #fef3c7; border-radius: 6px; border-left: 3px solid #f59e0b;">
+      <p style="font-weight: bold; margin: 0 0 8px 0; color: #92400e; font-size: 14px;">🎳 Vos options bowling</p>
+      <ul style="margin: 0; padding-left: 18px; color: #333; font-size: 14px;">
+        ${items.map(item => `<li style="margin: 4px 0;">${item}</li>`).join('')}
+      </ul>
+    </div>`;
+}
+
+function buildCancellationHtml(url: string | undefined | null): string {
+  if (!url) return '';
+  return `
+    <div style="margin-top: 24px; text-align: center; padding-top: 16px; border-top: 1px dashed #e5e7eb;">
+      <p style="font-size: 12px; color: #9ca3af; margin: 0 0 6px 0;">
+        Vous avez un imprévu ? Vous pouvez annuler votre inscription en cliquant sur le lien ci-dessous.
+      </p>
+      <a href="${url}" style="font-size: 12px; color: #dc2626; text-decoration: underline;">
+        Annuler mon inscription
+      </a>
+    </div>`;
+}
+
 // Initialisation de Firebase côté serveur pour éviter les conflits 'use client'
 function getDb() {
   const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -32,19 +86,22 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json();
-    const { 
-      to, 
-      firstName, 
+    const {
+      to,
+      firstName,
       adherentId,
       campaignId,
-      type, 
-      customMessage, 
-      subject: providedSubject, 
-      eventTitle, 
-      eventDate, 
+      type,
+      customMessage,
+      subject: providedSubject,
+      eventTitle,
+      eventDate,
       eventLocation,
       campaignSubject,
-      campaignBody
+      campaignBody,
+      menuChoices,
+      bowlingChoices,
+      annulationUrl,
     } = data;
 
     if (!to) {
@@ -148,6 +205,9 @@ export async function POST(request: Request) {
               <p>📅 <strong>Date :</strong> ${eventDate}</p>
               <p>📍 <strong>Lieu :</strong> ${eventLocation}</p>
             </div>
+            ${buildMenuChoicesHtml(menuChoices)}
+            ${buildBowlingChoicesHtml(bowlingChoices)}
+            ${buildCancellationHtml(annulationUrl)}
             ${commonFooter}
           </div>
         </div>

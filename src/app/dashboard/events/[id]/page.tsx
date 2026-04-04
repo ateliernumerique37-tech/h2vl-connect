@@ -22,7 +22,7 @@ import { deleteEvenement } from '@/services/evenementsService';
 import { addInscription, updateInscription, deleteInscription } from '@/services/inscriptionsService';
 import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection, query } from 'firebase/firestore';
+import { doc, collection, query, setDoc } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
@@ -493,18 +493,29 @@ export default function EventDetailPage() {
   const handleNewRegistration = async (inscriptionData: Omit<Inscription, 'id' | 'date_inscription'>) => {
     try {
       const inscriptionDate = new Date().toISOString();
-      await addInscription(db, { ...inscriptionData, date_inscription: inscriptionDate });
-      
+      const inscriptionId = await addInscription(db, { ...inscriptionData, date_inscription: inscriptionDate });
+
+      // Générer et stocker le jeton d'annulation
+      const jetonAnnulation = crypto.randomUUID();
+      await setDoc(doc(db, 'annulations_inscription', jetonAnnulation), {
+        inscriptionId,
+        evenementId: event?.id || '',
+        eventTitle: event?.titre || '',
+        utilisé: false,
+        createdAt: inscriptionDate,
+      });
+
       const adherent = rawAdherents?.find(a => a.id === inscriptionData.id_adherent);
-      
+
       if (event && adherent) {
         await addLog(db, auth, `Inscription : ${adherent.prenom} ${adherent.nom} à ${event.titre}`);
-        
+
         // Envoi de l'email de confirmation via l'API Nodemailer avec tracking
         try {
           const formattedEventDate = new Date(event.date).toLocaleDateString("fr-FR", {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
           });
+          const annulationUrl = `${window.location.origin}/lien/annulation/${jetonAnnulation}`;
 
           await fetch('/api/send-email', {
             method: 'POST',
@@ -518,8 +529,9 @@ export default function EventDetailPage() {
               eventTitle: event.titre,
               eventDate: formattedEventDate,
               eventLocation: event.lieu,
-              price: event.prix,
-              menuChoices: inscriptionData.choixMenu
+              menuChoices: inscriptionData.choixMenu ?? null,
+              bowlingChoices: inscriptionData.choixBowling ?? null,
+              annulationUrl,
             }),
           });
           toast({ title: "Inscription validée et email envoyé" });

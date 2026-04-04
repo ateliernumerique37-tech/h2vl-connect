@@ -81,6 +81,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    /** Jetons d'annulation d'inscription - ACCÈS PUBLIC EN LECTURE ET CRÉATION */
+    match /annulations_inscription/{jeton} {
+      allow read: if true;
+      allow create: if true;
+      // La mise à jour (marquage "utilisé") et la suppression passent par l'API Admin SDK
+      allow update, delete: if false;
+    }
+
     /** Ancienne collection roles_admins (compatibilité) */
     match /roles_admins/{id} {
       allow read: if isSignedIn();

@@ -35,6 +35,8 @@ export async function POST(request: Request) {
       evenementId: eventId,
       eventTitle: eventTitle || '',
       adherentId,
+      adherentEmail: to,
+      adherentFirstName: firstName || '',
       statut: 'envoyé',
       dateEnvoi,
       dateInscription: null,
