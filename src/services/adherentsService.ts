@@ -18,7 +18,7 @@ export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'i
     });
     
     if (cotisationAJour) {
-        await addCotisation(db, docRef.id);
+        await addCotisationForYear(db, docRef.id, new Date().getFullYear(), estMembreFaaf);
     }
     
     return docRef.id;
@@ -55,7 +55,7 @@ export async function updateAdherent(db: Firestore, id: string, updates: Partial
     });
 
     if (updates.cotisationAJour === true) {
-        await addCotisation(db, id);
+        await addCotisationForYear(db, id, new Date().getFullYear(), updates.estMembreFaaf ?? false);
         const { cotisationAJour, ...rest } = allowedUpdates;
         if (Object.keys(rest).length > 0) await updateDoc(docRef, rest);
     } else if (updates.cotisationAJour === false) {
@@ -109,49 +109,79 @@ export async function deleteAllAdherents(db: Firestore): Promise<void> {
 }
 
 /**
- * Ajoute une cotisation et met à jour le statut de l'adhérent.
+ * Ajoute une cotisation pour une année donnée.
+ * Met à jour cotisationAJour uniquement si l'année est l'année en cours.
+ * Montant : 40€ si membre FAAF, 15€ sinon.
  */
-export async function addCotisation(db: Firestore, adherentId: string): Promise<void> {
+export async function addCotisationForYear(
+    db: Firestore,
+    adherentId: string,
+    annee: number,
+    isFaaf: boolean
+): Promise<void> {
     const currentYear = new Date().getFullYear();
+    const montant = isFaaf ? 40 : 15;
+
     const q = query(
         collection(db, cotisationsCollectionName),
         where('adherentId', '==', adherentId),
-        where('annee', '==', currentYear)
+        where('annee', '==', annee)
     );
     const existing = await getDocs(q);
-    
+
     const batch = writeBatch(db);
     if (existing.empty) {
         const cotisationRef = doc(collection(db, cotisationsCollectionName));
         batch.set(cotisationRef, {
             adherentId,
-            annee: currentYear,
+            annee,
             datePaiement: new Date().toISOString(),
-            montant: 15,
+            montant,
         });
     }
-    
-    const adherentRef = doc(db, adherentsCollectionName, adherentId);
-    batch.update(adherentRef, { cotisationAJour: true });
+
+    if (annee === currentYear) {
+        const adherentRef = doc(db, adherentsCollectionName, adherentId);
+        batch.update(adherentRef, { cotisationAJour: true });
+    }
+
     await batch.commit();
 }
 
 /**
- * Supprime la cotisation de l'année en cours et met à jour le statut.
+ * Supprime la cotisation d'une année donnée.
+ * Met à jour cotisationAJour uniquement si l'année est l'année en cours.
  */
-export async function removeCotisation(db: Firestore, adherentId: string): Promise<void> {
+export async function deleteCotisationForYear(
+    db: Firestore,
+    adherentId: string,
+    annee: number
+): Promise<void> {
     const currentYear = new Date().getFullYear();
     const q = query(
         collection(db, cotisationsCollectionName),
         where('adherentId', '==', adherentId),
-        where('annee', '==', currentYear)
+        where('annee', '==', annee)
     );
-    
+
     const querySnapshot = await getDocs(q);
     const batch = writeBatch(db);
-    querySnapshot.forEach((doc) => batch.delete(doc.ref));
-    
-    const adherentRef = doc(db, adherentsCollectionName, adherentId);
-    batch.update(adherentRef, { cotisationAJour: false });
+    querySnapshot.forEach((d) => batch.delete(d.ref));
+
+    if (annee === currentYear) {
+        const adherentRef = doc(db, adherentsCollectionName, adherentId);
+        batch.update(adherentRef, { cotisationAJour: false });
+    }
+
     await batch.commit();
+}
+
+/** Alias pour la compatibilité avec l'ancien code (année en cours). */
+export async function addCotisation(db: Firestore, adherentId: string, isFaaf = false): Promise<void> {
+    await addCotisationForYear(db, adherentId, new Date().getFullYear(), isFaaf);
+}
+
+/** Alias pour la compatibilité avec l'ancien code (année en cours). */
+export async function removeCotisation(db: Firestore, adherentId: string): Promise<void> {
+    await deleteCotisationForYear(db, adherentId, new Date().getFullYear());
 }

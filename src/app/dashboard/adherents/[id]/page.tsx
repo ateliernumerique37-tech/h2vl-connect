@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState } from 'react';
-import { Pencil, ChevronLeft, Phone, MapPin, Mail, Calendar, User, CreditCard, CheckCircle2, XCircle, Copy, Check, PhoneCall } from "lucide-react";
+import { Pencil, ChevronLeft, Phone, MapPin, Mail, Calendar, User, CreditCard, CheckCircle2, XCircle, Copy, Check, PhoneCall, Loader2 } from "lucide-react";
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { addCotisationForYear, deleteCotisationForYear } from '@/services/adherentsService';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,11 +50,52 @@ export default function AdherentDetailPage() {
   const { data: rawCotisations, isLoading: isLoadingCotisations } = useCollection<Cotisation>(cotisationsQuery);
 
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [submittingYear, setSubmittingYear] = useState<number | null>(null);
+  const { toast } = useToast();
 
-  const adherentCotisations = useMemo(() => {
-    if (!rawCotisations) return [];
-    return [...rawCotisations].sort((a, b) => new Date(b.datePaiement).getTime() - new Date(a.datePaiement).getTime());
+  const currentYear = new Date().getFullYear();
+  const FIRST_YEAR = 2022;
+
+  // Toutes les années de 2022 à l'année en cours (ordre décroissant)
+  const allYears = useMemo(() => {
+    const years: number[] = [];
+    for (let y = currentYear; y >= FIRST_YEAR; y--) years.push(y);
+    return years;
+  }, [currentYear]);
+
+  // Map annee → cotisation pour lookup rapide
+  const cotisationByYear = useMemo(() => {
+    const map = new Map<number, Cotisation>();
+    if (!rawCotisations) return map;
+    rawCotisations.forEach(c => map.set(Number(c.annee), c));
+    return map;
   }, [rawCotisations]);
+
+  const handlePayCotisation = async (annee: number) => {
+    if (!adherent) return;
+    setSubmittingYear(annee);
+    try {
+      await addCotisationForYear(db, id, annee, adherent.estMembreFaaf);
+      toast({ title: `Cotisation ${annee} enregistrée`, description: `${adherent.estMembreFaaf ? '40' : '15'} €` });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible d\'enregistrer la cotisation.' });
+    } finally {
+      setSubmittingYear(null);
+    }
+  };
+
+  const handleCancelCotisation = async (annee: number) => {
+    if (!adherent) return;
+    setSubmittingYear(annee);
+    try {
+      await deleteCotisationForYear(db, id, annee);
+      toast({ title: `Cotisation ${annee} annulée` });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible d\'annuler la cotisation.' });
+    } finally {
+      setSubmittingYear(null);
+    }
+  };
 
   const handleCopy = (text: string, fieldName: string) => {
     if (!text) return;
@@ -252,33 +295,99 @@ export default function AdherentDetailPage() {
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" /> Historique des Cotisations
           </CardTitle>
-          <CardDescription>Suivi des règlements annuels.</CardDescription>
+          <CardDescription>
+            Tarif : <strong>{adherent.estMembreFaaf ? '40 €' : '15 €'}</strong> par an
+            {adherent.estMembreFaaf ? ' (membre FAAF)' : ''}.
+            Cliquez sur une ligne pour enregistrer ou annuler un paiement.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Année</TableHead>
+                <TableHead>Statut</TableHead>
                 <TableHead>Date de paiement</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {adherentCotisations.length > 0 ? (
-                adherentCotisations.map((cotisation) => (
-                  <TableRow key={cotisation.id}>
-                    <TableCell className="font-medium">{cotisation.annee}</TableCell>
-                    <TableCell>{new Date(cotisation.datePaiement).toLocaleDateString('fr-FR')}</TableCell>
-                    <TableCell className="text-right font-bold">{cotisation.montant.toFixed(2)} €</TableCell>
+              {allYears.map((annee) => {
+                const cotisation = cotisationByYear.get(annee);
+                const isPaid = !!cotisation;
+                const isCurrentYear = annee === currentYear;
+                const isLoading = submittingYear === annee;
+
+                return (
+                  <TableRow
+                    key={annee}
+                    className={cn(
+                      isCurrentYear && 'bg-primary/5 font-semibold',
+                      isPaid && !isCurrentYear && 'text-muted-foreground'
+                    )}
+                  >
+                    <TableCell className="font-medium">
+                      {annee}
+                      {isCurrentYear && (
+                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-primary">
+                          en cours
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {isPaid ? (
+                        <span className="flex items-center gap-1 text-green-700 font-medium text-sm">
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Payée
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-muted-foreground text-sm">
+                          <XCircle className="h-4 w-4" aria-hidden="true" /> Non payée
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {cotisation
+                        ? new Date(cotisation.datePaiement).toLocaleDateString('fr-FR')
+                        : <span className="text-muted-foreground italic">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-sm">
+                      {cotisation
+                        ? <span className="font-bold">{cotisation.montant.toFixed(2)} €</span>
+                        : <span className="text-muted-foreground italic">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {isPaid ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[36px] focus-visible:ring-2 focus-visible:ring-destructive"
+                          onClick={() => handleCancelCotisation(annee)}
+                          disabled={isLoading || submittingYear !== null}
+                          aria-label={`Annuler la cotisation ${annee}`}
+                        >
+                          {isLoading
+                            ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            : 'Annuler'}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="min-h-[36px] focus-visible:ring-2 focus-visible:ring-primary"
+                          onClick={() => handlePayCotisation(annee)}
+                          disabled={isLoading || submittingYear !== null}
+                          aria-label={`Enregistrer la cotisation ${annee}`}
+                        >
+                          {isLoading
+                            ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            : 'Marquer payée'}
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center py-6 text-muted-foreground italic">
-                    Aucun historique financier.
-                  </TableCell>
-                </TableRow>
-              )}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
