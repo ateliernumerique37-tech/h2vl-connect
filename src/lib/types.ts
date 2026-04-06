@@ -34,6 +34,7 @@ export interface Evenement {
     desserts?: string[];
   };
   estSortieBowling?: boolean;
+  dateLimiteInscription?: string; // ISO string — inscriptions fermées après cette date
 }
 
 export interface Inscription {

@@ -41,6 +41,9 @@ export default function CreateEventPage() {
                 necessiteMenu: formData.get('necessiteMenu') === 'on',
                 optionsMenu: {},
                 estSortieBowling,
+                ...(formData.get('dateLimiteInscription')
+                  ? { dateLimiteInscription: new Date(formData.get('dateLimiteInscription') as string).toISOString() }
+                  : {}),
             };
             
             if (newEvent.necessiteMenu) {
@@ -105,6 +108,21 @@ export default function CreateEventPage() {
                                 <Label htmlFor="lieu">Lieu</Label>
                                 <Input id="lieu" name="lieu" required maxLength={200} />
                             </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="dateLimiteInscription">
+                                Date limite d'inscription
+                                <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
+                            </Label>
+                            <Input
+                                id="dateLimiteInscription"
+                                name="dateLimiteInscription"
+                                type="datetime-local"
+                                aria-label="Date limite d'inscription — optionnel"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Si renseignée, les inscriptions seront automatiquement fermées après cette date.
+                            </p>
                         </div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-2">

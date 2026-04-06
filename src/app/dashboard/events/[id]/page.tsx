@@ -112,6 +112,12 @@ function RegisterMemberDialog({
   const listboxId = `adherents-listbox-${event.id}`;
   const inputId = `adherent-search-input-${event.id}`;
   const isFull = currentCount >= (event.nombrePlacesMax || Infinity);
+  const now = new Date();
+  const isEventPast = new Date(event.date) < now;
+  const isDeadlinePassed = event.dateLimiteInscription
+    ? new Date(event.dateLimiteInscription) < now
+    : false;
+  const isRegistrationClosed = isEventPast || isDeadlinePassed;
 
   const filteredAdherents = useMemo(() => {
     return adherentsList.filter(a => 
@@ -191,9 +197,22 @@ function RegisterMemberDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="lg" disabled={isFull} className="w-full shadow-md min-h-[48px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" aria-label={isFull ? "L'événement est complet" : `Inscrire un adhérent à l'événement ${event.titre}`}>
+        <Button
+          size="lg"
+          disabled={isFull || isRegistrationClosed}
+          className="w-full shadow-md min-h-[48px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          aria-label={
+            isFull ? "L'événement est complet"
+            : isEventPast ? "L'événement est passé"
+            : isDeadlinePassed ? "La date limite d'inscription est dépassée"
+            : `Inscrire un adhérent à l'événement ${event.titre}`
+          }
+        >
           <PlusCircle className="mr-2 h-5 w-5" />
-          {isFull ? "Événement complet" : "Inscrire un adhérent"}
+          {isFull ? "Événement complet"
+            : isEventPast ? "Événement passé"
+            : isDeadlinePassed ? "Inscriptions fermées"
+            : "Inscrire un adhérent"}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[450px] flex flex-col max-h-[90vh]">
@@ -212,6 +231,16 @@ function RegisterMemberDialog({
           {isFull && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm font-semibold text-center" role="alert">
               Attention : Cet événement est déjà complet.
+            </div>
+          )}
+          {!isFull && isEventPast && (
+            <div className="p-3 bg-orange-50 border border-orange-200 text-orange-700 rounded-md text-sm font-semibold text-center" role="alert">
+              Cet événement est passé — les inscriptions sont fermées.
+            </div>
+          )}
+          {!isFull && !isEventPast && isDeadlinePassed && (
+            <div className="p-3 bg-orange-50 border border-orange-200 text-orange-700 rounded-md text-sm font-semibold text-center" role="alert">
+              La date limite d'inscription est dépassée.
             </div>
           )}
           
@@ -378,7 +407,7 @@ function RegisterMemberDialog({
         <DialogFooter className="mt-auto pt-4 border-t">
           <Button 
             onClick={handleRegister} 
-            disabled={!selectedAdherentId || isSubmitting || isFull} 
+            disabled={!selectedAdherentId || isSubmitting || isFull || isRegistrationClosed}
             className="w-full h-12 text-base font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label="Confirmer l'inscription"
           >
@@ -684,6 +713,18 @@ export default function EventDetailPage() {
             <Euro className="h-4 w-4 text-primary" />
             <span className="font-bold text-foreground">{event.prix > 0 ? `${event.prix.toFixed(2)} €` : "Gratuit"}</span>
           </div>
+          {event.dateLimiteInscription && (
+            <div
+              className={`flex items-center gap-2 ${isDeadlinePassed ? 'text-destructive font-semibold' : ''}`}
+              aria-label={`Date limite d'inscription : ${new Date(event.dateLimiteInscription).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+            >
+              <Calendar className="h-4 w-4 text-primary" />
+              <span>
+                Limite d'inscription : {new Date(event.dateLimiteInscription).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {isDeadlinePassed && <span className="ml-1">(dépassée)</span>}
+              </span>
+            </div>
+          )}
         </div>
       </header>
 

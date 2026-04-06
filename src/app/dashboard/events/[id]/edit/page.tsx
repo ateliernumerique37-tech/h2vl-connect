@@ -67,6 +67,7 @@ export default function EditEventPage() {
     const [nombrePlacesMax, setNombrePlacesMax] = useState('50');
     const [necessiteMenu, setNecessiteMenu] = useState(false);
     const [estSortieBowling, setEstSortieBowling] = useState(false);
+    const [dateLimiteInscription, setDateLimiteInscription] = useState('');
     const [aperitifs, setAperitifs] = useState('');
     const [entrees, setEntrees] = useState('');
     const [plats, setPlats] = useState('');
@@ -91,6 +92,11 @@ export default function EditEventPage() {
                     setNombrePlacesMax((foundEvent.nombrePlacesMax || 50).toString());
                     setNecessiteMenu(foundEvent.necessiteMenu || false);
                     setEstSortieBowling(foundEvent.estSortieBowling || false);
+                    if (foundEvent.dateLimiteInscription) {
+                        const d = new Date(foundEvent.dateLimiteInscription);
+                        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                        setDateLimiteInscription(d.toISOString().slice(0, 16));
+                    }
                     if (foundEvent.optionsMenu) {
                         setAperitifs(foundEvent.optionsMenu.aperitifs?.join(', ') || '');
                         setEntrees(foundEvent.optionsMenu.entrees?.join(', ') || '');
@@ -128,6 +134,9 @@ export default function EditEventPage() {
                 nombrePlacesMax: parseInt(nombrePlacesMax, 10),
                 necessiteMenu,
                 estSortieBowling,
+                ...(dateLimiteInscription
+                  ? { dateLimiteInscription: new Date(dateLimiteInscription).toISOString() }
+                  : { dateLimiteInscription: undefined }),
             };
 
             if (necessiteMenu) {
@@ -199,6 +208,23 @@ export default function EditEventPage() {
                           <Label htmlFor="nombrePlacesMax">Nombre de places max</Label>
                           <Input id="nombrePlacesMax" name="nombrePlacesMax" type="number" min="1" required value={nombrePlacesMax} onChange={(e) => setNombrePlacesMax(e.target.value)} />
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="dateLimiteInscription">
+                            Date limite d'inscription
+                            <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
+                        </Label>
+                        <Input
+                            id="dateLimiteInscription"
+                            name="dateLimiteInscription"
+                            type="datetime-local"
+                            value={dateLimiteInscription}
+                            onChange={(e) => setDateLimiteInscription(e.target.value)}
+                            aria-label="Date limite d'inscription — optionnel"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Si renseignée, les inscriptions seront automatiquement fermées après cette date.
+                        </p>
                     </div>
                 </CardContent>
             </Card>

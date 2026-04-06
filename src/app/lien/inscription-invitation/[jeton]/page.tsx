@@ -24,7 +24,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Inscription, Evenement } from '@/lib/types';
 
-type PageStatus = 'loading' | 'pending_choices' | 'submitting' | 'success' | 'already_registered' | 'event_full' | 'error';
+type PageStatus = 'loading' | 'pending_choices' | 'submitting' | 'success' | 'already_registered' | 'event_full' | 'registration_closed' | 'error';
 
 const MENU_ORDER = [
   { key: 'aperitifChoisi',  label: 'Apéritif',       field: 'aperitifs'  },
@@ -126,7 +126,18 @@ function InscriptionContent() {
           return;
         }
 
-        // 5. Vérifier la capacité
+        // 5. Vérifier si les inscriptions sont fermées (événement passé ou deadline dépassée)
+        const now = new Date();
+        if (new Date(event.date) < now) {
+          setStatus('registration_closed');
+          return;
+        }
+        if (event.dateLimiteInscription && new Date(event.dateLimiteInscription) < now) {
+          setStatus('registration_closed');
+          return;
+        }
+
+        // 6. Vérifier la capacité
         if (event.nombrePlacesMax && event.nombrePlacesMax > 0) {
           const allInscriptionsSnap = await getDocs(
             query(collection(db, 'inscriptions'), where('id_evenement', '==', evenementId))
@@ -137,14 +148,14 @@ function InscriptionContent() {
           }
         }
 
-        // 6. Si l'événement nécessite des choix (menu ou bowling), on affiche le formulaire
+        // 7. Si l'événement nécessite des choix (menu ou bowling), on affiche le formulaire
         if (event.necessiteMenu || event.estSortieBowling) {
           setPendingIds({ evenementId, adherentId });
           setStatus('pending_choices');
           return;
         }
 
-        // 7. Sinon, inscription directe (pas de choix à faire)
+        // 8. Sinon, inscription directe (pas de choix à faire)
         const inscriptionDate = new Date().toISOString();
         const inscriptionId = await addInscription(db, {
           id_evenement: evenementId,
@@ -432,6 +443,7 @@ function InscriptionContent() {
     success: 'Inscription confirmée !',
     already_registered: 'Déjà inscrit(e)',
     event_full: 'Événement complet',
+    registration_closed: 'Inscriptions fermées',
     error: 'Lien invalide',
   };
 
@@ -440,6 +452,7 @@ function InscriptionContent() {
     success: 'Votre participation a bien été enregistrée. À bientôt chez H2VL !',
     already_registered: 'Vous êtes déjà inscrit(e) à cet événement.',
     event_full: 'Désolé, toutes les places sont prises pour cet événement.',
+    registration_closed: 'Les inscriptions pour cet événement sont maintenant fermées.',
     error: "Ce lien n'est pas valide ou a expiré.",
   };
 
@@ -455,6 +468,7 @@ function InscriptionContent() {
               {status === 'success' && <CheckCircle2 className="h-10 w-10 text-green-500 animate-in zoom-in duration-300" />}
               {status === 'already_registered' && <UserCheck className="h-10 w-10 text-blue-500" />}
               {status === 'event_full' && <AlertCircle className="h-10 w-10 text-orange-500" />}
+              {status === 'registration_closed' && <AlertCircle className="h-10 w-10 text-orange-500" />}
               {status === 'error' && <AlertCircle className="h-10 w-10 text-destructive" />}
             </div>
           </div>
