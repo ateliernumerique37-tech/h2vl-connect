@@ -338,6 +338,7 @@ export default function AdminPage() {
                 <CardContent className="px-2">
                     <div className="max-h-[500px] overflow-y-auto">
                         <Table>
+                            <caption className="sr-only">Journal des actions administratives</caption>
                             <TableBody>
                             {paginatedLogs.map(log => (
                                 <TableRow key={log.id} className="hover:bg-transparent">

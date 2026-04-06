@@ -85,7 +85,7 @@ export default function CreateEventPage() {
                  <p className="text-muted-foreground">Remplissez les détails ci-dessous pour organiser une nouvelle activité.</p>
             </header>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isSubmitting}>
                 <Card>
                     <CardHeader>
                         <CardTitle>Informations principales</CardTitle>
@@ -102,7 +102,8 @@ export default function CreateEventPage() {
                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="date">Date et Heure</Label>
-                                <Input id="date" name="date" type="datetime-local" required />
+                                <Input id="date" name="date" type="datetime-local" required aria-describedby="date-format-hint" />
+                                <p id="date-format-hint" className="text-xs text-muted-foreground">Format : JJ/MM/AAAA HH:MM</p>
                             </div>
                              <div className="space-y-2">
                                 <Label htmlFor="lieu">Lieu</Label>
@@ -119,8 +120,9 @@ export default function CreateEventPage() {
                                 name="dateLimiteInscription"
                                 type="datetime-local"
                                 aria-label="Date limite d'inscription — optionnel"
+                                aria-describedby="date-limite-help"
                             />
-                            <p className="text-xs text-muted-foreground">
+                            <p id="date-limite-help" className="text-xs text-muted-foreground">
                                 Si renseignée, les inscriptions seront automatiquement fermées après cette date.
                             </p>
                         </div>

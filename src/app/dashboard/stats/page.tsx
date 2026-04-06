@@ -218,7 +218,7 @@ export default function StatsPage() {
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Répartition par Genre</CardTitle>
+            <CardTitle role="heading" aria-level={2}>Répartition par Genre</CardTitle>
             <CardDescription>Données issues des profils complétés.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -249,7 +249,7 @@ export default function StatsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Engagement Associatif</CardTitle>
+            <CardTitle role="heading" aria-level={2}>Engagement Associatif</CardTitle>
             <CardDescription>Structure hiérarchique et bénévolat.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -279,7 +279,7 @@ export default function StatsPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Pyramide des Âges</CardTitle>
+            <CardTitle role="heading" aria-level={2}>Pyramide des Âges</CardTitle>
             <CardDescription>Distribution des adhérents par tranches d'âge (Calcul basé sur {stats.validAgesCount} dates valides).</CardDescription>
           </CardHeader>
           <CardContent>

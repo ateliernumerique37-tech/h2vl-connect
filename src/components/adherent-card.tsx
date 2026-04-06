@@ -76,13 +76,13 @@ export function AdherentCard({ adherent }: AdherentCardProps) {
       <CardFooter className="p-3 pt-2 border-t bg-muted/30 gap-2 flex flex-wrap">
         <Button asChild variant="secondary" size="sm" className="flex-1 min-w-[80px] min-h-[40px]" aria-label={`Consulter le profil de ${adherent.prenom} ${adherent.nom}`}>
           <Link href={`/dashboard/adherents/${adherent.id}`}>
-            <Eye className="mr-2 h-4 w-4" />
+            <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
             Détails
           </Link>
         </Button>
         <Button asChild variant="outline" size="sm" className="flex-1 min-w-[80px] min-h-[40px]" aria-label={`Modifier les informations de ${adherent.prenom} ${adherent.nom}`}>
           <Link href={`/dashboard/adherents/${adherent.id}/edit`}>
-            <Pencil className="mr-2 h-4 w-4" />
+            <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
             Modifier
           </Link>
         </Button>

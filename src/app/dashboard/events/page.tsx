@@ -171,6 +171,10 @@ export default function EventsPage() {
       </Card>
 
 
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {filteredEvents.length} événement{filteredEvents.length !== 1 ? 's' : ''} trouvé{filteredEvents.length !== 1 ? 's' : ''}
+      </div>
+
        {paginatedEvents.length === 0 ? (
          <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
             <p className="text-muted-foreground">

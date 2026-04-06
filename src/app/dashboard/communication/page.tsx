@@ -423,9 +423,9 @@ export default function CommunicationPage() {
           <Card className="mb-6">
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row gap-4 items-center">
-                <Label className="font-bold">Type de suivi :</Label>
+                <Label id="tracking-type-label" className="font-bold">Type de suivi :</Label>
                 <Select value={trackingTypeFilter} onValueChange={(v) => { setTrackingTypeFilter(v as TrackingType); setSelectedCampaignId(null); }}>
-                  <SelectTrigger className="w-full sm:w-[250px]">
+                  <SelectTrigger className="w-full sm:w-[250px]" aria-labelledby="tracking-type-label">
                     <SelectValue placeholder="Choisir un type" />
                   </SelectTrigger>
                   <SelectContent>
