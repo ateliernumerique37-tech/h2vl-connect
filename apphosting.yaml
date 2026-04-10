@@ -26,3 +26,7 @@ env:
     value: "Gestion de l'association H2VL"
     availability:
       - RUNTIME
+  - variable: CRON_SECRET
+    value: "h2vl-cron-bK7mNpQ3rJ9sX1tZ5vE8wA4dC6fH2gL0"
+    availability:
+      - RUNTIME
