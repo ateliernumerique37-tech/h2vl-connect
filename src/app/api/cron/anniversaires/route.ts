@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
 import { adminDb } from '@/lib/firebase-admin';
 
 export const maxDuration = 60;
@@ -26,32 +25,18 @@ function isBirthdayToday(dateString: string | null | undefined): boolean {
   }
 }
 
-function buildBirthdayHtml(prenom: string, customMessage: string): string {
-  return `
-    <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
-      <div style="background-color: #1A75D1; padding: 20px; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">Joyeux Anniversaire ! 🎂</h1>
-      </div>
-      <div style="padding: 30px;">
-        <p style="font-size: 16px; color: #1e40af; font-weight: bold;">Bonjour ${prenom},</p>
-        <p style="font-size: 16px; color: #333;">${customMessage}</p>
-        <div style="margin-top: 40px; padding: 20px; border-top: 2px solid #eee; text-align: center;">
-          <p style="font-size: 14px; color: #666;">
-            Cordialement,<br/>
-            <strong>EVA</strong>, la petite mascotte de H2VL qui veille sur vous ✨
-          </p>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 export async function POST(request: Request) {
   // ── Vérification du secret ───────────────────────────────────────────────
   const secret = request.headers.get('x-cron-secret');
   if (!secret || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // ── Construire l'URL de base pour appeler /api/send-email ────────────────
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const host = request.headers.get('host') || 'localhost:9002';
+  const protocol = forwardedProto || (host.includes('localhost') ? 'http' : 'https');
+  const origin = `${protocol}://${host}`;
 
   try {
     const db = adminDb();
@@ -81,19 +66,7 @@ export async function POST(request: Request) {
       .get();
     const alreadySentIds = new Set(logsSnap.docs.map(d => d.data().id_adherent as string));
 
-    // ── 4. Configurer Nodemailer ─────────────────────────────────────────
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: Number(process.env.EMAIL_PORT),
-      secure: process.env.EMAIL_PORT === '465',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      connectionTimeout: 10000,
-    });
-
-    // ── 5. Envoyer les emails ────────────────────────────────────────────
+    // ── 4. Envoyer les emails via /api/send-email ────────────────────────
     let sent = 0;
     let errors = 0;
 
@@ -104,21 +77,34 @@ export async function POST(request: Request) {
         const randomMsg = BIRTHDAY_MESSAGES[Math.floor(Math.random() * BIRTHDAY_MESSAGES.length)];
         const customMessage = randomMsg.replace('[Prenom]', adherent.prenom);
 
-        await transporter.sendMail({
-          from: `"${process.env.EMAIL_FROM_NAME || 'H2VL'}" <${process.env.EMAIL_USER}>`,
-          to: adherent.email,
-          subject: `Joyeux anniversaire ${adherent.prenom} ! 🎉`,
-          html: buildBirthdayHtml(adherent.prenom, customMessage),
+        const res = await fetch(`${origin}/api/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: adherent.email,
+            firstName: adherent.prenom,
+            adherentId: adherent.id,
+            campaignId: 'anniversaire',
+            type: 'birthday',
+            subject: `Joyeux anniversaire ${adherent.prenom} ! 🎉`,
+            customMessage,
+          }),
         });
 
-        // Enregistrer le log pour éviter les doublons
-        await db.collection('logs_anniversaires').add({
-          id_adherent: adherent.id,
-          date_envoi: todayStr,
-          statut: 'envoyé',
-        });
+        const result = await res.json();
 
-        sent++;
+        if (result.success) {
+          // Enregistrer le log anti-doublons
+          await db.collection('logs_anniversaires').add({
+            id_adherent: adherent.id,
+            date_envoi: todayStr,
+            statut: 'envoyé',
+          });
+          sent++;
+        } else {
+          console.error(`Échec send-email pour ${adherent.email}:`, result.error);
+          errors++;
+        }
       } catch (err) {
         console.error(`Erreur anniversaire pour ${adherent.email}:`, err);
         errors++;
