@@ -303,9 +303,12 @@ export default function EditEventPage() {
                 </CardContent>
             </Card>
 
-            <div className="flex justify-start">
+            <div className="flex gap-3">
+                <Button type="button" variant="outline" onClick={() => router.push(`/dashboard/events/${id}`)} disabled={isSubmitting} className="min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+                    Annuler
+                </Button>
                 <Button type="submit" disabled={isSubmitting} className="min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Enregistrer les modifications
                 </Button>
             </div>

@@ -211,7 +211,10 @@ export default function CreateEventPage() {
                     </CardContent>
                 </Card>
 
-                <div className="flex justify-start">
+                <div className="flex gap-3">
+                    <Button type="button" variant="outline" onClick={() => router.push('/dashboard/events')} disabled={isSubmitting} className="min-h-[44px]">
+                        Annuler
+                    </Button>
                     <Button type="submit" disabled={isSubmitting} className="min-h-[44px]">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Créer l'événement

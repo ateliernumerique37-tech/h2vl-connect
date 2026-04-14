@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
@@ -676,11 +676,17 @@ export default function EventDetailPage() {
   return (
     <div className="space-y-8 pb-10">
       <header className="flex flex-col gap-2 border-b pb-6">
+        <Button variant="ghost" size="sm" asChild className="w-fit -ml-2 text-muted-foreground hover:text-foreground">
+          <Link href="/dashboard/events" aria-label="Retour à la liste des événements">
+            <ChevronLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+            Retour aux événements
+          </Link>
+        </Button>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h1 className="text-3xl font-bold tracking-tight text-primary">{event.titre}</h1>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" asChild className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary">
-              <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="mr-2 h-4 w-4" /> Modifier</Link>
+              <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Modifier</Link>
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>

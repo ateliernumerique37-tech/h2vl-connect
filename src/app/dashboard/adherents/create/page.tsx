@@ -158,7 +158,10 @@ export default function CreateAdherentPage() {
                 </CardContent>
             </Card>
             
-            <div className="flex justify-start">
+            <div className="flex gap-3">
+                <Button type="button" variant="outline" onClick={() => router.push('/dashboard/adherents')} disabled={isLoading} className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    Annuler
+                </Button>
                 <Button type="submit" disabled={isLoading} className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Enregistrer l'adhérent
