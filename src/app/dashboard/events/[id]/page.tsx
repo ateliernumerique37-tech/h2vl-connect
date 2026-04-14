@@ -247,7 +247,7 @@ function RegisterMemberDialog({
           <div className="space-y-3">
             <Label htmlFor={inputId} className="font-semibold">Choix de l'adhérent</Label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 id={inputId}
                 placeholder="Rechercher par nom ou prénom..."
@@ -276,7 +276,7 @@ function RegisterMemberDialog({
                   onClick={clearSelection}
                   aria-label="Effacer la recherche"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </Button>
               )}
             </div>
@@ -317,7 +317,7 @@ function RegisterMemberDialog({
                           )}
                         >
                           <span className="truncate">{adherent.prenom} {adherent.nom}</span>
-                          {isSelected && <Check className="h-4 w-4" />}
+                          {isSelected && <Check className="h-4 w-4" aria-hidden="true" />}
                         </div>
                       );
                     })}
@@ -341,7 +341,7 @@ function RegisterMemberDialog({
 
           {event.necessiteMenu && event.optionsMenu && (
             <div className="space-y-4 rounded-lg border p-4 bg-muted/5">
-              <h4 className="font-bold border-b pb-2 text-sm uppercase text-primary/80">Choix du Menu</h4>
+              <h3 className="font-bold border-b pb-2 text-sm uppercase text-primary/80">Choix du Menu</h3>
               <div className="grid gap-4">
                 {event.optionsMenu.aperitifs?.length ? (
                   <MenuChoiceSection category="Apéritif" options={event.optionsMenu.aperitifs} eventId={event.id} selected={menuChoices?.aperitifChoisi} onSelect={(value) => setMenuChoices(prev => ({...prev, aperitifChoisi: value}))} />
@@ -364,7 +364,7 @@ function RegisterMemberDialog({
 
           {event.estSortieBowling && (
             <div className="space-y-3 rounded-lg border p-4 bg-muted/5">
-              <h4 className="font-bold border-b pb-2 text-sm uppercase text-primary/80">🎳 Options Bowling</h4>
+              <h3 className="font-bold border-b pb-2 text-sm uppercase text-primary/80">🎳 Options Bowling</h3>
               <div className="space-y-3">
                 <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
                   <Checkbox
@@ -406,10 +406,11 @@ function RegisterMemberDialog({
 
         <DialogFooter className="mt-auto pt-4 border-t">
           <Button 
-            onClick={handleRegister} 
+            onClick={handleRegister}
             disabled={!selectedAdherentId || isSubmitting || isFull || isRegistrationClosed}
             className="w-full h-12 text-base font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label="Confirmer l'inscription"
+            aria-busy={isSubmitting}
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Valider l'inscription
