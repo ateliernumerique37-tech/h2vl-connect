@@ -30,7 +30,7 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
     e.preventDefault();
     if (isSubmitting) return;
     const { password, ...rest } = formData;
-    await onSubmit(isEditing ? rest : { ...rest, password });
+    await onSubmit(isEditing ? { ...rest, ...(password ? { password } : {}) } : { ...rest, password });
   };
 
   return (
@@ -78,26 +78,29 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
         />
       </div>
 
-      {!isEditing && (
-        <div className="space-y-2">
-          <Label htmlFor="password">Mot de passe initial</Label>
-          <Input
-            id="password"
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            placeholder="Minimum 6 caractères"
-            required
-            aria-required="true"
-            minLength={6}
-            maxLength={100}
-            autoComplete="new-password"
-          />
-          <p className="text-xs text-muted-foreground">
-            Communiquez ce mot de passe à l'administrateur. Il pourra le modifier depuis son profil.
-          </p>
-        </div>
-      )}
+      <div className="space-y-2">
+        <Label htmlFor="password">
+          {isEditing ? 'Nouveau mot de passe' : 'Mot de passe initial'}
+          {isEditing && <span className="ml-2 font-normal text-muted-foreground text-xs">(laisser vide pour ne pas modifier)</span>}
+        </Label>
+        <Input
+          id="password"
+          type="password"
+          value={formData.password}
+          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+          placeholder="Minimum 6 caractères"
+          required={!isEditing}
+          aria-required={!isEditing}
+          minLength={6}
+          maxLength={100}
+          autoComplete="new-password"
+        />
+        <p className="text-xs text-muted-foreground">
+          {isEditing
+            ? "Le nouvel mot de passe sera appliqué immédiatement sur le compte Firebase."
+            : "Communiquez ce mot de passe à l'administrateur. Il pourra le modifier depuis son profil."}
+        </p>
+      </div>
 
       <div className="space-y-2">
         <Label htmlFor="role">Rôle</Label>

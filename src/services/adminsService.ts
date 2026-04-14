@@ -64,6 +64,25 @@ export async function updateAdminProfile(db: Firestore, auth: Auth, id: string, 
 }
 
 /**
+ * Change le mot de passe d'un admin via l'API sécurisée (Admin SDK).
+ */
+export async function updateAdminPassword(auth: Auth, uid: string, newPassword: string): Promise<void> {
+  const token = await getIdToken(auth);
+
+  const res = await fetch('/api/update-admin-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ uid, password: newPassword }),
+  });
+
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+}
+
+/**
  * Supprime le compte Firebase Auth + le profil Firestore via l'API sécurisée.
  * Refuse la suppression si c'est le dernier admin.
  */

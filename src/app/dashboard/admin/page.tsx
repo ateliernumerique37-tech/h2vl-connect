@@ -8,7 +8,7 @@ import type { Admin, LogAdmin, Adherent } from "@/lib/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { createAdminProfile, updateAdminProfile, deleteAdminProfile } from "@/services/adminsService";
+import { createAdminProfile, updateAdminProfile, updateAdminPassword, deleteAdminProfile } from "@/services/adminsService";
 import { addLog } from "@/services/logsService";
 import { deleteAllAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -81,6 +81,9 @@ export default function AdminPage() {
     try {
         if (editingAdmin) {
             await updateAdminProfile(db, auth, editingAdmin.id, formData);
+            if (formData.password) {
+                await updateAdminPassword(auth, editingAdmin.id, formData.password);
+            }
             await addLog(db, auth, `Modification de l'admin : ${formData.prenom} ${formData.nom}`);
             toast({ title: "Modifications enregistrées" });
         } else {
