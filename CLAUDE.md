@@ -60,6 +60,8 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 | `POST /api/create-admin` | Crée un compte Firebase Auth + doc Firestore admins | Bearer token admin |
 | `POST /api/delete-admin` | Supprime un admin (Auth + Firestore), protège le dernier admin | Bearer token admin |
 | `POST /api/cancel-inscription` | Annule une inscription via jeton d'annulation (Admin SDK) | Non (jeton secret) |
+| `POST /api/update-admin-password` | Change le mot de passe d'un admin (Admin SDK) | Bearer token admin |
+| `POST /api/cron/anniversaires` | Envoi automatique des emails d'anniversaire | Header `x-cron-secret` |
 | `POST /api/confirm-read` | Obsolète — retourne 410 | — |
 
 ---
@@ -189,6 +191,7 @@ Définies dans `apphosting.yaml` (disponibles au runtime sur Cloud Run) :
 | `EMAIL_USER` | `ateliernumerique37@gmail.com` |
 | `EMAIL_PASS` | `deyqfrobqwyfagsf` (mot de passe d'application Gmail) |
 | `EMAIL_FROM_NAME` | `Gestion de l'association H2VL` |
+| `CRON_SECRET` | `h2vl-cron-bK7mNpQ3rJ9sX1tZ5vE8wA4dC6fH2gL0` |
 
 En développement local, copier ces valeurs dans un fichier `.env.local`.
 
@@ -279,6 +282,8 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
   1. Vérifie qu'il reste au moins 1 admin
   2. Supprime le compte Firebase Auth
   3. Supprime le doc Firestore
+- Le changement de mot de passe passe par `POST /api/update-admin-password` (Admin SDK, Bearer token)
+- Mot de passe oublié → `/forgot-password` via `sendPasswordResetEmail` Firebase Auth (email de réinitialisation)
 - **Règle importante** : `isAdmin()` vérifie `exists(/admins/{request.auth.uid})` — l'ID du doc doit être l'UID Firebase Auth, pas un ID aléatoire
 
 ---
@@ -300,6 +305,23 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
   - **Prend le goûter de l'amitié**
 - Les choix s'affichent dans la liste des inscrits et dans l'export CSV
 - Les choix s'affichent dans l'e-mail de confirmation
+
+### Cron anniversaires
+- Job Cloud Scheduler GCP : `0 8 * * *` Europe/Paris → POST `https://studio--studio-6079106449-cf583.us-central1.hosted.app/api/cron/anniversaires`
+- Header requis : `x-cron-secret: h2vl-cron-bK7mNpQ3rJ9sX1tZ5vE8wA4dC6fH2gL0`
+- Le cron appelle `/api/send-email` (pas Nodemailer directement) → tracking email complet inclus
+- Anti-doublons via `logs_anniversaires` (champ `date_envoi: YYYY-MM-DD`)
+- **Ne jamais envoyer via Nodemailer directement dans le cron** — toujours passer par `/api/send-email`
+
+### Cotisations
+- `addCotisationForYear(db, adherentId, annee, isFaaf)` — montant : 40 € FAAF / 15 € sinon
+- `deleteCotisationForYear(db, adherentId, annee)` — met à jour `cotisationAJour` uniquement si `annee === currentYear`
+- Historique affiché depuis 2022 (`FIRST_YEAR = 2022`)
+- `addCotisation` / `removeCotisation` sont des aliases conservés pour compatibilité
+
+### Sauvegardes Firestore
+- Managed Backups hebdomadaires activées → Google Cloud Storage
+- Point-in-time recovery (PITR) activé — restauration possible jusqu'à 7 jours en arrière
 
 ### Invitation par lien
 1. L'admin envoie des invitations depuis la page de détail d'un événement
