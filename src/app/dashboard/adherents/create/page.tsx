@@ -13,8 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestore } from '@/firebase';
+import { RoleGuard } from '@/components/dashboard/role-guard';
 
-export default function CreateAdherentPage() {
+function CreateAdherentPageContent() {
     const router = useRouter();
     const db = useFirestore();
     const { toast } = useToast();
@@ -168,5 +169,13 @@ export default function CreateAdherentPage() {
                 </Button>
             </div>
         </form>
+    );
+}
+
+export default function CreateAdherentPage() {
+    return (
+        <RoleGuard>
+            <CreateAdherentPageContent />
+        </RoleGuard>
     );
 }

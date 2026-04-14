@@ -7,6 +7,7 @@ import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { AdminRoleProvider, type AdminRole } from '@/contexts/admin-role-context';
 
 /**
  * Composant de chargement statique pour le rendu initial.
@@ -83,7 +84,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
-  return <>{children}</>;
+  const role = ((adminDoc as any)?.role as AdminRole) ?? 'Administrateur';
+
+  return (
+    <AdminRoleProvider value={{ role }}>
+      {children}
+    </AdminRoleProvider>
+  );
 }
 
 export default function DashboardLayout({

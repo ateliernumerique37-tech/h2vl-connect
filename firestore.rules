@@ -21,6 +21,10 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    function isAdministrateur() {
+      return isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'Administrateur';
+    }
+
     // --- COLLECTION RULES ---
 
     /** Profils administrateurs */
@@ -36,7 +40,10 @@ service cloud.firestore {
 
     /** Membres de l'association */
     match /adherents/{adherentId} {
-      allow read, write: if isAdmin();
+      // Lecture autorisée à tous les admins (nécessaire pour stats et communication)
+      allow read: if isAdmin();
+      // Écriture réservée aux Administrateurs uniquement (RGPD)
+      allow write: if isAdministrateur();
     }
 
     /** Événements */
@@ -53,7 +60,10 @@ service cloud.firestore {
 
     /** Cotisations des membres */
     match /cotisations/{id} {
-      allow read, write: if isAdmin();
+      // Lecture autorisée à tous les admins (statistiques)
+      allow read: if isAdmin();
+      // Écriture réservée aux Administrateurs uniquement
+      allow write: if isAdministrateur();
     }
 
     /** Campagnes d'e-mails */

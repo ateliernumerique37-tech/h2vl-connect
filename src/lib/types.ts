@@ -70,7 +70,7 @@ export interface Admin {
   prenom: string;
   nom: string;
   email: string;
-  role: 'Administrateur' | 'Super Admin' | 'Éditeur';
+  role: 'Administrateur' | 'Modérateur';
   dateCreation: string; // ISO string
 }
 

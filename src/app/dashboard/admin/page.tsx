@@ -17,6 +17,7 @@ import { collection, query, orderBy, getDocs, writeBatch, doc } from "firebase/f
 import { AdminTable } from "@/components/admin/admin-table";
 import { AdminForm } from "@/components/admin/admin-form";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { useAdminRole } from "@/contexts/admin-role-context";
 
 const LOGS_PER_PAGE = 20;
 
@@ -41,6 +42,7 @@ export default function AdminPage() {
   const db = useFirestore();
   const auth = useAuth();
   const { user } = useUser();
+  const role = useAdminRole();
   
   const adminsQuery = useMemoFirebase(() => query(collection(db, 'admins')), [db]);
   const { data: administrateurs, isLoading: isLoadingAdmins } = useCollection<Admin>(adminsQuery);
@@ -239,43 +241,59 @@ export default function AdminPage() {
     reader.readAsText(file);
   };
   
+  const isModerateur = role === 'Modérateur';
+
+  // Pour les modérateurs : afficher uniquement leur propre compte
+  const visibleAdmins = isModerateur
+    ? (administrateurs ?? []).filter(a => a.id === user?.uid)
+    : (administrateurs ?? []);
+
   if (isLoadingAdmins || isLoadingLogs) return <AdminPageSkeleton />;
 
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">Administration</h1>
-        <p className="text-muted-foreground">Gérez les accès, importez des données et consultez le journal d'audit.</p>
+        <p className="text-muted-foreground">
+          {isModerateur
+            ? "Gérez votre compte et consultez vos informations."
+            : "Gérez les accès, importez des données et consultez le journal d'audit."}
+        </p>
       </header>
-      
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+
+      <div className={isModerateur ? "grid gap-6" : "grid gap-6 lg:grid-cols-3"}>
+        <Card className={isModerateur ? "" : "lg:col-span-2"}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div className="space-y-1">
                     <CardTitle className="flex items-center gap-2">
                         <ShieldCheck className="h-5 w-5 text-primary" />
-                        Comptes Administrateurs
+                        {isModerateur ? "Mon compte" : "Comptes Administrateurs"}
                     </CardTitle>
-                    <CardDescription>Liste des personnes autorisées à gérer l'association.</CardDescription>
+                    <CardDescription>
+                      {isModerateur
+                        ? "Vos informations de compte administrateur."
+                        : "Liste des personnes autorisées à gérer l'association."}
+                    </CardDescription>
                 </div>
-                <Button onClick={handleOpenCreate} size="sm" className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Nouvel Admin
-                </Button>
+                {!isModerateur && (
+                    <Button onClick={handleOpenCreate} size="sm" className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Nouvel Admin
+                    </Button>
+                )}
             </CardHeader>
             <CardContent>
-                {administrateurs && (
-                    <AdminTable
-                        admins={administrateurs}
-                        currentUserId={user?.uid}
-                        onEdit={handleOpenEdit}
-                        onDelete={handleDeleteAdmin}
-                    />
-                )}
+                <AdminTable
+                    admins={visibleAdmins}
+                    currentUserId={user?.uid}
+                    onEdit={handleOpenEdit}
+                    onDelete={isModerateur ? undefined : handleDeleteAdmin}
+                />
             </CardContent>
         </Card>
 
-        <div className="space-y-6">
+        {!isModerateur && (
+          <div className="space-y-6">
             <Card>
                 <CardHeader>
                     <CardTitle>Base de données</CardTitle>
@@ -283,26 +301,26 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="relative">
-                      <Button 
-                        onClick={() => fileInputRef.current?.click()} 
-                        disabled={isImporting} 
-                        variant="outline" 
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isImporting}
+                        variant="outline"
                         className="w-full min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         aria-label="Importer un fichier CSV d'adhérents"
                       >
                         {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                         {isImporting ? "Importation en cours..." : "Importer / Mettre à jour CSV"}
                       </Button>
-                      <input 
-                        ref={fileInputRef} 
-                        type="file" 
-                        accept=".csv" 
-                        className="sr-only" 
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv"
+                        className="sr-only"
                         onChange={handleFileUpload}
                         aria-hidden="true"
                       />
                     </div>
-                    
+
                     <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
                         <div className="flex items-center gap-2 text-destructive font-semibold mb-2">
                             <AlertTriangle className="h-4 w-4" />
@@ -393,7 +411,8 @@ export default function AdminPage() {
                     )}
                 </CardContent>
             </Card>
-        </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>

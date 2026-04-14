@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
+import { useAdminRole } from '@/contexts/admin-role-context';
+import { RoleGuard } from '@/components/dashboard/role-guard';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -56,7 +58,7 @@ function AdherentsPageSkeleton() {
     )
 }
 
-export default function AdherentsPage() {
+function AdherentsPageContent() {
   const db = useFirestore();
   const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
   const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
@@ -375,5 +377,13 @@ export default function AdherentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdherentsPage() {
+  return (
+    <RoleGuard>
+      <AdherentsPageContent />
+    </RoleGuard>
   );
 }

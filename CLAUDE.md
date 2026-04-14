@@ -401,6 +401,39 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
 
 ---
 
+---
+
+## Rôles et contrôle d'accès (RBAC)
+
+### Rôles disponibles
+| Rôle | Valeur dans Firestore |
+|---|---|
+| Administrateur |  |
+| Modérateur |  |
+
+### Permissions par rôle
+| Section | Administrateur | Modérateur |
+|---|---|---|
+| Tableau de bord | ✅ Complet | ✅ Complet |
+| Événements | ✅ Complet | ✅ Complet |
+| Communication | ✅ Complet | ✅ Complet |
+| Statistiques | ✅ Complet | ✅ Complet |
+| Adhérents (liste, fiche, création) | ✅ Complet | ❌ Bloqué (RGPD) |
+| Admin — autres comptes + logs | ✅ Complet | ❌ Caché |
+| Admin — son propre compte | ✅ | ✅ |
+
+### Architecture technique
+- **Contexte** :  — expose  via 
+- **Hook** :  — retourne 
+- **Provider** : Injecté dans  →  lit 
+- **Composant guard** :  — affiche message RGPD si rôle insuffisant
+- **Sidebar** : Item Adhérents masqué pour les Modérateurs
+- **Firestore rules** :  helper — écriture adhérents/cotisations réservée aux Administrateurs
+
+### Règle Firestore
+
+> ⚠️ Après toute modification de firestore.rules → déployer manuellement via Cloud Shell
+
 ## Commandes utiles
 
 ```bash

@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState } from 'react';
 import { Pencil, ChevronLeft, Phone, MapPin, Mail, Calendar, User, CreditCard, CheckCircle2, XCircle, Copy, Check, PhoneCall, Loader2 } from "lucide-react";
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+import { RoleGuard } from '@/components/dashboard/role-guard';
 import { doc, collection, query, where } from 'firebase/firestore';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -33,7 +34,7 @@ function ProfileSkeleton() {
     );
 }
 
-export default function AdherentDetailPage() {
+function AdherentDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const db = useFirestore();
@@ -393,5 +394,13 @@ export default function AdherentDetailPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AdherentDetailPage() {
+  return (
+    <RoleGuard>
+      <AdherentDetailPageContent />
+    </RoleGuard>
   );
 }

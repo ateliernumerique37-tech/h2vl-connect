@@ -29,7 +29,7 @@ interface AdminTableProps {
   admins: Admin[];
   currentUserId: string | undefined;
   onEdit: (admin: Admin) => void;
-  onDelete: (admin: Admin) => void;
+  onDelete?: (admin: Admin) => void;
 }
 
 export function AdminTable({ admins, currentUserId, onEdit, onDelete }: AdminTableProps) {
@@ -37,12 +37,10 @@ export function AdminTable({ admins, currentUserId, onEdit, onDelete }: AdminTab
 
   const getRoleBadge = (role: Admin['role']) => {
     switch (role) {
-      case 'Super Admin':
-        return <Badge variant="default" className="bg-primary">{role}</Badge>;
       case 'Administrateur':
+        return <Badge variant="default" className="bg-primary">{role}</Badge>;
+      case 'Modérateur':
         return <Badge variant="secondary">{role}</Badge>;
-      case 'Éditeur':
-        return <Badge variant="outline">{role}</Badge>;
       default:
         return <Badge variant="outline">{role}</Badge>;
     }
@@ -63,7 +61,7 @@ export function AdminTable({ admins, currentUserId, onEdit, onDelete }: AdminTab
           <TableBody>
             {admins.map((admin) => {
               const isSelf = admin.id === currentUserId;
-              const canDelete = !isSelf && !isLastAdmin;
+              const canDelete = !!onDelete && !isSelf && !isLastAdmin;
 
               return (
                 <TableRow key={admin.id}>
@@ -107,7 +105,7 @@ export function AdminTable({ admins, currentUserId, onEdit, onDelete }: AdminTab
                             <AlertDialogFooter>
                               <AlertDialogCancel>Annuler</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => onDelete(admin)}
+                                onClick={() => onDelete?.(admin)}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Confirmer la suppression

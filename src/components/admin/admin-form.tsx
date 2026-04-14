@@ -113,8 +113,7 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="Administrateur">Administrateur</SelectItem>
-            <SelectItem value="Super Admin">Super Admin</SelectItem>
-            <SelectItem value="Éditeur">Éditeur</SelectItem>
+            <SelectItem value="Modérateur">Modérateur</SelectItem>
           </SelectContent>
         </Select>
       </div>

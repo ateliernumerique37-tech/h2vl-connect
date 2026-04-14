@@ -15,6 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/icons";
+import { useAdminRole } from "@/contexts/admin-role-context";
 
 const menuItems = [
   {
@@ -56,7 +57,8 @@ const menuItems = [
 export function SidebarNav() {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
-  
+  const role = useAdminRole();
+
   const mountedPathname = useRef(pathname);
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export function SidebarNav() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          {menuItems.map((item) => (
+          {menuItems.filter(item => role !== 'Modérateur' || item.href !== '/dashboard/adherents').map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
