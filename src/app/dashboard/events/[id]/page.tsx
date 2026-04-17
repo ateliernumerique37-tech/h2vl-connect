@@ -603,7 +603,7 @@ export default function EventDetailPage() {
     if (!event || !eventInscriptions.length || !rawAdherents) return;
 
     const hasBowling = event.estSortieBowling;
-    const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Montant Payé", "Choix Menu", ...(hasBowling ? ["Options Bowling"] : [])];
+    const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Montant réglé (€)", "Prix unitaire (€)", "Choix Menu", ...(hasBowling ? ["Options Bowling"] : [])];
 
     const rows = eventInscriptions.map(ins => {
       const ad = rawAdherents.find(a => a.id === ins.id_adherent);
@@ -631,6 +631,7 @@ export default function EventDetailPage() {
         ad?.email || '',
         ad?.telephone || '',
         ins.a_paye ? "Payé" : "En attente",
+        ins.a_paye ? event.prix.toFixed(2) : "0.00",
         event.prix.toFixed(2),
         menuChoicesStr,
         ...(hasBowling ? [bowlingStr] : []),
