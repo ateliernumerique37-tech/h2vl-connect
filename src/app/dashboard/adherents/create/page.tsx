@@ -10,16 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestore } from '@/firebase';
 import { RoleGuard } from '@/components/dashboard/role-guard';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 function CreateAdherentPageContent() {
     const router = useRouter();
     const db = useFirestore();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [doublon, setDoublon] = useState<string | null>(null);
     
     const [formData, setFormData] = useState<Omit<Adherent, 'id' | 'dateInscription'>>({
         prenom: '',
@@ -52,11 +54,32 @@ function CreateAdherentPageContent() {
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (isLoading) return;
+        setDoublon(null);
         setIsLoading(true);
+
         try {
+            // Vérification doublon : email + prénom (même email + même prénom = même personne)
+            if (formData.email) {
+                const snap = await getDocs(
+                    query(collection(db, 'adherents'), where('email', '==', formData.email.toLowerCase().trim()))
+                );
+                const prenomSaisi = formData.prenom.toLowerCase().trim();
+                const doublon = snap.docs.find(d => {
+                    const prenom = (d.data().prenom as string ?? '').toLowerCase().trim();
+                    return prenom === prenomSaisi;
+                });
+                if (doublon) {
+                    const d = doublon.data();
+                    setDoublon(`${d.prenom} ${d.nom} est déjà enregistré avec cette adresse e-mail.`);
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
             const newAdherentData = {
                 ...formData,
-                dateInscription: new Date().toISOString()
+                email: formData.email.toLowerCase().trim(),
+                dateInscription: new Date().toISOString(),
             };
             await addAdherent(db, newAdherentData);
             toast({
@@ -159,6 +182,16 @@ function CreateAdherentPageContent() {
                 </CardContent>
             </Card>
             
+            {doublon && (
+                <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-destructive" role="alert" aria-live="assertive">
+                    <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" aria-hidden="true" />
+                    <div>
+                        <p className="font-semibold">Adhérent déjà existant</p>
+                        <p className="text-sm mt-0.5">{doublon}</p>
+                    </div>
+                </div>
+            )}
+
             <div className="flex gap-3">
                 <Button type="button" variant="outline" onClick={() => router.push('/dashboard/adherents')} disabled={isLoading} className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     Annuler
