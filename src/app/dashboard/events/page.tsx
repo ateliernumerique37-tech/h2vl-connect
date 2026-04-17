@@ -4,18 +4,12 @@ import { useState, useMemo, useEffect } from 'react';
 import { EventCard } from "@/components/event-card";
 import type { Evenement } from '@/lib/types';
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlusCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import AiEventForm from '@/components/admin/ai-event-form';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 
@@ -123,23 +117,8 @@ export default function EventsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-           <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" aria-label="Générer un événement avec l'IA">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Générer avec l'IA
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl">
-                 <div className="pt-4">
-                  <AiEventForm />
-                </div>
-              </DialogContent>
-            </Dialog>
           <Link href="/dashboard/events/create" passHref>
-            <Button
-                aria-label="Créer un nouvel événement manuellement"
-            >
+            <Button aria-label="Créer un nouvel événement">
               <PlusCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Créer un événement
             </Button>
