@@ -23,7 +23,7 @@ import { deleteEvenement } from '@/services/evenementsService';
 import { addInscription, updateInscription, deleteInscription } from '@/services/inscriptionsService';
 import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection, query, setDoc } from 'firebase/firestore';
+import { doc, collection, query } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
@@ -579,17 +579,27 @@ export default function EventDetailPage() {
       const inscriptionDate = new Date().toISOString();
       const inscriptionId = await addInscription(db, { ...inscriptionData, date_inscription: inscriptionDate });
 
-      // Générer et stocker le jeton d'annulation
-      const jetonAnnulation = crypto.randomUUID();
-      await setDoc(doc(db, 'annulations_inscription', jetonAnnulation), {
-        inscriptionId,
-        evenementId: event?.id || '',
-        eventTitle: event?.titre || '',
-        eventDate: formattedDate,
-        eventDateFin: formattedDateFin || null,
-        utilisé: false,
-        createdAt: inscriptionDate,
-      });
+      // Générer et stocker le jeton d'annulation via Admin SDK (annulations_inscription is write-protected)
+      let jetonAnnulation: string | null = null;
+      try {
+        const tokenRes = await fetch('/api/create-annulation-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inscriptionId,
+            evenementId: event?.id || '',
+            eventTitle: event?.titre || '',
+            eventDate: formattedDate,
+            eventDateFin: formattedDateFin || null,
+          }),
+        });
+        const tokenData = await tokenRes.json();
+        if (tokenRes.ok && tokenData.success) {
+          jetonAnnulation = tokenData.jeton;
+        }
+      } catch (tokenError) {
+        console.error('Échec création jeton annulation:', tokenError);
+      }
 
       const adherent = rawAdherents?.find(a => a.id === inscriptionData.id_adherent);
 
@@ -601,7 +611,9 @@ export default function EventDetailPage() {
           const formattedEventDate = new Date(event.date).toLocaleDateString("fr-FR", {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
           });
-          const annulationUrl = `${window.location.origin}/lien/annulation/${jetonAnnulation}`;
+          const annulationUrl = jetonAnnulation
+            ? `${window.location.origin}/lien/annulation/${jetonAnnulation}`
+            : undefined;
 
           await fetch('/api/send-email', {
             method: 'POST',
@@ -729,7 +741,12 @@ export default function EventDetailPage() {
 
   if (isLoadingEvent) return <EventDetailSkeleton />;
   if (!event) return notFound();
-  
+
+  const nowMain = new Date();
+  const isDeadlinePassed = event.dateLimiteInscription
+    ? new Date(event.dateLimiteInscription) < nowMain
+    : false;
+
   const formattedDate = new Date(event.date).toLocaleDateString("fr-FR", {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
