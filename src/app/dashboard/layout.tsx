@@ -1,12 +1,12 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { AdminRoleProvider, type AdminRole } from '@/contexts/admin-role-context';
 
 /**
@@ -41,10 +41,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
-  
+
   const adminRef = useMemoFirebase(() => user ? doc(db, 'admins', user.uid) : null, [db, user]);
   const { data: adminDoc, isLoading: isAdminDocLoading } = useDoc(adminRef);
-  const [isHealing, setIsHealing] = useState(false);
+
+  // Detect the render frame where adminRef changed but useDoc's useEffect hasn't fired yet.
+  // During that frame, isAdminDocLoading is still false while adminDoc is null — a false "no doc" state
+  // that would trigger wrong side effects. We treat this transition frame as "loading".
+  const prevAdminRefPath = useRef<string | undefined>(undefined);
+  const currentAdminRefPath = adminRef?.path;
+  const adminRefInTransition = prevAdminRefPath.current !== currentAdminRefPath;
+  prevAdminRefPath.current = currentAdminRefPath;
+
+  const isEffectivelyLoading = isAdminDocLoading || adminRefInTransition;
 
   useEffect(() => {
     setIsMounted(true);
@@ -56,33 +65,22 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isMounted, user, isUserLoading, router]);
 
+  // If auth is resolved, doc is loaded, and no admin doc exists → not an admin, redirect to login
   useEffect(() => {
-    if (isMounted && user && db && !isAdminDocLoading && !adminDoc && !isHealing) {
-      setIsHealing(true);
-      const emailName = user.email ? user.email.split('@')[0] : 'Admin';
-      
-      setDoc(doc(db, 'admins', user.uid), {
-        prenom: emailName,
-        nom: '',
-        email: user.email,
-        role: 'Administrateur',
-      }, { merge: true })
-      .catch(() => {})
-      .finally(() => {
-        setIsHealing(false);
-      });
+    if (isMounted && !isUserLoading && !isEffectivelyLoading && user && !adminDoc) {
+      router.replace('/login');
     }
-  }, [isMounted, user, db, adminDoc, isAdminDocLoading, isHealing]);
+  }, [isMounted, isUserLoading, isEffectivelyLoading, user, adminDoc, router]);
 
   if (!isMounted) {
     return null;
   }
 
-  if (isUserLoading || isAdminDocLoading || isHealing) {
+  if (isUserLoading || (user && isEffectivelyLoading)) {
     return <DashboardSkeleton />;
   }
 
-  if (!user) return null;
+  if (!user || !adminDoc) return null;
 
   const role = ((adminDoc as any)?.role as AdminRole) ?? 'Administrateur';
 
