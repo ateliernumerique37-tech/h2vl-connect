@@ -484,25 +484,36 @@ export default function EventDetailPage() {
       .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [rawAdherents, eventInscriptions]);
 
+  const filteredNonRegistered = useMemo(() => {
+    const q = inviteeSearch.toLowerCase().trim();
+    if (!q) return nonRegisteredAdherents;
+    return nonRegisteredAdherents.filter(a =>
+      a.nom.toLowerCase().includes(q) || a.prenom.toLowerCase().includes(q)
+    );
+  }, [nonRegisteredAdherents, inviteeSearch]);
+
   const [isSendingInvitations, setIsSendingInvitations] = useState(false);
   const [invitationProgress, setInvitationProgress] = useState(0);
+  const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
+  const [inviteeSearch, setInviteeSearch] = useState('');
   const [pendingPayInscriptionId, setPendingPayInscriptionId] = useState<string | null>(null);
   const [selectedMoyenInscription, setSelectedMoyenInscription] = useState<MoyenPaiementInscription>('especes');
 
   const handleSendInvitations = async () => {
-    if (!event || nonRegisteredAdherents.length === 0) return;
+    if (!event || selectedInvitees.size === 0) return;
     setIsSendingInvitations(true);
     setInvitationProgress(0);
 
+    const targets = nonRegisteredAdherents.filter(a => selectedInvitees.has(a.id));
     const formattedEventDate = new Date(event.date).toLocaleDateString('fr-FR', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
 
     let successCount = 0;
-    for (let i = 0; i < nonRegisteredAdherents.length; i++) {
-      const adherent = nonRegisteredAdherents[i];
+    for (let i = 0; i < targets.length; i++) {
+      const adherent = targets[i];
       if (!adherent.email) {
-        setInvitationProgress(Math.round(((i + 1) / nonRegisteredAdherents.length) * 100));
+        setInvitationProgress(Math.round(((i + 1) / targets.length) * 100));
         continue;
       }
       try {
@@ -527,12 +538,13 @@ export default function EventDetailPage() {
       } catch (e) {
         console.error(`Echec invitation ${adherent.email}:`, e);
       }
-      setInvitationProgress(Math.round(((i + 1) / nonRegisteredAdherents.length) * 100));
+      setInvitationProgress(Math.round(((i + 1) / targets.length) * 100));
     }
 
-    await addLog(db, auth, `Invitations envoyées pour "${event.titre}" (${successCount}/${nonRegisteredAdherents.length})`);
+    await addLog(db, auth, `Invitations envoyées pour "${event.titre}" (${successCount}/${targets.length})`);
     toast({ title: 'Invitations envoyées', description: `${successCount} invitation(s) envoyée(s).` });
     setIsSendingInvitations(false);
+    setSelectedInvitees(new Set());
   };
 
   const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
@@ -856,57 +868,136 @@ export default function EventDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground" id="invitation-desc">
-                Envoie une invitation avec un lien d'auto-inscription à chaque adhérent non encore inscrit ({nonRegisteredAdherents.length} adhérent{nonRegisteredAdherents.length > 1 ? 's' : ''}).
-              </p>
-              <div aria-live="polite" aria-atomic="true">
-                {isSendingInvitations && (
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Envoi en cours…</span>
-                      <span aria-label={`${invitationProgress} pourcent`}>{invitationProgress}%</span>
+              {nonRegisteredAdherents.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Tous les adhérents sont déjà inscrits.
+                </p>
+              ) : (
+                <>
+                  {/* Barre de recherche + tout sélectionner */}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                      <Input
+                        placeholder="Rechercher un adhérent…"
+                        value={inviteeSearch}
+                        onChange={e => setInviteeSearch(e.target.value)}
+                        className="pl-8 h-9 text-sm"
+                        aria-label="Rechercher un adhérent à inviter"
+                      />
                     </div>
-                    <Progress
-                      value={invitationProgress}
-                      className="h-2"
-                      aria-label="Progression de l'envoi des invitations"
-                      aria-valuenow={invitationProgress}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 shrink-0 text-xs"
+                      onClick={() => {
+                        const allIds = new Set(filteredNonRegistered.map(a => a.id));
+                        const allSelected = filteredNonRegistered.every(a => selectedInvitees.has(a.id));
+                        if (allSelected) {
+                          setSelectedInvitees(prev => {
+                            const next = new Set(prev);
+                            filteredNonRegistered.forEach(a => next.delete(a.id));
+                            return next;
+                          });
+                        } else {
+                          setSelectedInvitees(prev => new Set([...prev, ...allIds]));
+                        }
+                      }}
+                      aria-label={filteredNonRegistered.every(a => selectedInvitees.has(a.id)) ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    >
+                      {filteredNonRegistered.every(a => selectedInvitees.has(a.id)) ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </Button>
                   </div>
-                )}
-              </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    className="w-full min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
-                    variant="outline"
-                    disabled={isSendingInvitations || nonRegisteredAdherents.length === 0 || isLoadingAdherents || isLoadingInscriptions}
-                    aria-describedby="invitation-desc"
-                    aria-label={`Envoyer les invitations à ${nonRegisteredAdherents.length} adhérent${nonRegisteredAdherents.length > 1 ? 's' : ''} non inscrits à ${event.titre}`}
-                  >
-                    {isSendingInvitations
-                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Envoi…</>
-                      : <><Mail className="mr-2 h-4 w-4" aria-hidden="true" /> Envoyer les invitations</>
-                    }
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Envoyer les invitations ?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {nonRegisteredAdherents.length} adhérent{nonRegisteredAdherents.length > 1 ? 's' : ''} recevront un e-mail avec un lien personnel pour confirmer leur inscription à <strong>{event.titre}</strong>.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleSendInvitations} className="focus-visible:ring-2 focus-visible:ring-primary">
-                      Confirmer l'envoi
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+
+                  {/* Liste des adhérents avec cases à cocher */}
+                  <ScrollArea className="h-48 rounded-md border">
+                    <div className="p-2 space-y-1">
+                      {filteredNonRegistered.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">Aucun résultat.</p>
+                      ) : (
+                        filteredNonRegistered.map(adherent => (
+                          <div
+                            key={adherent.id}
+                            className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                            onClick={() => setSelectedInvitees(prev => {
+                              const next = new Set(prev);
+                              next.has(adherent.id) ? next.delete(adherent.id) : next.add(adherent.id);
+                              return next;
+                            })}
+                          >
+                            <Checkbox
+                              checked={selectedInvitees.has(adherent.id)}
+                              onCheckedChange={() => setSelectedInvitees(prev => {
+                                const next = new Set(prev);
+                                next.has(adherent.id) ? next.delete(adherent.id) : next.add(adherent.id);
+                                return next;
+                              })}
+                              aria-label={`Sélectionner ${adherent.prenom} ${adherent.nom}`}
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <span className="text-sm flex-1">{adherent.prenom} {adherent.nom}</span>
+                            {!adherent.email && (
+                              <span className="text-[10px] text-muted-foreground italic">sans email</span>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+
+                  {/* Progression */}
+                  <div aria-live="polite" aria-atomic="true">
+                    {isSendingInvitations && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Envoi en cours…</span>
+                          <span aria-label={`${invitationProgress} pourcent`}>{invitationProgress}%</span>
+                        </div>
+                        <Progress
+                          value={invitationProgress}
+                          className="h-2"
+                          aria-label="Progression de l'envoi des invitations"
+                          aria-valuenow={invitationProgress}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bouton d'envoi */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        className="w-full min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                        variant="outline"
+                        disabled={isSendingInvitations || selectedInvitees.size === 0 || isLoadingAdherents || isLoadingInscriptions}
+                        aria-label={`Envoyer les invitations aux ${selectedInvitees.size} adhérent(s) sélectionné(s)`}
+                      >
+                        {isSendingInvitations
+                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Envoi…</>
+                          : <><Mail className="mr-2 h-4 w-4" aria-hidden="true" /> Envoyer {selectedInvitees.size > 0 ? `(${selectedInvitees.size})` : ''}</>
+                        }
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Envoyer les invitations ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {selectedInvitees.size} adhérent{selectedInvitees.size > 1 ? 's' : ''} recevront un e-mail avec un lien personnel pour confirmer leur inscription à <strong>{event.titre}</strong>.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleSendInvitations} className="focus-visible:ring-2 focus-visible:ring-primary">
+                          Confirmer l'envoi
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              )}
             </CardContent>
           </Card>
 

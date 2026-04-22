@@ -5,17 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { initializeFirebase } from '@/firebase';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  setDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-} from 'firebase/firestore';
-import { addInscription } from '@/services/inscriptionsService';
+import { doc, getDoc } from 'firebase/firestore';
 import { CheckCircle2, AlertCircle, Loader2, CalendarDays, MapPin, UserCheck } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,37 +31,70 @@ function InscriptionContent() {
   const [status, setStatus] = useState<PageStatus>('loading');
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
-  // Données de l'événement affichées dans la page
   const [eventTitle, setEventTitle] = useState<string | null>(null);
   const [eventDate, setEventDate] = useState<string | null>(null);
   const [eventDateFin, setEventDateFin] = useState<string | null>(null);
   const [eventLocation, setEventLocation] = useState<string | null>(null);
-
-  // Données complètes de l'événement (pour afficher les choix)
   const [eventData, setEventData] = useState<Partial<Evenement> | null>(null);
 
-  // IDs nécessaires pour créer l'inscription différée
-  const [pendingIds, setPendingIds] = useState<{ evenementId: string; adherentId: string } | null>(null);
-
-  // Données de l'adhérent stockées dans l'invitation (pour l'email de confirmation)
-  const [invitationEmail, setInvitationEmail] = useState<string | null>(null);
-  const [invitationFirstName, setInvitationFirstName] = useState<string | null>(null);
-
-  // Choix de l'utilisateur
   const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
   const [bowlingChoices, setBowlingChoices] = useState<Inscription['choixBowling']>({});
+
+  // Appelle l'API Admin SDK et gère la réponse
+  const callConfirmApi = async (extraChoices?: { menuChoices?: Inscription['choixMenu']; bowlingChoices?: Inscription['choixBowling'] }) => {
+    const res = await fetch('/api/confirm-inscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jeton, ...extraChoices }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      const err = data.error as string;
+      if (err === 'ALREADY_REGISTERED') { setStatus('already_registered'); return; }
+      if (err === 'EVENT_FULL')         { setStatus('event_full'); return; }
+      if (err === 'REGISTRATION_CLOSED') { setStatus('registration_closed'); return; }
+      setStatus('error');
+      setErrorDetails(err);
+      return;
+    }
+
+    // Envoi de l'e-mail de confirmation (best-effort)
+    if (data.adherentEmail) {
+      try {
+        const annulationUrl = `${window.location.origin}/lien/annulation/${data.jetonAnnulation}`;
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: data.adherentEmail,
+            firstName: data.adherentFirstName || '',
+            eventTitle: data.eventTitle,
+            eventDate: data.eventDate,
+            eventDateFin: data.eventDateFin,
+            eventLocation: data.eventLocation,
+            menuChoices: extraChoices?.menuChoices ?? null,
+            bowlingChoices: extraChoices?.bowlingChoices ?? null,
+            annulationUrl,
+          }),
+        });
+      } catch (e) {
+        console.error('Email confirmation failed:', e);
+      }
+    }
+
+    setStatus('success');
+  };
 
   useEffect(() => {
     if (!jeton) return;
 
-    const processInscription = async () => {
+    const init = async () => {
       try {
         const { firestore: db } = initializeFirebase();
 
-        // 1. Récupérer l'invitation
-        const invitationRef = doc(db, 'invitations_evenement', jeton);
-        const invitationSnap = await getDoc(invitationRef);
-
+        // Lire l'invitation (collection publique)
+        const invitationSnap = await getDoc(doc(db, 'invitations_evenement', jeton));
         if (!invitationSnap.exists()) {
           setStatus('error');
           setErrorDetails('NOT_FOUND');
@@ -80,20 +103,13 @@ function InscriptionContent() {
 
         const invitation = invitationSnap.data();
 
-        // Stocker email et prénom de l'adhérent (présents si envoyé via la nouvelle version)
-        if (invitation.adherentEmail) setInvitationEmail(invitation.adherentEmail);
-        if (invitation.adherentFirstName) setInvitationFirstName(invitation.adherentFirstName);
-
-        // 2. Déjà inscrit via ce lien
         if (invitation.statut === 'inscrit') {
           setStatus('already_registered');
           return;
         }
 
-        const { evenementId, adherentId } = invitation;
-
-        // 3. Récupérer l'événement
-        const eventSnap = await getDoc(doc(db, 'evenements', evenementId));
+        // Lire l'événement (collection désormais publique)
+        const eventSnap = await getDoc(doc(db, 'evenements', invitation.evenementId));
         if (!eventSnap.exists()) {
           setStatus('error');
           setErrorDetails('EVENT_NOT_FOUND');
@@ -101,123 +117,26 @@ function InscriptionContent() {
         }
 
         const event = eventSnap.data() as Evenement;
-        const formattedDate = new Date(event.date).toLocaleDateString('fr-FR', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
+
+        const fmt = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
         });
+
         setEventTitle(event.titre);
-        setEventDate(formattedDate);
-        if (event.dateFin) {
-          setEventDateFin(new Date(event.dateFin).toLocaleDateString('fr-FR', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-          }));
-        }
+        setEventDate(fmt(event.date));
+        if (event.dateFin) setEventDateFin(fmt(event.dateFin));
         setEventLocation(event.lieu);
         setEventData(event);
 
-        // 4. Vérifier si déjà inscrit via une autre voie
-        // (lecture sans auth tolérée — si bloquée par les règles, on continue sans vérification)
-        try {
-          const existingQuery = query(
-            collection(db, 'inscriptions'),
-            where('id_evenement', '==', evenementId),
-            where('id_adherent', '==', adherentId)
-          );
-          const existingSnap = await getDocs(existingQuery);
-          if (!existingSnap.empty) {
-            await updateDoc(invitationRef, { statut: 'inscrit', dateInscription: new Date().toISOString() });
-            setStatus('already_registered');
-            return;
-          }
-        } catch {
-          // Pas de permission pour lire les inscriptions sans auth — on continue
-        }
-
-        // 5. Vérifier si les inscriptions sont fermées (événement passé ou deadline dépassée)
-        const now = new Date();
-        if (new Date(event.date) < now) {
-          setStatus('registration_closed');
-          return;
-        }
-        if (event.dateLimiteInscription && new Date(event.dateLimiteInscription) < now) {
-          setStatus('registration_closed');
-          return;
-        }
-
-        // 6. Vérifier la capacité
-        if (event.nombrePlacesMax && event.nombrePlacesMax > 0) {
-          const allInscriptionsSnap = await getDocs(
-            query(collection(db, 'inscriptions'), where('id_evenement', '==', evenementId))
-          );
-          if (allInscriptionsSnap.size >= event.nombrePlacesMax) {
-            setStatus('event_full');
-            return;
-          }
-        }
-
-        // 7. Si l'événement nécessite des choix (menu ou bowling), on affiche le formulaire
+        // Si l'événement nécessite des choix, afficher le formulaire
         if (event.necessiteMenu || event.estSortieBowling) {
-          setPendingIds({ evenementId, adherentId });
           setStatus('pending_choices');
           return;
         }
 
-        // 8. Sinon, inscription directe (pas de choix à faire)
-        const inscriptionDate = new Date().toISOString();
-        const inscriptionId = await addInscription(db, {
-          id_evenement: evenementId,
-          id_adherent: adherentId,
-          a_paye: false,
-          date_inscription: inscriptionDate,
-        });
+        // Sinon, inscription directe via l'API Admin SDK
+        await callConfirmApi();
 
-        // Jeton d'annulation
-        const jetonAnnulation = crypto.randomUUID();
-        const formattedDateFinDirect = event.dateFin
-          ? new Date(event.dateFin).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-          : null;
-        await setDoc(doc(db, 'annulations_inscription', jetonAnnulation), {
-          inscriptionId,
-          evenementId,
-          eventTitle: event.titre || '',
-          eventDate: formattedDate,
-          eventDateFin: formattedDateFinDirect,
-          utilisé: false,
-          createdAt: inscriptionDate,
-        });
-
-        await updateDoc(invitationRef, {
-          statut: 'inscrit',
-          dateInscription: inscriptionDate,
-        });
-
-        // Email de confirmation
-        if (invitation.adherentEmail) {
-          try {
-            const annulationUrl = `${window.location.origin}/lien/annulation/${jetonAnnulation}`;
-            await fetch('/api/send-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                to: invitation.adherentEmail,
-                firstName: invitation.adherentFirstName || '',
-                eventTitle: event.titre,
-                eventDate: formattedDate,
-                eventDateFin: formattedDateFinDirect,
-                eventLocation: event.lieu,
-                annulationUrl,
-              }),
-            });
-          } catch (e) {
-            console.error('Email confirmation failed:', e);
-          }
-        }
-
-        setStatus('success');
       } catch (err: any) {
         console.error('Inscription error:', err);
         setStatus('error');
@@ -225,80 +144,19 @@ function InscriptionContent() {
       }
     };
 
-    processInscription();
+    init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jeton]);
 
-  // Soumission différée avec les choix (menu et/ou bowling)
   const handleConfirmWithChoices = async () => {
-    if (!pendingIds) return;
     setStatus('submitting');
-
-    try {
-      const { firestore: db } = initializeFirebase();
-
-      const inscriptionDate = new Date().toISOString();
-      const inscriptionData: Omit<Inscription, 'id'> = {
-        id_evenement: pendingIds.evenementId,
-        id_adherent: pendingIds.adherentId,
-        a_paye: false,
-        date_inscription: inscriptionDate,
-        ...(eventData?.necessiteMenu && { choixMenu: menuChoices }),
-        ...(eventData?.estSortieBowling && { choixBowling: bowlingChoices }),
-      };
-
-      const inscriptionId = await addInscription(db, inscriptionData);
-
-      // Jeton d'annulation
-      const jetonAnnulation = crypto.randomUUID();
-      await setDoc(doc(db, 'annulations_inscription', jetonAnnulation), {
-        inscriptionId,
-        evenementId: pendingIds.evenementId,
-        eventTitle: eventTitle || '',
-        eventDate: eventDate,
-        eventDateFin: eventDateFin,
-        utilisé: false,
-        createdAt: inscriptionDate,
-      });
-
-      const invitationRef = doc(db, 'invitations_evenement', jeton);
-      await updateDoc(invitationRef, {
-        statut: 'inscrit',
-        dateInscription: inscriptionDate,
-      });
-
-      // Email de confirmation avec les choix
-      if (invitationEmail) {
-        try {
-          const annulationUrl = `${window.location.origin}/lien/annulation/${jetonAnnulation}`;
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: invitationEmail,
-              firstName: invitationFirstName || '',
-              eventTitle,
-              eventDate,
-              eventDateFin,
-              eventLocation,
-              menuChoices: eventData?.necessiteMenu ? menuChoices : null,
-              bowlingChoices: eventData?.estSortieBowling ? bowlingChoices : null,
-              annulationUrl,
-            }),
-          });
-        } catch (e) {
-          console.error('Email confirmation failed:', e);
-        }
-      }
-
-      setStatus('success');
-    } catch (err: any) {
-      console.error('Inscription error:', err);
-      setStatus('error');
-      setErrorDetails(err.message);
-    }
+    await callConfirmApi({
+      menuChoices: eventData?.necessiteMenu ? menuChoices : undefined,
+      bowlingChoices: eventData?.estSortieBowling ? bowlingChoices : undefined,
+    });
   };
 
-  // ── Rendu : formulaire de choix ──────────────────────────────────────────
+  // ── Formulaire de choix ──────────────────────────────────────────────────
   if (status === 'pending_choices' || status === 'submitting') {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -308,11 +166,7 @@ function InscriptionContent() {
               Confirmer mon inscription
             </CardTitle>
             {eventTitle && (
-              <div
-                className="mt-3 rounded-xl bg-primary/5 border border-primary/20 p-4 space-y-1"
-                role="region"
-                aria-label={`Détails de l'événement`}
-              >
+              <div className="mt-3 rounded-xl bg-primary/5 border border-primary/20 p-4 space-y-1" role="region" aria-label="Détails de l'événement">
                 <p className="font-bold text-primary text-base">{eventTitle}</p>
                 {eventDate && (
                   <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -331,7 +185,7 @@ function InscriptionContent() {
           </CardHeader>
 
           <CardContent className="space-y-6 pt-4">
-            {/* ── Choix de menu ────────────────────────────────────────── */}
+            {/* Choix de menu */}
             {eventData?.necessiteMenu && eventData.optionsMenu && (
               <div className="space-y-4 rounded-lg border p-4 bg-muted/5">
                 <h2 className="font-bold text-sm uppercase tracking-wider text-primary/80 border-b pb-2">
@@ -348,23 +202,16 @@ function InscriptionContent() {
                         </Label>
                         <RadioGroup
                           value={menuChoices?.[key] ?? ''}
-                          onValueChange={(value) =>
-                            setMenuChoices((prev) => ({ ...prev, [key]: value }))
-                          }
+                          onValueChange={(value) => setMenuChoices(prev => ({ ...prev, [key]: value }))}
                           aria-label={`Choix pour ${label}`}
                           className="grid gap-1"
                         >
                           {options.map((option, idx) => {
                             const optionId = `menu-${key}-${idx}`;
                             return (
-                              <div
-                                key={optionId}
-                                className="flex items-center space-x-2 rounded-md border p-2 hover:bg-muted/50 transition-colors"
-                              >
+                              <div key={optionId} className="flex items-center space-x-2 rounded-md border p-2 hover:bg-muted/50 transition-colors">
                                 <RadioGroupItem value={option} id={optionId} />
-                                <Label htmlFor={optionId} className="flex-1 cursor-pointer text-sm font-normal">
-                                  {option}
-                                </Label>
+                                <Label htmlFor={optionId} className="flex-1 cursor-pointer text-sm font-normal">{option}</Label>
                               </div>
                             );
                           })}
@@ -376,60 +223,42 @@ function InscriptionContent() {
               </div>
             )}
 
-            {/* ── Options bowling ──────────────────────────────────────── */}
+            {/* Options bowling */}
             {eventData?.estSortieBowling && (
               <div className="space-y-3 rounded-lg border p-4 bg-muted/5">
                 <h2 className="font-bold text-sm uppercase tracking-wider text-primary/80 border-b pb-2">
                   🎳 Options bowling
                 </h2>
                 <div className="space-y-2">
-                  <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
-                    <Checkbox
-                      id="bowling-barrieres"
-                      checked={bowlingChoices?.avecBarrieres ?? false}
-                      onCheckedChange={(checked) =>
-                        setBowlingChoices((prev) => ({
-                          ...prev,
-                          avecBarrieres: checked === true,
-                          sansBarrieres: checked === true ? false : prev?.sansBarrieres,
-                        }))
-                      }
-                      aria-label="Je joue avec barrières"
-                    />
-                    <Label htmlFor="bowling-barrieres" className="flex-1 cursor-pointer text-sm font-normal">
-                      Avec barrières
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
-                    <Checkbox
-                      id="bowling-sans-barrieres"
-                      checked={bowlingChoices?.sansBarrieres ?? false}
-                      onCheckedChange={(checked) =>
-                        setBowlingChoices((prev) => ({
-                          ...prev,
-                          sansBarrieres: checked === true,
-                          avecBarrieres: checked === true ? false : prev?.avecBarrieres,
-                        }))
-                      }
-                      aria-label="Je joue sans barrières"
-                    />
-                    <Label htmlFor="bowling-sans-barrieres" className="flex-1 cursor-pointer text-sm font-normal">
-                      Sans barrières
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
-                    <Checkbox
-                      id="bowling-gouter"
-                      checked={bowlingChoices?.prendGouter ?? false}
-                      onCheckedChange={(checked) =>
-                        setBowlingChoices((prev) => ({ ...prev, prendGouter: checked === true }))
-                      }
-                      aria-label="Je prends le goûter de l'amitié"
-                    />
-                    <Label htmlFor="bowling-gouter" className="flex-1 cursor-pointer text-sm font-normal">
-                      Prend le goûter de l'amitié
-                    </Label>
-                  </div>
+                  {[
+                    {
+                      id: 'bowling-barrieres',
+                      label: 'Avec barrières',
+                      checked: bowlingChoices?.avecBarrieres ?? false,
+                      onChange: (checked: boolean) => setBowlingChoices(prev => ({
+                        ...prev, avecBarrieres: checked, sansBarrieres: checked ? false : prev?.sansBarrieres,
+                      })),
+                    },
+                    {
+                      id: 'bowling-sans-barrieres',
+                      label: 'Sans barrières',
+                      checked: bowlingChoices?.sansBarrieres ?? false,
+                      onChange: (checked: boolean) => setBowlingChoices(prev => ({
+                        ...prev, sansBarrieres: checked, avecBarrieres: checked ? false : prev?.avecBarrieres,
+                      })),
+                    },
+                    {
+                      id: 'bowling-gouter',
+                      label: "Prend le goûter de l'amitié",
+                      checked: bowlingChoices?.prendGouter ?? false,
+                      onChange: (checked: boolean) => setBowlingChoices(prev => ({ ...prev, prendGouter: checked })),
+                    },
+                  ].map(({ id, label, checked, onChange }) => (
+                    <div key={id} className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
+                      <Checkbox id={id} checked={checked} onCheckedChange={(v) => onChange(v === true)} aria-label={label} />
+                      <Label htmlFor={id} className="flex-1 cursor-pointer text-sm font-normal">{label}</Label>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -443,10 +272,7 @@ function InscriptionContent() {
               aria-label="Confirmer mon inscription"
             >
               {status === 'submitting' ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  Enregistrement…
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Enregistrement…</>
               ) : (
                 '✅ Confirmer mon inscription'
               )}
@@ -457,26 +283,22 @@ function InscriptionContent() {
     );
   }
 
-  // ── Rendu : états finaux (loading / success / already_registered / full / error) ──
-  const statusLabel: Record<Exclude<PageStatus, 'pending_choices' | 'submitting'>, string> = {
-    loading: 'Traitement en cours…',
-    success: 'Inscription confirmée !',
-    already_registered: 'Déjà inscrit(e)',
-    event_full: 'Événement complet',
-    registration_closed: 'Inscriptions fermées',
-    error: 'Lien invalide',
-  };
-
-  const statusDescription: Record<Exclude<PageStatus, 'pending_choices' | 'submitting'>, string> = {
-    loading: 'Nous vérifions votre invitation, merci de patienter.',
-    success: 'Votre participation a bien été enregistrée. À bientôt chez H2VL !',
-    already_registered: 'Vous êtes déjà inscrit(e) à cet événement.',
-    event_full: 'Désolé, toutes les places sont prises pour cet événement.',
-    registration_closed: 'Les inscriptions pour cet événement sont maintenant fermées.',
-    error: "Ce lien n'est pas valide ou a expiré.",
+  // ── États finaux ─────────────────────────────────────────────────────────
+  const statusConfig: Record<Exclude<PageStatus, 'pending_choices' | 'submitting'>, {
+    icon: React.ReactNode;
+    title: string;
+    description: string;
+  }> = {
+    loading:             { icon: <Loader2 className="h-8 w-8 text-primary animate-spin" />,                          title: 'Traitement en cours…',       description: 'Nous vérifions votre invitation, merci de patienter.' },
+    success:             { icon: <CheckCircle2 className="h-10 w-10 text-green-500 animate-in zoom-in duration-300" />, title: 'Inscription confirmée !',    description: 'Votre participation a bien été enregistrée. À bientôt chez H2VL !' },
+    already_registered:  { icon: <UserCheck className="h-10 w-10 text-blue-500" />,                                   title: 'Déjà inscrit(e)',            description: 'Vous êtes déjà inscrit(e) à cet événement.' },
+    event_full:          { icon: <AlertCircle className="h-10 w-10 text-orange-500" />,                               title: 'Événement complet',          description: 'Désolé, toutes les places sont prises pour cet événement.' },
+    registration_closed: { icon: <AlertCircle className="h-10 w-10 text-orange-500" />,                               title: 'Inscriptions fermées',       description: 'Les inscriptions pour cet événement sont maintenant fermées.' },
+    error:               { icon: <AlertCircle className="h-10 w-10 text-destructive" />,                              title: 'Lien invalide',              description: "Ce lien n'est pas valide ou a expiré." },
   };
 
   const safeStatus = status as Exclude<PageStatus, 'pending_choices' | 'submitting'>;
+  const { icon, title, description } = statusConfig[safeStatus];
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -484,40 +306,21 @@ function InscriptionContent() {
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-6" aria-hidden="true">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              {status === 'loading' && <Loader2 className="h-8 w-8 text-primary animate-spin" />}
-              {status === 'success' && <CheckCircle2 className="h-10 w-10 text-green-500 animate-in zoom-in duration-300" />}
-              {status === 'already_registered' && <UserCheck className="h-10 w-10 text-blue-500" />}
-              {status === 'event_full' && <AlertCircle className="h-10 w-10 text-orange-500" />}
-              {status === 'registration_closed' && <AlertCircle className="h-10 w-10 text-orange-500" />}
-              {status === 'error' && <AlertCircle className="h-10 w-10 text-destructive" />}
+              {icon}
             </div>
           </div>
-
-          <CardTitle
-            className="text-2xl font-bold tracking-tight"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {statusLabel[safeStatus]}
+          <CardTitle className="text-2xl font-bold tracking-tight" role="status" aria-live="polite" aria-atomic="true">
+            {title}
           </CardTitle>
         </CardHeader>
 
         <CardContent className="text-center space-y-6 pt-4">
-          <p
-            className="text-muted-foreground text-base leading-relaxed"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {statusDescription[safeStatus]}
+          <p className="text-muted-foreground text-base leading-relaxed" aria-live="polite" aria-atomic="true">
+            {description}
           </p>
 
           {status === 'success' && eventTitle && (
-            <div
-              className="bg-green-50 border border-green-100 rounded-xl p-4 text-left space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500"
-              role="region"
-              aria-label={`Détails de l'événement : ${eventTitle}`}
-            >
+            <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-left space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500" role="region" aria-label={`Détails de l'événement : ${eventTitle}`}>
               <p className="font-bold text-green-800 text-base">{eventTitle}</p>
               {eventDate && (
                 <p className="flex items-center gap-2 text-sm text-green-700">
