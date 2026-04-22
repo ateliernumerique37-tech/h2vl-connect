@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { Admin } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
@@ -103,19 +103,25 @@ export function AdminForm({ initialData, onSubmit, onCancel, isSubmitting }: Adm
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="role">Rôle</Label>
-        <Select
+        <Label>Rôle</Label>
+        <RadioGroup
           value={formData.role}
           onValueChange={(value: Admin['role']) => setFormData({ ...formData, role: value })}
+          className="grid grid-cols-2 gap-2"
         >
-          <SelectTrigger id="role" aria-label="Sélectionner un rôle" className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-            <SelectValue placeholder="Choisir un rôle" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Administrateur">Administrateur</SelectItem>
-            <SelectItem value="Modérateur">Modérateur</SelectItem>
-          </SelectContent>
-        </Select>
+          {([
+            { value: 'Administrateur', description: 'Accès complet' },
+            { value: 'Modérateur', description: 'Sans accès adhérents' },
+          ] as const).map(({ value, description }) => (
+            <div key={value} className="flex items-center gap-2 rounded-md border bg-background p-3 hover:bg-muted/50 cursor-pointer transition-colors">
+              <RadioGroupItem value={value} id={`role-${value}`} />
+              <div>
+                <Label htmlFor={`role-${value}`} className="cursor-pointer font-medium">{value}</Label>
+                <p className="text-xs text-muted-foreground">{description}</p>
+              </div>
+            </div>
+          ))}
+        </RadioGroup>
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
