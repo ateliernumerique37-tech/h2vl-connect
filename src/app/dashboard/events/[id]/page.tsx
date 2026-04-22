@@ -484,6 +484,12 @@ export default function EventDetailPage() {
       .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [rawAdherents, eventInscriptions]);
 
+  const [isSendingInvitations, setIsSendingInvitations] = useState(false);
+  const [invitationProgress, setInvitationProgress] = useState(0);
+  const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
+  const [inviteeSearch, setInviteeSearch] = useState('');
+  const [pendingPayInscriptionId, setPendingPayInscriptionId] = useState<string | null>(null);
+
   const filteredNonRegistered = useMemo(() => {
     const q = inviteeSearch.toLowerCase().trim();
     if (!q) return nonRegisteredAdherents;
@@ -491,12 +497,6 @@ export default function EventDetailPage() {
       a.nom.toLowerCase().includes(q) || a.prenom.toLowerCase().includes(q)
     );
   }, [nonRegisteredAdherents, inviteeSearch]);
-
-  const [isSendingInvitations, setIsSendingInvitations] = useState(false);
-  const [invitationProgress, setInvitationProgress] = useState(0);
-  const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
-  const [inviteeSearch, setInviteeSearch] = useState('');
-  const [pendingPayInscriptionId, setPendingPayInscriptionId] = useState<string | null>(null);
   const [selectedMoyenInscription, setSelectedMoyenInscription] = useState<MoyenPaiementInscription>('especes');
 
   const handleSendInvitations = async () => {
