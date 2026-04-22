@@ -596,9 +596,21 @@ export default function EventDetailPage() {
         const tokenData = await tokenRes.json();
         if (tokenRes.ok && tokenData.success) {
           jetonAnnulation = tokenData.jeton;
+        } else {
+          console.error('Échec création jeton annulation:', tokenData.error);
+          toast({
+            variant: 'destructive',
+            title: 'Avertissement',
+            description: "L'inscription a été enregistrée mais le lien d'annulation n'a pas pu être généré.",
+          });
         }
       } catch (tokenError) {
         console.error('Échec création jeton annulation:', tokenError);
+        toast({
+          variant: 'destructive',
+          title: 'Avertissement',
+          description: "L'inscription a été enregistrée mais le lien d'annulation n'a pas pu être généré.",
+        });
       }
 
       const adherent = rawAdherents?.find(a => a.id === inscriptionData.id_adherent);
@@ -615,7 +627,7 @@ export default function EventDetailPage() {
             ? `${window.location.origin}/lien/annulation/${jetonAnnulation}`
             : undefined;
 
-          await fetch('/api/send-email', {
+          const emailRes = await fetch('/api/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -635,10 +647,24 @@ export default function EventDetailPage() {
               annulationUrl,
             }),
           });
-          toast({ title: "Inscription validée et email envoyé" });
+          if (emailRes.ok) {
+            toast({ title: "Inscription validée et email envoyé" });
+          } else {
+            const emailData = await emailRes.json().catch(() => ({}));
+            console.error("Échec envoi email:", emailData.error);
+            toast({
+              variant: 'destructive',
+              title: 'Inscription validée',
+              description: `L'email de confirmation n'a pas pu être envoyé à ${adherent.email}.`,
+            });
+          }
         } catch (emailError) {
           console.error("Échec envoi email:", emailError);
-          toast({ title: "Inscription validée", description: "Note: L'envoi de l'email a échoué." });
+          toast({
+            variant: 'destructive',
+            title: 'Inscription validée',
+            description: `L'email de confirmation n'a pas pu être envoyé à ${adherent.email}.`,
+          });
         }
       }
     } catch (error) {
