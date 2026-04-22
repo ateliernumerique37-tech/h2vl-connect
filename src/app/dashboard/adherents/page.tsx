@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import type { Adherent } from "@/lib/types";
+import type { Adherent, Cotisation } from "@/lib/types";
+import { MOYEN_PAIEMENT_LABEL } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, ChevronLeft, ChevronRight, Search, Download } from "lucide-react";
 import { AdherentCard } from "@/components/adherent-card";
@@ -12,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { useAdminRole } from '@/contexts/admin-role-context';
 import { RoleGuard } from '@/components/dashboard/role-guard';
 
@@ -60,8 +61,16 @@ function AdherentsPageSkeleton() {
 
 function AdherentsPageContent() {
   const db = useFirestore();
+  const currentYear = new Date().getFullYear();
+
   const adherentsQuery = useMemoFirebase(() => query(collection(db, 'adherents')), [db]);
   const { data: adherents, isLoading } = useCollection<Adherent>(adherentsQuery);
+
+  const cotisationsQuery = useMemoFirebase(
+    () => query(collection(db, 'cotisations'), where('annee', '==', currentYear)),
+    [db, currentYear]
+  );
+  const { data: cotisations } = useCollection<Cotisation>(cotisationsQuery);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -129,17 +138,17 @@ function AdherentsPageContent() {
   const handleExportCSV = () => {
     if (!adherents || adherents.length === 0) return;
 
-    // Ordre strict des 13 colonnes pour compatibilité miroir avec l'import
     const headers = [
-      "Prenom", "Nom", "Email", "Telephone", "Adresse", "DateNaissance", 
-      "Genre", "DateInscription", "MembreBureau", "Benevole", "MembreFAAF", 
-      "DroitImage", "CotisationAJour"
+      "Prenom", "Nom", "Email", "Telephone", "Adresse", "DateNaissance",
+      "Genre", "DateInscription", "MembreBureau", "Benevole", "MembreFAAF",
+      "DroitImage", "CotisationAJour",
+      `DatePaiement_${currentYear}`, `Montant_${currentYear}_EUR`, `MoyenPaiement_${currentYear}`
     ];
 
     const formatDate = (dateStr: string) => {
       if (!dateStr) return "";
       try {
-        return dateStr.split('T')[0]; // Format YYYY-MM-DD
+        return dateStr.split('T')[0];
       } catch (e) {
         return "";
       }
@@ -147,21 +156,31 @@ function AdherentsPageContent() {
 
     const formatBool = (bool: boolean) => (bool ? "Oui" : "Non");
 
-    const rows = adherents.map(a => [
-      a.prenom,
-      a.nom,
-      a.email,
-      a.telephone || "",
-      a.adresse || "",
-      formatDate(a.dateNaissance),
-      a.genre || "Autre",
-      formatDate(a.dateInscription),
-      formatBool(a.estMembreBureau),
-      formatBool(a.estBenevole),
-      formatBool(a.estMembreFaaf),
-      formatBool(a.accordeDroitImage),
-      formatBool(a.cotisationAJour)
-    ]);
+    // Index des cotisations de l'année par adherentId pour lookup O(1)
+    const cotisationByAdherent = new Map<string, Cotisation>();
+    cotisations?.forEach(c => cotisationByAdherent.set(c.adherentId, c));
+
+    const rows = adherents.map(a => {
+      const cotisation = cotisationByAdherent.get(a.id);
+      return [
+        a.prenom,
+        a.nom,
+        a.email,
+        a.telephone || "",
+        a.adresse || "",
+        formatDate(a.dateNaissance),
+        a.genre || "Autre",
+        formatDate(a.dateInscription),
+        formatBool(a.estMembreBureau),
+        formatBool(a.estBenevole),
+        formatBool(a.estMembreFaaf),
+        formatBool(a.accordeDroitImage),
+        formatBool(a.cotisationAJour),
+        cotisation ? formatDate(cotisation.datePaiement) : "",
+        cotisation ? cotisation.montant.toFixed(2) : "",
+        cotisation?.moyenPaiement ? MOYEN_PAIEMENT_LABEL[cotisation.moyenPaiement] : "",
+      ];
+    });
 
     // Construction du contenu CSV avec séparateur virgule et protection des champs par guillemets doubles
     const csvContent = [
