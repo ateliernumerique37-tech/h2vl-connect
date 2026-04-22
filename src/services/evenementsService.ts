@@ -24,9 +24,10 @@ export async function addEvenement(db: Firestore, eventData: Omit<Evenement, 'id
     return docRef.id;
 }
 
-export async function updateEvenement(db: Firestore, id: string, updates: Partial<Evenement>): Promise<void> {
+export async function updateEvenement(db: Firestore, id: string, updates: Partial<Evenement> | Record<string, unknown>): Promise<void> {
     const docRef = doc(db, evenementsCollectionName, id);
-    await updateDoc(docRef, updates);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await updateDoc(docRef, updates as any);
 }
 
 export async function deleteEvenement(db: Firestore, id: string): Promise<void> {

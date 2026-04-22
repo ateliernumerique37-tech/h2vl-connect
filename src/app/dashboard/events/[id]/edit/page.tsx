@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, notFound, useRouter } from 'next/navigation';
 import { getEvenementById, updateEvenement } from '@/services/evenementsService';
+import { deleteField } from 'firebase/firestore';
 import { addLog } from '@/services/logsService';
 import type { Evenement } from '@/lib/types';
 import { Button } from "@/components/ui/button";
@@ -131,7 +132,7 @@ export default function EditEventPage() {
         setIsSubmitting(true);
         
         try {
-            const updatedEvent: Partial<Evenement> = {
+            const updatedEvent = {
                 titre,
                 description,
                 date: new Date(date).toISOString(),
@@ -140,12 +141,8 @@ export default function EditEventPage() {
                 nombrePlacesMax: parseInt(nombrePlacesMax, 10),
                 necessiteMenu,
                 estSortieBowling,
-                ...(dateFin
-                  ? { dateFin: new Date(dateFin).toISOString() }
-                  : { dateFin: undefined }),
-                ...(dateLimiteInscription
-                  ? { dateLimiteInscription: new Date(dateLimiteInscription).toISOString() }
-                  : { dateLimiteInscription: undefined }),
+                dateFin: dateFin ? new Date(dateFin).toISOString() : deleteField(),
+                dateLimiteInscription: dateLimiteInscription ? new Date(dateLimiteInscription).toISOString() : deleteField(),
             };
 
             if (necessiteMenu) {
