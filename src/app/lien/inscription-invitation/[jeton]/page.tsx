@@ -150,10 +150,16 @@ function InscriptionContent() {
 
   const handleConfirmWithChoices = async () => {
     setStatus('submitting');
-    await callConfirmApi({
-      menuChoices: eventData?.necessiteMenu ? menuChoices : undefined,
-      bowlingChoices: eventData?.estSortieBowling ? bowlingChoices : undefined,
-    });
+    try {
+      await callConfirmApi({
+        menuChoices: eventData?.necessiteMenu ? menuChoices : undefined,
+        bowlingChoices: eventData?.estSortieBowling ? bowlingChoices : undefined,
+      });
+    } catch (err: any) {
+      console.error('Confirm error:', err);
+      setStatus('error');
+      setErrorDetails(err.message);
+    }
   };
 
   // ── Formulaire de choix ──────────────────────────────────────────────────
