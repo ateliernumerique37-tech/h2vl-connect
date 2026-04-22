@@ -35,6 +35,14 @@ export async function POST(request: Request) {
       dateAnnulation: new Date().toISOString(),
     });
 
+    // 5. Remettre l'invitation à "envoyé" pour que le lien redevienne utilisable
+    if (tokenData.jetonInvitation) {
+      await db.collection('invitations_evenement').doc(tokenData.jetonInvitation).update({
+        statut: 'envoyé',
+        dateInscription: null,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       eventTitle: tokenData.eventTitle || '',

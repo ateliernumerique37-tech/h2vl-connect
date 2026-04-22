@@ -92,6 +92,7 @@ export async function POST(request: Request) {
       eventTitle: event.titre || '',
       eventDate: formattedDate,
       eventDateFin: formattedDateFin,
+      jetonInvitation: jeton,
       utilisé: false,
       createdAt: inscriptionDate,
     });
