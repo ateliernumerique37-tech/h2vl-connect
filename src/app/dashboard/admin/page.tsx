@@ -459,7 +459,7 @@ export default function AdminPage() {
         )}
       </div>
 
-      <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>
+      <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen} modal={false}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>{editingAdmin ? "Modifier l'Administrateur" : "Ajouter un Administrateur"}</DialogTitle>
