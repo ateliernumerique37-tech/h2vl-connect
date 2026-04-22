@@ -56,9 +56,7 @@ service cloud.firestore {
     /** Inscriptions aux événements */
     match /inscriptions/{inscriptionId} {
       allow read: if isSignedIn();
-      // Création publique : nécessaire pour l'auto-inscription via lien d'invitation
-      allow create: if true;
-      allow update, delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     /** Cotisations des membres */
