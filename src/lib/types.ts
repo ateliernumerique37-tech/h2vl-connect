@@ -35,6 +35,7 @@ export interface Evenement {
   };
   estSortieBowling?: boolean;
   dateLimiteInscription?: string; // ISO string — inscriptions fermées après cette date
+  dateFin?: string; // ISO string — date de fin de l'événement (optionnel)
 }
 
 export interface Inscription {

@@ -67,6 +67,7 @@ export default function EditEventPage() {
     const [nombrePlacesMax, setNombrePlacesMax] = useState('50');
     const [necessiteMenu, setNecessiteMenu] = useState(false);
     const [estSortieBowling, setEstSortieBowling] = useState(false);
+    const [dateFin, setDateFin] = useState('');
     const [dateLimiteInscription, setDateLimiteInscription] = useState('');
     const [aperitifs, setAperitifs] = useState('');
     const [entrees, setEntrees] = useState('');
@@ -92,6 +93,11 @@ export default function EditEventPage() {
                     setNombrePlacesMax((foundEvent.nombrePlacesMax || 50).toString());
                     setNecessiteMenu(foundEvent.necessiteMenu || false);
                     setEstSortieBowling(foundEvent.estSortieBowling || false);
+                    if (foundEvent.dateFin) {
+                        const df = new Date(foundEvent.dateFin);
+                        df.setMinutes(df.getMinutes() - df.getTimezoneOffset());
+                        setDateFin(df.toISOString().slice(0, 16));
+                    }
                     if (foundEvent.dateLimiteInscription) {
                         const d = new Date(foundEvent.dateLimiteInscription);
                         d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -134,6 +140,9 @@ export default function EditEventPage() {
                 nombrePlacesMax: parseInt(nombrePlacesMax, 10),
                 necessiteMenu,
                 estSortieBowling,
+                ...(dateFin
+                  ? { dateFin: new Date(dateFin).toISOString() }
+                  : { dateFin: undefined }),
                 ...(dateLimiteInscription
                   ? { dateLimiteInscription: new Date(dateLimiteInscription).toISOString() }
                   : { dateLimiteInscription: undefined }),
@@ -210,23 +219,39 @@ export default function EditEventPage() {
                           <Input id="nombrePlacesMax" name="nombrePlacesMax" type="number" min="1" required value={nombrePlacesMax} onChange={(e) => setNombrePlacesMax(e.target.value)} />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="dateLimiteInscription">
-                            Date limite d'inscription
-                            <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
-                        </Label>
-                        <Input
-                            id="dateLimiteInscription"
-                            name="dateLimiteInscription"
-                            type="datetime-local"
-                            value={dateLimiteInscription}
-                            onChange={(e) => setDateLimiteInscription(e.target.value)}
-                            aria-label="Date limite d'inscription — optionnel"
-                            aria-describedby="date-limite-help"
-                        />
-                        <p id="date-limite-help" className="text-xs text-muted-foreground">
-                            Si renseignée, les inscriptions seront automatiquement fermées après cette date.
-                        </p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="dateFin">
+                                Date de fin
+                                <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
+                            </Label>
+                            <Input
+                                id="dateFin"
+                                name="dateFin"
+                                type="datetime-local"
+                                value={dateFin}
+                                onChange={(e) => setDateFin(e.target.value)}
+                                aria-label="Date de fin de l'événement — optionnel"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="dateLimiteInscription">
+                                Date limite d'inscription
+                                <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
+                            </Label>
+                            <Input
+                                id="dateLimiteInscription"
+                                name="dateLimiteInscription"
+                                type="datetime-local"
+                                value={dateLimiteInscription}
+                                onChange={(e) => setDateLimiteInscription(e.target.value)}
+                                aria-label="Date limite d'inscription — optionnel"
+                                aria-describedby="date-limite-help"
+                            />
+                            <p id="date-limite-help" className="text-xs text-muted-foreground">
+                                Si renseignée, les inscriptions seront automatiquement fermées après cette date.
+                            </p>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

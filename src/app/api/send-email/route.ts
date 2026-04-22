@@ -96,6 +96,7 @@ export async function POST(request: Request) {
       subject: providedSubject,
       eventTitle,
       eventDate,
+      eventDateFin,
       eventLocation,
       campaignSubject,
       campaignBody,
@@ -202,7 +203,8 @@ export async function POST(request: Request) {
             <p style="font-size: 16px;">Bonjour <strong>${firstName}</strong>,</p>
             <div style="margin: 25px 0; padding: 20px; background-color: #eff6ff; border-radius: 8px; border: 1px solid #dbeafe;">
               <h2 style="margin-top: 0; color: #1e40af; font-size: 20px;">${eventTitle}</h2>
-              <p>📅 <strong>Date :</strong> ${eventDate}</p>
+              <p>📅 <strong>Début :</strong> ${eventDate}</p>
+              ${eventDateFin ? `<p>🏁 <strong>Fin :</strong> ${eventDateFin}</p>` : ''}
               <p>📍 <strong>Lieu :</strong> ${eventLocation}</p>
             </div>
             ${buildMenuChoicesHtml(menuChoices)}

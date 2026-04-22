@@ -495,6 +495,9 @@ export default function EventDetailPage() {
             eventId: event.id,
             eventTitle: event.titre,
             eventDate: formattedEventDate,
+            eventDateFin: event.dateFin
+              ? new Date(event.dateFin).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+              : undefined,
             eventLocation: event.lieu,
             eventPrix: event.prix,
           }),
@@ -531,6 +534,8 @@ export default function EventDetailPage() {
         inscriptionId,
         evenementId: event?.id || '',
         eventTitle: event?.titre || '',
+        eventDate: formattedDate,
+        eventDateFin: formattedDateFin || null,
         utilisé: false,
         createdAt: inscriptionDate,
       });
@@ -558,6 +563,9 @@ export default function EventDetailPage() {
               subject: `Confirmation d'inscription : ${event.titre}`,
               eventTitle: event.titre,
               eventDate: formattedEventDate,
+              eventDateFin: event.dateFin
+                ? new Date(event.dateFin).toLocaleDateString("fr-FR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : undefined,
               eventLocation: event.lieu,
               menuChoices: inscriptionData.choixMenu ?? null,
               bowlingChoices: inscriptionData.choixBowling ?? null,
@@ -673,6 +681,11 @@ export default function EventDetailPage() {
   const formattedDate = new Date(event.date).toLocaleDateString("fr-FR", {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
+  const formattedDateFin = event.dateFin
+    ? new Date(event.dateFin).toLocaleDateString("fr-FR", {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      })
+    : null;
 
   return (
     <div className="space-y-8 pb-10">
@@ -709,10 +722,16 @@ export default function EventDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground mt-2">
-          <div className="flex items-center gap-2" aria-label={`Date: ${formattedDate}`}>
+          <div className="flex items-center gap-2" aria-label={`Début: ${formattedDate}`}>
             <Calendar className="h-4 w-4 text-primary" />
             <span>{formattedDate}</span>
           </div>
+          {formattedDateFin && (
+            <div className="flex items-center gap-2" aria-label={`Fin: ${formattedDateFin}`}>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">Fin : {formattedDateFin}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2" aria-label={`Lieu: ${event.lieu}`}>
             <MapPin className="h-4 w-4 text-primary" />
             <span>{event.lieu}</span>

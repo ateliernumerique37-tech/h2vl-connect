@@ -41,6 +41,9 @@ export default function CreateEventPage() {
                 necessiteMenu: formData.get('necessiteMenu') === 'on',
                 optionsMenu: {},
                 estSortieBowling,
+                ...(formData.get('dateFin')
+                  ? { dateFin: new Date(formData.get('dateFin') as string).toISOString() }
+                  : {}),
                 ...(formData.get('dateLimiteInscription')
                   ? { dateLimiteInscription: new Date(formData.get('dateLimiteInscription') as string).toISOString() }
                   : {}),
@@ -110,21 +113,35 @@ export default function CreateEventPage() {
                                 <Input id="lieu" name="lieu" required maxLength={200} />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="dateLimiteInscription">
-                                Date limite d'inscription
-                                <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
-                            </Label>
-                            <Input
-                                id="dateLimiteInscription"
-                                name="dateLimiteInscription"
-                                type="datetime-local"
-                                aria-label="Date limite d'inscription — optionnel"
-                                aria-describedby="date-limite-help"
-                            />
-                            <p id="date-limite-help" className="text-xs text-muted-foreground">
-                                Si renseignée, les inscriptions seront automatiquement fermées après cette date.
-                            </p>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="dateFin">
+                                    Date de fin
+                                    <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
+                                </Label>
+                                <Input
+                                    id="dateFin"
+                                    name="dateFin"
+                                    type="datetime-local"
+                                    aria-label="Date de fin de l'événement — optionnel"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="dateLimiteInscription">
+                                    Date limite d'inscription
+                                    <span className="ml-2 font-normal text-muted-foreground text-xs">(optionnel)</span>
+                                </Label>
+                                <Input
+                                    id="dateLimiteInscription"
+                                    name="dateLimiteInscription"
+                                    type="datetime-local"
+                                    aria-label="Date limite d'inscription — optionnel"
+                                    aria-describedby="date-limite-help"
+                                />
+                                <p id="date-limite-help" className="text-xs text-muted-foreground">
+                                    Si renseignée, les inscriptions seront automatiquement fermées après cette date.
+                                </p>
+                            </div>
                         </div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-2">

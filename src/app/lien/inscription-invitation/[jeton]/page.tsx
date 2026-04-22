@@ -44,6 +44,7 @@ function InscriptionContent() {
   // Données de l'événement affichées dans la page
   const [eventTitle, setEventTitle] = useState<string | null>(null);
   const [eventDate, setEventDate] = useState<string | null>(null);
+  const [eventDateFin, setEventDateFin] = useState<string | null>(null);
   const [eventLocation, setEventLocation] = useState<string | null>(null);
 
   // Données complètes de l'événement (pour afficher les choix)
@@ -110,6 +111,11 @@ function InscriptionContent() {
         });
         setEventTitle(event.titre);
         setEventDate(formattedDate);
+        if (event.dateFin) {
+          setEventDateFin(new Date(event.dateFin).toLocaleDateString('fr-FR', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+          }));
+        }
         setEventLocation(event.lieu);
         setEventData(event);
 
@@ -166,10 +172,15 @@ function InscriptionContent() {
 
         // Jeton d'annulation
         const jetonAnnulation = crypto.randomUUID();
+        const formattedDateFinDirect = event.dateFin
+          ? new Date(event.dateFin).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : null;
         await setDoc(doc(db, 'annulations_inscription', jetonAnnulation), {
           inscriptionId,
           evenementId,
           eventTitle: event.titre || '',
+          eventDate: formattedDate,
+          eventDateFin: formattedDateFinDirect,
           utilisé: false,
           createdAt: inscriptionDate,
         });
@@ -191,6 +202,7 @@ function InscriptionContent() {
                 firstName: invitation.adherentFirstName || '',
                 eventTitle: event.titre,
                 eventDate: formattedDate,
+                eventDateFin: formattedDateFinDirect,
                 eventLocation: event.lieu,
                 annulationUrl,
               }),
@@ -237,6 +249,8 @@ function InscriptionContent() {
         inscriptionId,
         evenementId: pendingIds.evenementId,
         eventTitle: eventTitle || '',
+        eventDate: eventDate,
+        eventDateFin: eventDateFin,
         utilisé: false,
         createdAt: inscriptionDate,
       });
@@ -259,6 +273,7 @@ function InscriptionContent() {
               firstName: invitationFirstName || '',
               eventTitle,
               eventDate,
+              eventDateFin,
               eventLocation,
               menuChoices: eventData?.necessiteMenu ? menuChoices : null,
               bowlingChoices: eventData?.estSortieBowling ? bowlingChoices : null,

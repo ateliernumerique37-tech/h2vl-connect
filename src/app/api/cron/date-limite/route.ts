@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
 
         const nbInscrits = inscriptions.length;
         const eventDateStr = formatEventDate(event.date);
+        const eventDateFinStr = event.dateFin ? formatEventDate(event.dateFin) : null;
 
         // 4. Construire la liste des inscrits (texte + HTML)
         const lignesTexte: string[] = [];
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
   <p>Bonjour,</p>
   <p>
     La date limite d'inscription à l'événement
-    <strong>"${event.titre}"</strong> du <strong>${eventDateStr}</strong>
+    <strong>"${event.titre}"</strong> du <strong>${eventDateStr}</strong>${eventDateFinStr ? ` au <strong>${eventDateFinStr}</strong>` : ''}
     est atteinte.
   </p>
 

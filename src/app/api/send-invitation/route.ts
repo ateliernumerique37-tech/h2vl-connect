@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
 
-    const { to, firstName, adherentId, eventId, eventTitle, eventDate, eventLocation, eventPrix } = await request.json();
+    const { to, firstName, adherentId, eventId, eventTitle, eventDate, eventDateFin, eventLocation, eventPrix } = await request.json();
 
     if (!to || !adherentId || !eventId) {
       return NextResponse.json({ success: false, error: 'Paramètres manquants.' }, { status: 400 });
@@ -71,7 +71,8 @@ export async function POST(request: Request) {
           <p style="font-size: 16px; color: #333;">L'association H2VL vous invite à participer au prochain événement :</p>
           <div style="margin: 25px 0; padding: 20px; background-color: #eff6ff; border-radius: 8px; border: 1px solid #dbeafe;">
             <h2 style="margin-top: 0; color: #1e40af; font-size: 20px;">${eventTitle}</h2>
-            <p style="margin: 8px 0;">📅 <strong>Date :</strong> ${eventDate}</p>
+            <p style="margin: 8px 0;">📅 <strong>Début :</strong> ${eventDate}</p>
+            ${eventDateFin ? `<p style="margin: 8px 0;">🏁 <strong>Fin :</strong> ${eventDateFin}</p>` : ''}
             <p style="margin: 8px 0;">📍 <strong>Lieu :</strong> ${eventLocation}</p>
             <p style="margin: 8px 0;">💶 <strong>Tarif :</strong> ${prixLabel}</p>
           </div>

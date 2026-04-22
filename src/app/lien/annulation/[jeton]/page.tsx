@@ -19,6 +19,8 @@ function AnnulationContent() {
   const [status, setStatus] = useState<PageStatus>('loading');
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [eventTitle, setEventTitle] = useState<string | null>(null);
+  const [eventDate, setEventDate] = useState<string | null>(null);
+  const [eventDateFin, setEventDateFin] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jeton) return;
@@ -39,11 +41,15 @@ function AnnulationContent() {
 
         if (tokenData.utilisé) {
           setEventTitle(tokenData.eventTitle || null);
+          setEventDate(tokenData.eventDate || null);
+          setEventDateFin(tokenData.eventDateFin || null);
           setStatus('already_cancelled');
           return;
         }
 
         setEventTitle(tokenData.eventTitle || null);
+        setEventDate(tokenData.eventDate || null);
+        setEventDateFin(tokenData.eventDateFin || null);
         setStatus('confirming');
       } catch (err: any) {
         console.error('Annulation load error:', err);
@@ -114,6 +120,12 @@ function AnnulationContent() {
                   <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {eventTitle}
                 </p>
+                {eventDate && (
+                  <p className="text-xs text-red-700 pl-6">📅 Début : {eventDate}</p>
+                )}
+                {eventDateFin && (
+                  <p className="text-xs text-red-700 pl-6">🏁 Fin : {eventDateFin}</p>
+                )}
               </div>
             )}
           </CardContent>
