@@ -135,7 +135,7 @@ function CreateAdherentPageContent() {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                             <Label htmlFor="dateNaissance">Date de naissance</Label>
-                            <Input id="dateNaissance" name="dateNaissance" type="date" required value={formData.dateNaissance.split('T')[0]} onChange={handleInputChange} aria-label="Sélectionner la date de naissance" />
+                            <Input id="dateNaissance" name="dateNaissance" type="date" value={formData.dateNaissance.split('T')[0]} onChange={handleInputChange} aria-label="Sélectionner la date de naissance" />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="genre">Genre</Label>
