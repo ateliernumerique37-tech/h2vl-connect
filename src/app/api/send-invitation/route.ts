@@ -1,13 +1,6 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
-import { firebaseConfig } from '@/firebase/config';
-
-function getDb() {
-  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  return getFirestore(app);
-}
+import { adminDb } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
@@ -29,9 +22,9 @@ export async function POST(request: Request) {
     const jeton = crypto.randomUUID();
     const dateEnvoi = new Date().toISOString();
 
-    // Enregistrement de l'invitation avant l'envoi
-    const db = getDb();
-    await setDoc(doc(db, 'invitations_evenement', jeton), {
+    // Enregistrement de l'invitation via Admin SDK (contourne les règles Firestore)
+    const db = adminDb();
+    await db.collection('invitations_evenement').doc(jeton).set({
       evenementId: eventId,
       eventTitle: eventTitle || '',
       adherentId,

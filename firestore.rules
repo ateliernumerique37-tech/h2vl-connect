@@ -87,17 +87,16 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
-    /** Invitations événements - ACCÈS PUBLIC EN LECTURE/ÉCRITURE POUR L'AUTO-INSCRIPTION */
+    /** Invitations événements - LECTURE PUBLIQUE UNIQUEMENT (écriture via Admin SDK) */
     match /invitations_evenement/{jeton} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if false;
     }
 
-    /** Jetons d'annulation d'inscription - ACCÈS PUBLIC EN LECTURE ET CRÉATION */
+    /** Jetons d'annulation d'inscription - LECTURE PUBLIQUE UNIQUEMENT (écriture via Admin SDK) */
     match /annulations_inscription/{jeton} {
       allow read: if true;
-      allow create: if true;
-      // La mise à jour (marquage "utilisé") et la suppression passent par l'API Admin SDK
-      allow update, delete: if false;
+      allow write: if false;
     }
 
     /** Ancienne collection roles_admins (compatibilité) */
