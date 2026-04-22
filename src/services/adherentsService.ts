@@ -9,18 +9,18 @@ const inscriptionsCollectionName = 'inscriptions';
 /**
  * Ajoute un adhérent et crée sa cotisation initiale si nécessaire.
  */
-export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'id'>): Promise<string> {
+export async function addAdherent(db: Firestore, adherentData: Omit<Adherent, 'id'>, moyenPaiementCotisation?: string): Promise<string> {
     const { prenom, nom, email, telephone, adresse, dateNaissance, genre, dateInscription, estMembreBureau, estBenevole, estMembreFaaf, accordeDroitImage, cotisationAJour } = adherentData;
-    
+
     const adherentsCollection = collection(db, adherentsCollectionName);
     const docRef = await addDoc(adherentsCollection, {
         prenom, nom, email, telephone, adresse, dateNaissance, genre, dateInscription, estMembreBureau, estBenevole, estMembreFaaf, accordeDroitImage, cotisationAJour
     });
-    
+
     if (cotisationAJour) {
-        await addCotisationForYear(db, docRef.id, new Date().getFullYear(), estMembreFaaf);
+        await addCotisationForYear(db, docRef.id, new Date().getFullYear(), estMembreFaaf, moyenPaiementCotisation);
     }
-    
+
     return docRef.id;
 }
 
@@ -117,7 +117,8 @@ export async function addCotisationForYear(
     db: Firestore,
     adherentId: string,
     annee: number,
-    isFaaf: boolean
+    isFaaf: boolean,
+    moyenPaiement?: string
 ): Promise<void> {
     const currentYear = new Date().getFullYear();
     const montant = isFaaf ? 40 : 15;
@@ -137,7 +138,11 @@ export async function addCotisationForYear(
             annee,
             datePaiement: new Date().toISOString(),
             montant,
+            ...(moyenPaiement ? { moyenPaiement } : {}),
         });
+    } else if (moyenPaiement) {
+        // Si cotisation déjà existante, on peut mettre à jour le moyen de paiement
+        existing.docs.forEach(d => batch.update(d.ref, { moyenPaiement }));
     }
 
     if (annee === currentYear) {

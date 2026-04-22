@@ -1,4 +1,27 @@
 
+export type MoyenPaiement = 'especes' | 'virement' | 'sumup' | 'cheque';
+export type MoyenPaiementInscription = MoyenPaiement | 'sur_place';
+
+export const MOYENS_PAIEMENT: { value: MoyenPaiement; label: string }[] = [
+  { value: 'especes', label: 'Espèces' },
+  { value: 'virement', label: 'Virement bancaire' },
+  { value: 'sumup', label: 'Terminal SumUp' },
+  { value: 'cheque', label: 'Chèque' },
+];
+
+export const MOYENS_PAIEMENT_INSCRIPTION: { value: MoyenPaiementInscription; label: string }[] = [
+  ...MOYENS_PAIEMENT,
+  { value: 'sur_place', label: 'Sur place (tiers)' },
+];
+
+export const MOYEN_PAIEMENT_LABEL: Record<string, string> = {
+  especes: 'Espèces',
+  virement: 'Virement bancaire',
+  sumup: 'Terminal SumUp',
+  cheque: 'Chèque',
+  sur_place: 'Sur place (tiers)',
+};
+
 export interface Adherent {
   id: string;
   prenom: string;
@@ -56,6 +79,7 @@ export interface Inscription {
     sansBarrieres?: boolean;
     prendGouter?: boolean;
   };
+  moyenPaiement?: MoyenPaiementInscription;
 }
 
 export interface Cotisation {
@@ -64,6 +88,7 @@ export interface Cotisation {
   annee: number | string;
   datePaiement: string; // ISO string
   montant: number;
+  moyenPaiement?: MoyenPaiement;
 }
 
 export interface Admin {

@@ -2,7 +2,8 @@
 
 import { useParams, notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { Evenement, Adherent, Inscription } from '@/lib/types';
+import type { Evenement, Adherent, Inscription, MoyenPaiementInscription } from '@/lib/types';
+import { MOYENS_PAIEMENT_INSCRIPTION, MOYEN_PAIEMENT_LABEL } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -101,6 +102,7 @@ function RegisterMemberDialog({
 }) {
   const [selectedAdherentId, setSelectedAdherentId] = useState<string>("");
   const [isPaid, setIsPaid] = useState(false);
+  const [moyenPaiementDialog, setMoyenPaiementDialog] = useState<MoyenPaiementInscription>('especes');
   const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
   const [bowlingChoices, setBowlingChoices] = useState<Inscription['choixBowling']>({});
   const [isOpen, setIsOpen] = useState(false);
@@ -129,6 +131,7 @@ function RegisterMemberDialog({
     if (!isOpen) {
       setSelectedAdherentId("");
       setIsPaid(false);
+      setMoyenPaiementDialog('especes');
       setMenuChoices({});
       setBowlingChoices({});
       setSearchTerm("");
@@ -178,6 +181,7 @@ function RegisterMemberDialog({
         id_evenement: event.id,
         id_adherent: selectedAdherentId,
         a_paye: isPaid,
+        ...(isPaid && { moyenPaiement: moyenPaiementDialog }),
         ...(event.necessiteMenu && { choixMenu: menuChoices }),
         ...(event.estSortieBowling && { choixBowling: bowlingChoices }),
       };
@@ -331,12 +335,27 @@ function RegisterMemberDialog({
             </ScrollArea>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/20 hover:bg-muted/30 transition-colors">
-            <div className="space-y-0.5">
-              <Label htmlFor="paid-toggle" className="font-semibold cursor-pointer">Paiement reçu</Label>
-              <p className="text-xs text-muted-foreground">Cochez si le règlement a été effectué.</p>
+          <div className="rounded-lg border bg-muted/20">
+            <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
+              <div className="space-y-0.5">
+                <Label htmlFor="paid-toggle" className="font-semibold cursor-pointer">Paiement reçu</Label>
+                <p className="text-xs text-muted-foreground">Cochez si le règlement a été effectué.</p>
+              </div>
+              <Switch id="paid-toggle" checked={isPaid} onCheckedChange={setIsPaid} aria-label="Marquer comme payé dès l'inscription" />
             </div>
-            <Switch id="paid-toggle" checked={isPaid} onCheckedChange={setIsPaid} aria-label="Marquer comme payé dès l'inscription" />
+            {isPaid && (
+              <div className="border-t px-4 pb-4 pt-3 space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Moyen de paiement</Label>
+                <RadioGroup value={moyenPaiementDialog} onValueChange={(v) => setMoyenPaiementDialog(v as MoyenPaiementInscription)} className="grid grid-cols-2 gap-2 pt-1">
+                  {MOYENS_PAIEMENT_INSCRIPTION.map(({ value, label }) => (
+                    <div key={value} className="flex items-center gap-2 rounded-md border bg-background p-2 hover:bg-muted/50 cursor-pointer transition-colors">
+                      <RadioGroupItem value={value} id={`reg-moyen-${value}`} />
+                      <Label htmlFor={`reg-moyen-${value}`} className="cursor-pointer text-sm font-normal">{label}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            )}
           </div>
 
           {event.necessiteMenu && event.optionsMenu && (
@@ -467,6 +486,8 @@ export default function EventDetailPage() {
 
   const [isSendingInvitations, setIsSendingInvitations] = useState(false);
   const [invitationProgress, setInvitationProgress] = useState(0);
+  const [pendingPayInscriptionId, setPendingPayInscriptionId] = useState<string | null>(null);
+  const [selectedMoyenInscription, setSelectedMoyenInscription] = useState<MoyenPaiementInscription>('especes');
 
   const handleSendInvitations = async () => {
     if (!event || nonRegisteredAdherents.length === 0) return;
@@ -515,11 +536,29 @@ export default function EventDetailPage() {
   };
 
   const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
+    if (hasPaid) {
+      // Ouvrir le dialog pour choisir le moyen de paiement
+      setSelectedMoyenInscription('especes');
+      setPendingPayInscriptionId(inscriptionId);
+      return;
+    }
     try {
-      await updateInscription(db, inscriptionId, { a_paye: hasPaid });
-      toast({ title: "Paiement mis à jour" });
+      await updateInscription(db, inscriptionId, { a_paye: false });
+      toast({ title: "Paiement annulé" });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue.' });
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!pendingPayInscriptionId) return;
+    try {
+      await updateInscription(db, pendingPayInscriptionId, { a_paye: true, moyenPaiement: selectedMoyenInscription });
+      toast({ title: "Paiement enregistré", description: MOYEN_PAIEMENT_LABEL[selectedMoyenInscription] });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Une erreur est survenue.' });
+    } finally {
+      setPendingPayInscriptionId(null);
     }
   };
   
@@ -611,7 +650,7 @@ export default function EventDetailPage() {
     if (!event || !eventInscriptions.length || !rawAdherents) return;
 
     const hasBowling = event.estSortieBowling;
-    const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Montant réglé (€)", "Prix unitaire (€)", "Choix Menu", ...(hasBowling ? ["Options Bowling"] : [])];
+    const headers = ["Prénom", "Nom", "Email", "Téléphone", "Statut Paiement", "Moyen de paiement", "Montant réglé (€)", "Prix unitaire (€)", "Choix Menu", ...(hasBowling ? ["Options Bowling"] : [])];
 
     const rows = eventInscriptions.map(ins => {
       const ad = rawAdherents.find(a => a.id === ins.id_adherent);
@@ -639,6 +678,7 @@ export default function EventDetailPage() {
         ad?.email || '',
         ad?.telephone || '',
         ins.a_paye ? "Payé" : "En attente",
+        ins.moyenPaiement ? MOYEN_PAIEMENT_LABEL[ins.moyenPaiement] : '',
         ins.a_paye ? event.prix.toFixed(2) : "0.00",
         event.prix.toFixed(2),
         menuChoicesStr,
@@ -904,12 +944,15 @@ export default function EventDetailPage() {
                         <div className="flex items-center justify-between gap-4">
                           <div className="min-w-0">
                             <span className="text-sm font-bold truncate block text-foreground">{adherentName}</span>
-                            <div className="mt-1">
+                            <div className="mt-1 space-y-1">
                               <span className="sr-only">Statut du paiement : </span>
                               {inscription.a_paye ? (
                                 <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Payé</Badge>
                               ) : (
                                 <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">En attente</Badge>
+                              )}
+                              {inscription.a_paye && inscription.moyenPaiement && (
+                                <p className="text-[10px] text-muted-foreground">{MOYEN_PAIEMENT_LABEL[inscription.moyenPaiement]}</p>
                               )}
                             </div>
                           </div>
@@ -990,6 +1033,30 @@ export default function EventDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Dialog moyen de paiement inscription */}
+      <Dialog open={pendingPayInscriptionId !== null} onOpenChange={(open) => { if (!open) setPendingPayInscriptionId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Moyen de paiement</DialogTitle>
+            <DialogDescription>
+              Par quel moyen le règlement a-t-il été effectué ?
+            </DialogDescription>
+          </DialogHeader>
+          <RadioGroup value={selectedMoyenInscription} onValueChange={(v) => setSelectedMoyenInscription(v as MoyenPaiementInscription)} className="space-y-2 py-2">
+            {MOYENS_PAIEMENT_INSCRIPTION.map(({ value, label }) => (
+              <div key={value} className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 cursor-pointer transition-colors">
+                <RadioGroupItem value={value} id={`pay-moyen-${value}`} />
+                <Label htmlFor={`pay-moyen-${value}`} className="cursor-pointer font-normal">{label}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingPayInscriptionId(null)}>Annuler</Button>
+            <Button onClick={handleConfirmPayment}>Confirmer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

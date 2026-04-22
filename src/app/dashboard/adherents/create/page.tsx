@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFirestore } from '@/firebase';
 import { RoleGuard } from '@/components/dashboard/role-guard';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { MOYENS_PAIEMENT, type MoyenPaiement } from '@/lib/types';
 
 function CreateAdherentPageContent() {
     const router = useRouter();
@@ -22,6 +24,7 @@ function CreateAdherentPageContent() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [doublon, setDoublon] = useState<string | null>(null);
+    const [moyenPaiement, setMoyenPaiement] = useState<MoyenPaiement>('especes');
     
     const [formData, setFormData] = useState<Omit<Adherent, 'id' | 'dateInscription'>>({
         prenom: '',
@@ -81,7 +84,7 @@ function CreateAdherentPageContent() {
                 email: formData.email.toLowerCase().trim(),
                 dateInscription: new Date().toISOString(),
             };
-            await addAdherent(db, newAdherentData);
+            await addAdherent(db, newAdherentData, formData.cotisationAJour ? moyenPaiement : undefined);
             toast({
                 title: "Adhérent ajouté",
                 description: `${formData.prenom} ${formData.nom} a été ajouté avec succès.`,
@@ -163,6 +166,19 @@ function CreateAdherentPageContent() {
                         <Label htmlFor="cotisationAJour" className="pr-4">Cotisation à jour</Label>
                         <Switch id="cotisationAJour" checked={formData.cotisationAJour} onCheckedChange={(checked) => handleSwitchChange('cotisationAJour', checked)} />
                     </div>
+                    {formData.cotisationAJour && (
+                        <div className="rounded-lg border p-3 space-y-2 bg-muted/30">
+                            <Label className="text-sm font-medium">Moyen de paiement de la cotisation</Label>
+                            <RadioGroup value={moyenPaiement} onValueChange={(v) => setMoyenPaiement(v as MoyenPaiement)} className="grid grid-cols-2 gap-2 pt-1">
+                                {MOYENS_PAIEMENT.map(({ value, label }) => (
+                                    <div key={value} className="flex items-center gap-2 rounded-md border bg-background p-2 hover:bg-muted/50 cursor-pointer transition-colors">
+                                        <RadioGroupItem value={value} id={`create-moyen-${value}`} />
+                                        <Label htmlFor={`create-moyen-${value}`} className="cursor-pointer text-sm font-normal">{label}</Label>
+                                    </div>
+                                ))}
+                            </RadioGroup>
+                        </div>
+                    )}
                      <div className="flex items-center justify-between rounded-lg border p-3">
                         <Label htmlFor="estMembreBureau" className="pr-4">Membre du bureau</Label>
                         <Switch id="estMembreBureau" checked={formData.estMembreBureau} onCheckedChange={(checked) => handleSwitchChange('estMembreBureau', checked)} />

@@ -16,6 +16,10 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { addCotisationForYear, deleteCotisationForYear } from '@/services/adherentsService';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { MOYENS_PAIEMENT, MOYEN_PAIEMENT_LABEL, type MoyenPaiement } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +56,8 @@ function AdherentDetailPageContent() {
 
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [submittingYear, setSubmittingYear] = useState<number | null>(null);
+  const [pendingPayYear, setPendingPayYear] = useState<number | null>(null);
+  const [selectedMoyen, setSelectedMoyen] = useState<MoyenPaiement>('especes');
   const { toast } = useToast();
 
   const currentYear = new Date().getFullYear();
@@ -72,12 +78,13 @@ function AdherentDetailPageContent() {
     return map;
   }, [rawCotisations]);
 
-  const handlePayCotisation = async (annee: number) => {
+  const handlePayCotisation = async (annee: number, moyenPaiement: MoyenPaiement) => {
     if (!adherent) return;
+    setPendingPayYear(null);
     setSubmittingYear(annee);
     try {
-      await addCotisationForYear(db, id, annee, adherent.estMembreFaaf);
-      toast({ title: `Cotisation ${annee} enregistrée`, description: `${adherent.estMembreFaaf ? '40' : '15'} €` });
+      await addCotisationForYear(db, id, annee, adherent.estMembreFaaf, moyenPaiement);
+      toast({ title: `Cotisation ${annee} enregistrée`, description: `${adherent.estMembreFaaf ? '40' : '15'} € — ${MOYEN_PAIEMENT_LABEL[moyenPaiement]}` });
     } catch {
       toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible d\'enregistrer la cotisation.' });
     } finally {
@@ -309,6 +316,7 @@ function AdherentDetailPageContent() {
                 <TableHead>Année</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Date de paiement</TableHead>
+                <TableHead>Moyen</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
@@ -352,6 +360,11 @@ function AdherentDetailPageContent() {
                         ? new Date(cotisation.datePaiement).toLocaleDateString('fr-FR')
                         : <span className="text-muted-foreground italic">—</span>}
                     </TableCell>
+                    <TableCell className="text-sm">
+                      {cotisation?.moyenPaiement
+                        ? <span className="text-foreground">{MOYEN_PAIEMENT_LABEL[cotisation.moyenPaiement]}</span>
+                        : <span className="text-muted-foreground italic">—</span>}
+                    </TableCell>
                     <TableCell className="text-right text-sm">
                       {cotisation
                         ? <span className="font-bold">{cotisation.montant.toFixed(2)} €</span>
@@ -376,7 +389,7 @@ function AdherentDetailPageContent() {
                           variant="outline"
                           size="sm"
                           className="min-h-[36px] focus-visible:ring-2 focus-visible:ring-primary"
-                          onClick={() => handlePayCotisation(annee)}
+                          onClick={() => { setSelectedMoyen('especes'); setPendingPayYear(annee); }}
                           disabled={isLoading || submittingYear !== null}
                           aria-label={`Enregistrer la cotisation ${annee}`}
                         >
@@ -393,6 +406,32 @@ function AdherentDetailPageContent() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Dialog choix du moyen de paiement de cotisation */}
+      <Dialog open={pendingPayYear !== null} onOpenChange={(open) => { if (!open) setPendingPayYear(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Moyen de paiement</DialogTitle>
+            <DialogDescription>
+              Cotisation {pendingPayYear} — {adherent.estMembreFaaf ? '40' : '15'} €. Par quel moyen a été effectué le règlement ?
+            </DialogDescription>
+          </DialogHeader>
+          <RadioGroup value={selectedMoyen} onValueChange={(v) => setSelectedMoyen(v as MoyenPaiement)} className="space-y-2 py-2">
+            {MOYENS_PAIEMENT.map(({ value, label }) => (
+              <div key={value} className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 cursor-pointer transition-colors">
+                <RadioGroupItem value={value} id={`moyen-${value}`} />
+                <Label htmlFor={`moyen-${value}`} className="cursor-pointer font-normal">{label}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingPayYear(null)}>Annuler</Button>
+            <Button onClick={() => pendingPayYear !== null && handlePayCotisation(pendingPayYear, selectedMoyen)}>
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

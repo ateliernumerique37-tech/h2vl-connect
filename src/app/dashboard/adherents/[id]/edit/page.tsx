@@ -2,7 +2,9 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import type { Adherent } from '@/lib/types';
-import { updateAdherent, deleteAdherent, addCotisation } from '@/services/adherentsService';
+import { updateAdherent, deleteAdherent, addCotisationForYear, deleteCotisationForYear } from '@/services/adherentsService';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { MOYENS_PAIEMENT, MOYEN_PAIEMENT_LABEL, type MoyenPaiement } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +37,8 @@ export default function EditAdherentPage() {
   const [formData, setFormData] = useState<Partial<Adherent>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [showAddCotisationDialog, setShowAddCotisationDialog] = useState(false);
+  const [selectedMoyen, setSelectedMoyen] = useState<MoyenPaiement>('especes');
+  const [cotisationPending, setCotisationPending] = useState(false); // dialog pour switch ON
 
   useEffect(() => {
     if (adherent) {
@@ -63,11 +67,40 @@ export default function EditAdherentPage() {
   };
 
   const handleSwitchChange = async (field: keyof Adherent, checked: boolean) => {
+    // cotisationAJour ON → passer par le dialog de paiement
+    if (field === 'cotisationAJour' && checked) {
+      setSelectedMoyen('especes');
+      setCotisationPending(true);
+      return;
+    }
+    // cotisationAJour OFF → suppression directe
+    if (field === 'cotisationAJour' && !checked) {
+      try {
+        await deleteCotisationForYear(db, id, new Date().getFullYear());
+        toast({ title: "Cotisation annulée" });
+      } catch {
+        toast({ variant: 'destructive', title: 'Erreur' });
+      }
+      return;
+    }
     try {
         await updateAdherent(db, id, { [field]: checked });
         toast({ title: "Statut mis à jour" });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Erreur de mise à jour' });
+    }
+  };
+
+  const handleConfirmCotisation = async (moyen: MoyenPaiement) => {
+    if (!adherent) return;
+    try {
+      await addCotisationForYear(db, id, new Date().getFullYear(), adherent.estMembreFaaf, moyen);
+      toast({ title: "Cotisation enregistrée", description: MOYEN_PAIEMENT_LABEL[moyen] });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erreur' });
+    } finally {
+      setCotisationPending(false);
+      setShowAddCotisationDialog(false);
     }
   };
   
@@ -82,13 +115,7 @@ export default function EditAdherentPage() {
   };
 
   const handleAddCotisation = async () => {
-    try {
-        await addCotisation(db, id);
-        setShowAddCotisationDialog(false);
-        toast({ title: "Cotisation ajoutée" });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Erreur système' });
-    }
+    await handleConfirmCotisation(selectedMoyen);
   };
 
   const handleSaveChanges = async () => {
@@ -227,21 +254,29 @@ export default function EditAdherentPage() {
             ))}
         </CardContent>
         <CardFooter className="border-t pt-6">
-            <Dialog open={showAddCotisationDialog} onOpenChange={setShowAddCotisationDialog}>
+            <Dialog open={showAddCotisationDialog || cotisationPending} onOpenChange={(open) => { if (!open) { setShowAddCotisationDialog(false); setCotisationPending(false); } }}>
                 <DialogTrigger asChild>
-                <Button variant="outline" className="min-h-[44px]">
+                <Button variant="outline" className="min-h-[44px]" onClick={() => { setSelectedMoyen('especes'); setShowAddCotisationDialog(true); }}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Valider une cotisation ({new Date().getFullYear()})
                 </Button>
                 </DialogTrigger>
                 <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Valider le paiement</DialogTitle>
+                    <DialogTitle>Moyen de paiement</DialogTitle>
                     <DialogDescription>
-                    Enregistrer le paiement de la cotisation (15€) pour l'année {new Date().getFullYear()} ?
+                    Cotisation {new Date().getFullYear()} — {adherent.estMembreFaaf ? '40' : '15'} €. Par quel moyen a été effectué le règlement ?
                     </DialogDescription>
                 </DialogHeader>
+                <RadioGroup value={selectedMoyen} onValueChange={(v) => setSelectedMoyen(v as MoyenPaiement)} className="space-y-2 py-2">
+                    {MOYENS_PAIEMENT.map(({ value, label }) => (
+                    <div key={value} className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 cursor-pointer transition-colors">
+                        <RadioGroupItem value={value} id={`edit-moyen-${value}`} />
+                        <Label htmlFor={`edit-moyen-${value}`} className="cursor-pointer font-normal">{label}</Label>
+                    </div>
+                    ))}
+                </RadioGroup>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowAddCotisationDialog(false)}>Annuler</Button>
+                    <Button variant="outline" onClick={() => { setShowAddCotisationDialog(false); setCotisationPending(false); }}>Annuler</Button>
                     <Button onClick={handleAddCotisation}>Confirmer</Button>
                 </DialogFooter>
                 </DialogContent>
