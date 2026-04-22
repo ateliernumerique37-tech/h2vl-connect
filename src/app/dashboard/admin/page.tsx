@@ -13,7 +13,7 @@ import { addLog } from "@/services/logsService";
 import { deleteAllAdherents } from "@/services/adherentsService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser, useFirestore, useCollection, useMemoFirebase, useAuth } from "@/firebase";
-import { collection, query, orderBy, getDocs, writeBatch, doc } from "firebase/firestore";
+import { collection, query, orderBy, where, getDocs, writeBatch, doc } from "firebase/firestore";
 import { AdminTable } from "@/components/admin/admin-table";
 import { AdminForm } from "@/components/admin/admin-form";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -124,21 +124,47 @@ export default function AdminPage() {
     }
   };
 
+  // Normalise un libellé de moyen de paiement (FR ou valeur brute) vers la valeur Firestore
+  const normalizeMoyen = (raw: string): string | undefined => {
+    const map: Record<string, string> = {
+      'espèces': 'especes', 'especes': 'especes',
+      'virement bancaire': 'virement', 'virement': 'virement',
+      'terminal sumup': 'sumup', 'sumup': 'sumup',
+      'chèque': 'cheque', 'cheque': 'cheque',
+      'sur place (tiers)': 'sur_place', 'sur_place': 'sur_place',
+    };
+    return map[raw.toLowerCase().trim()];
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
     const reader = new FileReader();
-    
+
     reader.onload = async (e) => {
       const text = e.target?.result as string;
       try {
         const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
         if (lines.length < 2) throw new Error("Le fichier CSV est vide ou ne contient que des en-têtes.");
 
+        // Lecture des en-têtes pour détecter l'année de cotisation (ex: "DatePaiement_2026" → 2026)
+        const headerValues = lines[0].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const hasCotisationColumns = headerValues.length >= 16;
+        let cotisationYear = new Date().getFullYear();
+        if (hasCotisationColumns && headerValues[13]) {
+          const m = headerValues[13].match(/(\d{4})/);
+          if (m) cotisationYear = parseInt(m[1]);
+        }
+
         const existingSnap = await getDocs(collection(db, 'adherents'));
-        const existingAdherents = existingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as Adherent }));
+        const existingAdherents = existingSnap.docs.map(d => ({ id: d.id, ...d.data() as Adherent }));
+
+        // Pré-chargement des cotisations existantes pour l'année détectée (upsert)
+        const cotisSnap = await getDocs(query(collection(db, 'cotisations'), where('annee', '==', cotisationYear)));
+        const cotisationByAdherentId = new Map<string, string>(); // adherentId → doc id
+        cotisSnap.docs.forEach(d => cotisationByAdherentId.set(d.data().adherentId as string, d.id));
 
         const rows = lines.slice(1);
         const batch = writeBatch(db);
@@ -147,8 +173,7 @@ export default function AdminPage() {
 
         for (const row of rows) {
           const values = row.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-          
-          // Mappage robuste des 13 champs
+
           const csvData = {
             prenom: values[0] || "",
             nom: values[1] || "",
@@ -165,15 +190,23 @@ export default function AdminPage() {
             cotisationAJour: values[12]?.toLowerCase() === 'oui',
           };
 
+          // Colonnes cotisation (13-15) — optionnelles
+          const rawDatePaiement = hasCotisationColumns ? values[13] : '';
+          const rawMontant      = hasCotisationColumns ? values[14] : '';
+          const rawMoyen        = hasCotisationColumns ? values[15] : '';
+          const datePaiement    = rawDatePaiement ? new Date(rawDatePaiement).toISOString() : new Date().toISOString();
+          const montant         = rawMontant ? parseFloat(rawMontant.replace(',', '.')) : (csvData.estMembreFaaf ? 40 : 15);
+          const moyenPaiement   = rawMoyen ? normalizeMoyen(rawMoyen) : undefined;
+
           const existingMatch = existingAdherents.find(ex => {
             const sameEmail = csvData.email && ex.email.toLowerCase() === csvData.email.toLowerCase();
-            const sameName = ex.nom.toLowerCase() === csvData.nom.toLowerCase() && 
+            const sameName = ex.nom.toLowerCase() === csvData.nom.toLowerCase() &&
                              ex.prenom.toLowerCase() === csvData.prenom.toLowerCase();
             return sameEmail || sameName;
           });
 
           if (existingMatch) {
-            // Logique UPSERT : Mise à jour sélective
+            // UPSERT adhérent
             const updates: any = {};
             if (values[0]) updates.prenom = values[0];
             if (values[1]) updates.nom = values[1];
@@ -183,8 +216,6 @@ export default function AdminPage() {
             if (values[5]) updates.dateNaissance = new Date(values[5]).toISOString();
             if (values[6]) updates.genre = values[6] as 'H' | 'F' | 'Autre';
             if (values[7]) updates.dateInscription = new Date(values[7]).toISOString();
-            
-            // Pour les booléens, on ne met à jour que si la case n'est pas vide
             if (values[8] !== "") updates.estMembreBureau = values[8].toLowerCase() === 'oui';
             if (values[9] !== "") updates.estBenevole = values[9].toLowerCase() === 'oui';
             if (values[10] !== "") updates.estMembreFaaf = values[10].toLowerCase() === 'oui';
@@ -195,20 +226,33 @@ export default function AdminPage() {
               batch.update(doc(db, 'adherents', existingMatch.id), updates);
               updateCount++;
             }
+
+            // UPSERT cotisation si colonnes présentes et date renseignée
+            if (hasCotisationColumns && rawDatePaiement) {
+              const existingCotisId = cotisationByAdherentId.get(existingMatch.id);
+              const cotisData: any = { datePaiement, montant, annee: cotisationYear, adherentId: existingMatch.id };
+              if (moyenPaiement) cotisData.moyenPaiement = moyenPaiement;
+              if (existingCotisId) {
+                batch.update(doc(db, 'cotisations', existingCotisId), cotisData);
+              } else {
+                batch.set(doc(collection(db, 'cotisations')), cotisData);
+              }
+            }
           } else {
             // Création d'un nouvel adhérent
             const newDocRef = doc(collection(db, 'adherents'));
             batch.set(newDocRef, csvData);
             createCount++;
-            
+
             if (csvData.cotisationAJour) {
-              const cotisRef = doc(collection(db, 'cotisations'));
-              batch.set(cotisRef, {
+              const cotisData: any = {
                 adherentId: newDocRef.id,
-                annee: new Date().getFullYear(),
-                datePaiement: new Date().toISOString(),
-                montant: 15
-              });
+                annee: cotisationYear,
+                datePaiement,
+                montant,
+              };
+              if (moyenPaiement) cotisData.moyenPaiement = moyenPaiement;
+              batch.set(doc(collection(db, 'cotisations')), cotisData);
             }
           }
         }
