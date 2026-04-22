@@ -120,16 +120,21 @@ function InscriptionContent() {
         setEventData(event);
 
         // 4. Vérifier si déjà inscrit via une autre voie
-        const existingQuery = query(
-          collection(db, 'inscriptions'),
-          where('id_evenement', '==', evenementId),
-          where('id_adherent', '==', adherentId)
-        );
-        const existingSnap = await getDocs(existingQuery);
-        if (!existingSnap.empty) {
-          await updateDoc(invitationRef, { statut: 'inscrit', dateInscription: new Date().toISOString() });
-          setStatus('already_registered');
-          return;
+        // (lecture sans auth tolérée — si bloquée par les règles, on continue sans vérification)
+        try {
+          const existingQuery = query(
+            collection(db, 'inscriptions'),
+            where('id_evenement', '==', evenementId),
+            where('id_adherent', '==', adherentId)
+          );
+          const existingSnap = await getDocs(existingQuery);
+          if (!existingSnap.empty) {
+            await updateDoc(invitationRef, { statut: 'inscrit', dateInscription: new Date().toISOString() });
+            setStatus('already_registered');
+            return;
+          }
+        } catch {
+          // Pas de permission pour lire les inscriptions sans auth — on continue
         }
 
         // 5. Vérifier si les inscriptions sont fermées (événement passé ou deadline dépassée)

@@ -48,14 +48,17 @@ service cloud.firestore {
 
     /** Événements */
     match /evenements/{evenementId} {
-      allow read: if isSignedIn();
+      // Lecture publique : nécessaire pour les pages d'invitation par lien (sans auth)
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     /** Inscriptions aux événements */
     match /inscriptions/{inscriptionId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      // Création publique : nécessaire pour l'auto-inscription via lien d'invitation
+      allow create: if true;
+      allow update, delete: if isAdmin();
     }
 
     /** Cotisations des membres */
