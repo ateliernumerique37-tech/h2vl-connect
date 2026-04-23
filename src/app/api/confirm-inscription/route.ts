@@ -107,6 +107,8 @@ export async function POST(request: Request) {
       eventDate: formattedDate,
       eventDateFin: formattedDateFin,
       eventLocation: event.lieu,
+      eventDescription: event.description || '',
+      eventPrix: event.prix ?? 0,
       adherentEmail,
       adherentFirstName,
     });

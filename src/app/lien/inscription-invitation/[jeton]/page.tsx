@@ -73,6 +73,8 @@ function InscriptionContent() {
             eventDate: data.eventDate,
             eventDateFin: data.eventDateFin,
             eventLocation: data.eventLocation,
+            eventDescription: data.eventDescription || '',
+            eventPrix: data.eventPrix ?? 0,
             menuChoices: extraChoices?.menuChoices ?? null,
             bowlingChoices: extraChoices?.bowlingChoices ?? null,
             annulationUrl,

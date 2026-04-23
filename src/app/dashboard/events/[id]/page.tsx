@@ -531,6 +531,7 @@ export default function EventDetailPage() {
               ? new Date(event.dateFin).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
               : undefined,
             eventLocation: event.lieu,
+            eventDescription: event.description,
             eventPrix: event.prix,
             necessiteMenu: event.necessiteMenu || false,
             estSortieBowling: event.estSortieBowling || false,
@@ -644,6 +645,8 @@ export default function EventDetailPage() {
                 ? new Date(event.dateFin).toLocaleDateString("fr-FR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                 : undefined,
               eventLocation: event.lieu,
+              eventDescription: event.description,
+              eventPrix: event.prix,
               menuChoices: inscriptionData.choixMenu ?? null,
               bowlingChoices: inscriptionData.choixBowling ?? null,
               annulationUrl,

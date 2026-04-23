@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     const {
       to, firstName, adherentId, campaignId, type,
       customMessage, subject: providedSubject,
-      eventTitle, eventDate, eventDateFin, eventLocation, eventPrix,
+      eventTitle, eventDate, eventDateFin, eventLocation, eventPrix, eventDescription,
       campaignSubject, campaignBody,
       menuChoices, bowlingChoices, annulationUrl,
     } = data;
@@ -205,9 +205,11 @@ export async function POST(request: Request) {
 
       const body = `
         <p style="margin:0 0 6px;font-size:16px;">Bonjour <strong>${firstName}</strong>,</p>
-        <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.7;">
+        <p style="margin:0 0 ${eventDescription ? '16px' : '24px'};font-size:15px;color:#4b5563;line-height:1.7;">
           Votre inscription est bien enregistrée. Nous avons hâte de vous retrouver !
         </p>
+
+        ${eventDescription ? `<p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">${escapeHtml(eventDescription)}</p>` : ''}
 
         <p style="margin:0 0 10px;font-size:15px;font-weight:bold;color:#1f2937;">Récapitulatif</p>
         <ul style="margin:0 0 8px;padding-left:20px;font-size:15px;color:#374151;line-height:2;">

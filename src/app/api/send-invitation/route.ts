@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     const {
       to, firstName, adherentId, eventId,
-      eventTitle, eventDate, eventDateFin, eventLocation, eventPrix,
+      eventTitle, eventDate, eventDateFin, eventLocation, eventPrix, eventDescription,
       necessiteMenu, estSortieBowling,
     } = await request.json();
 
@@ -99,9 +99,11 @@ export async function POST(request: Request) {
       <h2 style="margin:0 0 20px;font-size:21px;color:#1f2937;">Vous êtes invité(e) !</h2>
 
       <p style="margin:0 0 6px;font-size:16px;color:#1f2937;">Bonjour <strong>${firstName}</strong>,</p>
-      <p style="margin:0 0 28px;font-size:15px;color:#4b5563;line-height:1.7;">
+      <p style="margin:0 0 ${eventDescription ? '16px' : '28px'};font-size:15px;color:#4b5563;line-height:1.7;">
         Nous avons le plaisir de vous convier à notre prochain événement.
       </p>
+
+      ${eventDescription ? `<p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.7;">${eventDescription}</p>` : ''}
 
       <p style="margin:0 0 10px;font-size:17px;font-weight:bold;color:${BRAND_BLUE_DARK};">${eventTitle}</p>
       <ul style="margin:0 0 28px;padding-left:20px;font-size:15px;color:#374151;line-height:2;">
