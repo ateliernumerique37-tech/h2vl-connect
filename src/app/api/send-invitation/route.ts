@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { adminDb } from '@/lib/firebase-admin';
 
-const BRAND_BLUE = '#1A75D1';
+const BRAND_BLUE      = '#1A75D1';
 const BRAND_BLUE_DARK = '#1558A8';
 
 function emailWrapper(content: string): string {
@@ -13,21 +13,17 @@ function emailWrapper(content: string): string {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f3f4f6;padding:32px 16px;">
     <tr><td align="center">
       <table role="presentation" width="100%" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-
-        <!-- HEADER -->
         <tr>
           <td style="background-color:${BRAND_BLUE};padding:28px 32px;text-align:center;">
             <p style="margin:0;font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:1px;">H2VL</p>
-            <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">Handicap Visuel Val de Loire</p>
+            <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.85);">Handicap Visuel Val de Loire</p>
           </td>
         </tr>
-
-        <!-- BODY -->
-        <tr><td style="padding:36px 32px;font-family:Arial,sans-serif;color:#1f2937;">
-          ${content}
-        </td></tr>
-
-        <!-- FOOTER -->
+        <tr>
+          <td style="padding:36px 32px;font-family:Arial,sans-serif;color:#1f2937;">
+            ${content}
+          </td>
+        </tr>
         <tr>
           <td style="background-color:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 32px;text-align:center;font-family:Arial,sans-serif;">
             <p style="margin:0;font-size:12px;color:#6b7280;">
@@ -36,7 +32,6 @@ function emailWrapper(content: string): string {
             </p>
           </td>
         </tr>
-
       </table>
     </td></tr>
   </table>
@@ -90,10 +85,7 @@ export async function POST(request: Request) {
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT),
       secure: process.env.EMAIL_PORT === '465',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
       connectionTimeout: 10000,
     });
 
@@ -104,61 +96,41 @@ export async function POST(request: Request) {
       : 'Un seul clic suffit — votre place sera confirmée immédiatement.';
 
     const body = `
-      <h2 style="margin:0 0 8px;font-size:22px;color:#1f2937;">Vous êtes invité(e) !</h2>
-      <p style="margin:0 0 24px;font-size:16px;color:#4b5563;">
-        Bonjour <strong style="color:#1f2937;">${firstName}</strong>,<br><br>
-        Nous avons le plaisir de vous convier à notre prochain événement. Retrouvez ci-dessous toutes les informations utiles.
+      <h2 style="margin:0 0 20px;font-size:21px;color:#1f2937;">Vous êtes invité(e) !</h2>
+
+      <p style="margin:0 0 6px;font-size:16px;color:#1f2937;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 28px;font-size:15px;color:#4b5563;line-height:1.7;">
+        Nous avons le plaisir de vous convier à notre prochain événement.
       </p>
 
-      <!-- Carte événement -->
-      <table role="presentation" width="100%" style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;margin-bottom:28px;">
-        <tr><td style="padding:24px;">
-          <p style="margin:0 0 16px;font-size:19px;font-weight:bold;color:${BRAND_BLUE_DARK};">${eventTitle}</p>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-            <tr>
-              <td style="padding:5px 0;font-size:15px;color:#374151;">
-                <span style="font-size:17px;">📅</span>&nbsp; <strong>Début :</strong> ${eventDate}
-              </td>
-            </tr>
-            ${eventDateFin ? `<tr><td style="padding:5px 0;font-size:15px;color:#374151;"><span style="font-size:17px;">🏁</span>&nbsp; <strong>Fin :</strong> ${eventDateFin}</td></tr>` : ''}
-            <tr>
-              <td style="padding:5px 0;font-size:15px;color:#374151;">
-                <span style="font-size:17px;">📍</span>&nbsp; <strong>Lieu :</strong> ${eventLocation}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:5px 0;font-size:15px;color:#374151;">
-                <span style="font-size:17px;">💶</span>&nbsp; <strong>Tarif :</strong> ${prixLabel}
-              </td>
-            </tr>
-          </table>
-        </td></tr>
-      </table>
+      <p style="margin:0 0 10px;font-size:17px;font-weight:bold;color:${BRAND_BLUE_DARK};">${eventTitle}</p>
+      <ul style="margin:0 0 28px;padding-left:20px;font-size:15px;color:#374151;line-height:2;">
+        <li>📅 <strong>Début :</strong> ${eventDate}</li>
+        ${eventDateFin ? `<li>🏁 <strong>Fin :</strong> ${eventDateFin}</li>` : ''}
+        <li>📍 <strong>Lieu :</strong> ${eventLocation}</li>
+        <li>💶 <strong>Tarif :</strong> ${prixLabel}</li>
+      </ul>
 
-      <!-- CTA -->
-      <table role="presentation" width="100%" style="margin-bottom:24px;">
-        <tr><td style="text-align:center;padding:8px 0;">
-          <p style="margin:0 0 16px;font-size:15px;color:#4b5563;">${ctaExplainer}</p>
-          <a href="${inscriptionUrl}"
-            style="display:inline-block;padding:15px 32px;background-color:#16a34a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;letter-spacing:0.3px;">
-            Je m'inscris à cet événement →
-          </a>
-        </td></tr>
-      </table>
+      <p style="margin:0 0 16px;font-size:15px;color:#4b5563;">${ctaExplainer}</p>
 
-      <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;border-top:1px solid #f3f4f6;padding-top:16px;">
+      <p style="margin:0 0 28px;">
+        <a href="${inscriptionUrl}"
+          style="display:inline-block;padding:14px 30px;background-color:#16a34a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">
+          Je m'inscris à cet événement →
+        </a>
+      </p>
+
+      <p style="margin:0;font-size:12px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:16px;">
         Ce lien est personnel et nominatif — merci de ne pas le transférer.<br>
-        Si vous ne souhaitez pas participer, vous pouvez simplement ignorer cet e-mail.
+        Si vous ne souhaitez pas participer, vous pouvez ignorer cet e-mail.
       </p>
     `;
-
-    const html = emailWrapper(body);
 
     await transporter.sendMail({
       from: `"${process.env.EMAIL_FROM_NAME || 'H2VL'}" <${process.env.EMAIL_USER}>`,
       to,
       subject: `Invitation : ${eventTitle}`,
-      html,
+      html: emailWrapper(body),
     });
 
     return NextResponse.json({ success: true }, { status: 200 });
