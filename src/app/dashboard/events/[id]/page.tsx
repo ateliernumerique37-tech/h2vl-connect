@@ -532,6 +532,8 @@ export default function EventDetailPage() {
               : undefined,
             eventLocation: event.lieu,
             eventPrix: event.prix,
+            necessiteMenu: event.necessiteMenu || false,
+            estSortieBowling: event.estSortieBowling || false,
           }),
         });
         if (res.ok) successCount++;
