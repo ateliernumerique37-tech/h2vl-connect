@@ -2,7 +2,7 @@
 
 ## Vue d'ensemble
 
-Application de gestion interne de l'association **H2VL** (Handisport Val de Loire).
+Application de gestion interne de l'association **H2VL** (Handicap Visuel Val de Loire).
 Permet aux administrateurs de gérer les adhérents, les événements, les inscriptions, les cotisations et les communications par e-mail.
 
 - **Framework** : Next.js 15 (App Router)
@@ -57,9 +57,11 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 |---|---|---|
 | `POST /api/send-email` | Envoi d'un e-mail (confirmation inscription, anniversaire, campagne) | Non (appelé côté serveur) |
 | `POST /api/send-invitation` | Envoi d'une invitation à un événement avec lien d'auto-inscription | Non |
+| `POST /api/confirm-inscription` | Valide une inscription via lien d'invitation (Admin SDK) | Non (jeton secret) |
+| `POST /api/create-annulation-token` | Crée un jeton d'annulation pour une inscription admin manuelle (Admin SDK) | Non (appelé côté serveur) |
+| `POST /api/cancel-inscription` | Annule une inscription via jeton d'annulation (Admin SDK) | Non (jeton secret) |
 | `POST /api/create-admin` | Crée un compte Firebase Auth + doc Firestore admins | Bearer token admin |
 | `POST /api/delete-admin` | Supprime un admin (Auth + Firestore), protège le dernier admin | Bearer token admin |
-| `POST /api/cancel-inscription` | Annule une inscription via jeton d'annulation (Admin SDK) | Non (jeton secret) |
 | `POST /api/update-admin-password` | Change le mot de passe d'un admin (Admin SDK) | Bearer token admin |
 | `POST /api/cron/anniversaires` | Envoi automatique des emails d'anniversaire | Header `x-cron-secret` |
 | `POST /api/confirm-read` | Obsolète — retourne 410 | — |
@@ -70,15 +72,15 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 
 | Collection | Description | Règles |
 |---|---|---|
-| `admins/{uid}` | Profils admins — l'ID doc = UID Firebase Auth | Lecture : admin ou owner. Écriture : Admin SDK uniquement (`allow create/delete: if false`) |
-| `adherents/{id}` | Membres de l'association | Lecture/écriture : admin uniquement |
-| `evenements/{id}` | Événements | Lecture : connecté. Écriture : admin |
+| `admins/{uid}` | Profils admins — l'ID doc = UID Firebase Auth | `get` : owner ou admin. `list` : admin. `create/delete` : `false` (Admin SDK uniquement). `update` : admin |
+| `adherents/{id}` | Membres de l'association | Lecture : admin. Écriture : Administrateur uniquement (RGPD) |
+| `evenements/{id}` | Événements | **Lecture : publique** (`allow read: if true`). Écriture : admin |
 | `inscriptions/{id}` | Inscriptions aux événements | Lecture : connecté. Écriture : admin |
-| `cotisations/{id}` | Cotisations annuelles | Admin uniquement |
+| `cotisations/{id}` | Cotisations annuelles | Lecture/écriture : Administrateur uniquement |
 | `email_campaigns/{id}` | Campagnes e-mail envoyées | Admin uniquement |
 | `email_tracking/{jeton}` | Suivi des accusés de réception | **Public** (lecture/écriture) |
-| `invitations_evenement/{jeton}` | Invitations événement avec lien auto-inscription | **Public** (lecture/écriture) |
-| `annulations_inscription/{jeton}` | Jetons d'annulation d'inscription | **Lecture/création publique**, mise à jour par Admin SDK uniquement |
+| `invitations_evenement/{jeton}` | Invitations événement avec lien auto-inscription | **Lecture publique**, écriture : `false` (Admin SDK uniquement) |
+| `annulations_inscription/{jeton}` | Jetons d'annulation d'inscription | **Lecture publique**, écriture : `false` (Admin SDK uniquement) |
 | `logs_anniversaires/{id}` | Historique envois e-mail anniversaire | Admin uniquement |
 | `logs_admin/{id}` | Historique des actions admin | Admin uniquement |
 | `roles_admins/{id}` | Ancienne collection (compatibilité) | Lecture : connecté |
@@ -103,11 +105,14 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
   "inscriptionId": "...",
   "evenementId": "...",
   "eventTitle": "...",
+  "jetonInvitation": "UUID | null",
   "utilisé": false,
   "createdAt": "ISO string",
   "dateAnnulation": "ISO string (après usage)"
 }
 ```
+
+> `jetonInvitation` est renseigné quand l'inscription vient d'un lien d'invitation. Permet à `/api/cancel-inscription` de remettre l'invitation à `statut: 'envoyé'` après annulation, rendant le lien réutilisable.
 
 ---
 
@@ -130,10 +135,14 @@ InvitationEvenement
 - `necessiteMenu?: boolean` — active le choix de menu à l'inscription
 - `optionsMenu?: { aperitifs?, entrees?, plats?, fromages?, desserts? }` — listes d'options
 - `estSortieBowling?: boolean` — active les options bowling à l'inscription
+- `dateFin?: string` — ISO string, optionnel. Utiliser `deleteField()` pour le supprimer via `updateDoc`
+- `dateLimiteInscription?: string` — ISO string, optionnel. Idem
 
 ### Champs spéciaux `Inscription`
 - `choixMenu?: { aperitifChoisi?, entreeChoisie?, platChoisi?, fromageChoisi?, dessertChoisi? }`
 - `choixBowling?: { avecBarrieres?, sansBarrieres?, prendGouter? }`
+
+> ⚠️ Pour supprimer un champ optionnel via `updateDoc`, toujours utiliser `deleteField()` de `firebase/firestore` — jamais `undefined` (Firestore le rejette).
 
 ---
 
@@ -162,7 +171,21 @@ const auth = useAuth();
 ```
 
 ### Bug connu — `useDoc` race condition (corrigé)
-`isLoading` doit être initialisé à `true` si la ref est non-null, sinon `notFound()` se déclenche avant le premier snapshot Firestore. Fix appliqué dans `src/firebase/firestore/use-doc.tsx` : `useState<boolean>(() => memoizedDocRef != null)`.
+`isLoading` est initialisé à `true` si la ref est non-null : `useState<boolean>(() => memoizedDocRef != null)`.
+Sans ce fix, `notFound()` se déclenche avant le premier snapshot Firestore.
+
+### Bug connu — transition de ref dans le layout (corrigé)
+Dans `AuthGuard` (`dashboard/layout.tsx`), quand `adminRef` passe de `null` à une ref réelle, il y a une frame de rendu où `isAdminDocLoading = false` et `adminDoc = null` simultanément (le `useEffect` de `useDoc` n'a pas encore tourné).
+
+**Fix** : un `useRef` (`prevAdminRefPath`) détecte ce changement et étend l'état de chargement pour couvrir cette frame :
+```typescript
+const prevAdminRefPath = useRef<string | undefined>(undefined);
+const adminRefInTransition = prevAdminRefPath.current !== adminRef?.path;
+prevAdminRefPath.current = adminRef?.path;
+const isEffectivelyLoading = isAdminDocLoading || adminRefInTransition;
+```
+
+> ⚠️ Ne jamais rétablir la logique de "healing" (`setDoc` avec `{ merge: true }`) dans `AuthGuard`. Elle causait une corruption des données admin (prenom/nom/role écrasés) à chaque rechargement de session. L'écriture côté client est de toute façon bloquée par `allow create: if false`.
 
 ---
 
@@ -208,7 +231,6 @@ Les règles et indexes Firestore ne se déploient **pas** automatiquement.
 À chaque modification de `firestore.rules` ou `firestore.indexes.json`, déployer manuellement depuis **Cloud Shell** :
 
 ```bash
-# Dans Cloud Shell, depuis le répertoire du projet cloné
 cd h2vl-connect && git pull
 firebase deploy --only firestore --project studio-6079106449-cf583
 ```
@@ -221,8 +243,6 @@ git clone https://github.com/ateliernumerique37-tech/h2vl-connect.git
 > Le dépôt doit être **public** pour le clonage sans token. Le repasser en **privé** après.
 
 ### Accès public Cloud Run (à faire une seule fois, persiste)
-Firebase App Hosting ne supporte pas `invoker: public` dans `apphosting.yaml`.
-La commande suivante a été exécutée manuellement et **ne doit pas être relancée** :
 ```bash
 gcloud run services add-iam-policy-binding studio \
   --region us-central1 \
@@ -244,29 +264,63 @@ Paramètres acceptés :
   firstName: string,
   adherentId?: string,
   campaignId?: string,
-  type?: 'birthday' | 'campaign',   // absent = confirmation d'inscription
-  customMessage?: string,            // pour birthday
+  type?: 'birthday' | 'campaign',     // absent = confirmation d'inscription
+  customMessage?: string,              // pour birthday
   subject?: string,
   eventTitle?: string,
   eventDate?: string,
+  eventDateFin?: string,
   eventLocation?: string,
+  eventPrix?: number,
   campaignSubject?: string,
   campaignBody?: string,
-  menuChoices?: Record<string, string>,   // choix de menu à afficher dans l'email
+  menuChoices?: Record<string, string>,    // choix de menu à afficher
   bowlingChoices?: Record<string, boolean>, // options bowling à afficher
-  annulationUrl?: string,            // lien d'annulation à inclure dans l'email
+  annulationUrl?: string,              // lien d'annulation à inclure
 }
 ```
 
+### API `POST /api/send-invitation`
+
+Paramètres acceptés :
+```typescript
+{
+  to: string,
+  firstName: string,
+  adherentId: string,
+  eventId: string,
+  eventTitle: string,
+  eventDate: string,
+  eventDateFin?: string,
+  eventLocation: string,
+  eventPrix: number,
+  necessiteMenu: boolean,    // conditionne le texte du CTA dans l'email
+  estSortieBowling: boolean, // idem
+}
+```
+
+### Design des templates
+
+Tous les emails partagent la même structure :
+- Header coloré avec **H2VL** / *Handicap Visuel Val de Loire* en texte (pas d'image)
+- Contenu en texte simple avec listes à puces (pas de tableaux HTML)
+- Footer sobre avec nom de l'association
+- Couleur header : bleu (`#1A75D1`) pour invitation/anniversaire/campagne, vert (`#15803d`) pour confirmation d'inscription
+
+Le bouton de tracking s'appelle **"J'ai bien reçu cet e-mail ✓"** (anciennement "Accuser réception").
+
 ### Tracking e-mail
-Chaque e-mail contient un lien **"Accuser réception"** vers `/lien/confirmation/[jeton]`.
+Chaque e-mail contient un bouton vers `/lien/confirmation/[jeton]`.
 Le jeton est stocké dans `email_tracking/{jeton}` avec `statut: 'envoyé'`.
 Quand l'utilisateur clique, le statut passe à `confirmé` et `dateLecture` est renseignée.
 
 ### Lien d'annulation d'inscription
-Chaque e-mail de confirmation d'inscription contient un lien vers `/lien/annulation/[jeton]`.
-Le jeton est stocké dans `annulations_inscription/{jeton}`.
-L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK** pour supprimer l'inscription.
+Chaque e-mail de confirmation contient un lien vers `/lien/annulation/[jeton]`.
+Le jeton est stocké dans `annulations_inscription/{jeton}` via Admin SDK (`/api/create-annulation-token`).
+L'annulation appelle `POST /api/cancel-inscription` (Admin SDK) qui :
+1. Supprime l'inscription Firestore
+2. Marque le jeton comme utilisé
+3. Remet l'invitation à `statut: 'envoyé'` si `jetonInvitation` est renseigné (lien d'invitation réutilisable)
 
 ---
 
@@ -274,6 +328,7 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
 
 - La page `/signup` est désactivée (redirige vers `/login`)
 - Les admins se créent **uniquement depuis le dashboard** → `/dashboard/admin`
+- Le formulaire de création/édition utilise un **RadioGroup** pour le choix du rôle (pas un Select — conflit avec le focus trap du Dialog Radix)
 - La création passe par `POST /api/create-admin` (Admin SDK) :
   1. Vérifie le Bearer token du demandeur
   2. Crée le compte Firebase Auth avec `createUser()`
@@ -283,8 +338,8 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
   2. Supprime le compte Firebase Auth
   3. Supprime le doc Firestore
 - Le changement de mot de passe passe par `POST /api/update-admin-password` (Admin SDK, Bearer token)
-- Mot de passe oublié → `/forgot-password` via `sendPasswordResetEmail` Firebase Auth (email de réinitialisation)
-- **Règle importante** : `isAdmin()` vérifie `exists(/admins/{request.auth.uid})` — l'ID du doc doit être l'UID Firebase Auth, pas un ID aléatoire
+- Mot de passe oublié → `/forgot-password` via `sendPasswordResetEmail` Firebase Auth
+- **Règle importante** : `isAdmin()` vérifie `exists(/admins/{request.auth.uid})` — l'ID du doc doit être l'UID Firebase Auth
 
 ---
 
@@ -293,9 +348,8 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
 ### Menu restaurant
 - Activé via le switch **"Cet événement nécessite un choix de menu"** à la création/édition
 - Options définies par l'admin (champ texte, valeurs séparées par virgules)
-- À l'inscription d'un adhérent → RadioGroup par catégorie (Apéritif, Entrée, Plat, Fromage, Dessert)
-- Les choix s'affichent dans la liste des inscrits et dans l'export CSV
-- Les choix s'affichent dans l'e-mail de confirmation
+- À l'inscription → RadioGroup par catégorie (Apéritif, Entrée, Plat, Fromage, Dessert)
+- Les choix s'affichent dans la liste des inscrits, dans l'export CSV et dans l'e-mail de confirmation
 
 ### Sortie bowling
 - Activé via le switch **"C'est une sortie bowling"** à la création/édition
@@ -303,8 +357,7 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
   - **Avec barrières** (s'exclut mutuellement avec "Sans barrières")
   - **Sans barrières** (s'exclut mutuellement avec "Avec barrières")
   - **Prend le goûter de l'amitié**
-- Les choix s'affichent dans la liste des inscrits et dans l'export CSV
-- Les choix s'affichent dans l'e-mail de confirmation
+- Les choix s'affichent dans la liste des inscrits, dans l'export CSV et dans l'e-mail de confirmation
 
 ### Cron anniversaires
 - Job Cloud Scheduler GCP : `0 8 * * *` Europe/Paris → POST `https://studio--studio-6079106449-cf583.us-central1.hosted.app/api/cron/anniversaires`
@@ -325,18 +378,35 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
 
 ### Invitation par lien
 1. L'admin envoie des invitations depuis la page de détail d'un événement
-2. Chaque adhérent non inscrit reçoit un e-mail avec un lien unique `/lien/inscription-invitation/[jeton]`
-3. Si l'événement a un menu ou est une sortie bowling → page de choix avant confirmation
-4. Après inscription → e-mail de confirmation avec les choix + lien d'annulation
+2. Sélection individuelle des adhérents non inscrits (recherche + cases à cocher + "tout sélectionner")
+3. Chaque adhérent sélectionné reçoit un e-mail avec un lien unique `/lien/inscription-invitation/[jeton]`
+4. Le jeton est créé dans `invitations_evenement` via Admin SDK (`/api/send-invitation`)
+5. La page publique lit l'invitation et l'événement (les deux sont en lecture publique)
+6. Si menu ou bowling → page de choix avant confirmation
+7. La confirmation appelle `/api/confirm-inscription` (Admin SDK) qui :
+   - Valide le jeton, vérifie les places, vérifie les doublons
+   - Crée l'inscription et le jeton d'annulation (avec `jetonInvitation` pour pouvoir réinitialiser)
+   - Met l'invitation à `statut: 'inscrit'`
+8. E-mail de confirmation envoyé avec choix + lien d'annulation
+9. Si l'adhérent annule via le lien → l'invitation repasse à `statut: 'envoyé'` → lien réutilisable
+
+### Inscription manuelle (par un admin depuis le dashboard)
+1. L'admin utilise le dialog "Inscrire un adhérent" sur la page de détail de l'événement
+2. `addInscription` utilise le client SDK (les admins ont `allow write` sur `inscriptions`)
+3. Le jeton d'annulation est créé via `/api/create-annulation-token` (Admin SDK) car `annulations_inscription` a `allow write: if false`
+4. En cas d'échec de l'API, un toast d'avertissement s'affiche mais l'inscription est quand même validée
+5. L'e-mail de confirmation est envoyé via `/api/send-email`
 
 ---
 
 ## Sécurité — points importants
 
 - **Les routes `/lien/*` sont exclues du Service Worker PWA** (`navigateFallbackDenylist: [/^\/lien/]`) pour éviter que le SW intercepte les liens d'e-mail
-- **Firebase Hosting intercepte `/public/*`** comme des fichiers statiques → toutes les routes publiques dynamiques sont sous `/lien/` (pas `/public/`)
-- **`allow create: if false`** sur `admins` → impossible de créer un admin directement depuis le client, même connecté → passe obligatoirement par l'API Admin SDK
+- **Firebase Hosting intercepte `/public/*`** → toutes les routes publiques dynamiques sont sous `/lien/`
+- **`allow create: if false`** sur `admins` → impossible de créer un admin depuis le client → Admin SDK obligatoire
+- **`allow write: if false`** sur `invitations_evenement` et `annulations_inscription` → toutes les écritures passent par des routes API avec Admin SDK
 - **`annulationUrl`** utilise un UUID unique par inscription → non-devinable, à usage unique
+- **`evenements` est en lecture publique** (`allow read: if true`) — nécessaire pour que la page d'invitation publique puisse lire les détails de l'événement (choix de menu, bowling)
 
 ---
 
@@ -351,38 +421,47 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
 ├── src/
 │   ├── app/
 │   │   ├── (auth)/              # Pages login / forgot-password / signup
-│   │   ├── api/                 # Routes API Next.js
-│   │   │   ├── send-email/      # Envoi e-mail (confirmation, anniversaire, campagne)
-│   │   │   ├── send-invitation/ # Envoi invitation événement
-│   │   │   ├── create-admin/    # Création admin (Admin SDK)
-│   │   │   ├── delete-admin/    # Suppression admin (Admin SDK)
-│   │   │   └── cancel-inscription/ # Annulation inscription (Admin SDK)
+│   │   ├── api/
+│   │   │   ├── send-email/            # Envoi e-mail (confirmation, anniversaire, campagne)
+│   │   │   ├── send-invitation/       # Envoi invitation événement (Admin SDK)
+│   │   │   ├── confirm-inscription/   # Validation inscription via lien (Admin SDK)
+│   │   │   ├── create-annulation-token/ # Jeton d'annulation pour inscription manuelle (Admin SDK)
+│   │   │   ├── cancel-inscription/    # Annulation inscription (Admin SDK)
+│   │   │   ├── create-admin/          # Création admin (Admin SDK)
+│   │   │   ├── delete-admin/          # Suppression admin (Admin SDK)
+│   │   │   └── update-admin-password/ # Changement mot de passe (Admin SDK)
 │   │   ├── dashboard/           # Pages du tableau de bord (protégées)
+│   │   │   └── layout.tsx       # AuthGuard : gestion auth + rôle + protection race condition
 │   │   ├── lien/                # Pages publiques accessibles par lien e-mail
 │   │   │   ├── confirmation/    # Accusé de réception e-mail
 │   │   │   ├── inscription-invitation/ # Auto-inscription par invitation
 │   │   │   └── annulation/      # Annulation d'inscription
-│   │   └── error.tsx            # Error boundary global (erreurs Firestore)
+│   │   └── error.tsx            # Error boundary global
 │   ├── components/
 │   │   ├── ui/                  # Composants shadcn/ui
-│   │   ├── FirebaseErrorListener.tsx  # Écoute les erreurs permission-denied globales
+│   │   ├── admin/
+│   │   │   ├── admin-form.tsx   # Formulaire admin — RadioGroup pour le rôle (pas Select)
+│   │   │   └── admin-table.tsx
+│   │   ├── FirebaseErrorListener.tsx
 │   │   ├── adherent-card.tsx
 │   │   └── event-card.tsx
+│   ├── contexts/
+│   │   └── admin-role-context.tsx  # Contexte RBAC (Administrateur | Modérateur)
 │   ├── firebase/                # Hooks et initialisation Firebase client
-│   │   ├── index.ts             # Exports + initializeFirebase()
-│   │   ├── config.ts            # firebaseConfig (clés publiques)
-│   │   ├── provider.tsx         # FirebaseProvider (contexte Auth + Firestore)
+│   │   ├── index.ts
+│   │   ├── config.ts
+│   │   ├── provider.tsx
 │   │   └── firestore/
-│   │       ├── use-doc.tsx      # Hook temps réel document unique
-│   │       └── use-collection.tsx # Hook temps réel collection
+│   │       ├── use-doc.tsx      # isLoading initialisé à true si ref non-null
+│   │       └── use-collection.tsx
 │   ├── lib/
-│   │   ├── types.ts             # Tous les types TypeScript du projet
-│   │   ├── firebase-admin.ts    # Admin SDK (adminAuth, adminDb)
-│   │   └── utils.ts             # cn() et autres utilitaires
-│   └── services/                # Fonctions d'accès Firestore (client)
-│       ├── adminsService.ts     # CRUD admins (via API pour create/delete)
+│   │   ├── types.ts
+│   │   ├── firebase-admin.ts    # adminAuth, adminDb
+│   │   └── utils.ts
+│   └── services/
+│       ├── adminsService.ts
 │       ├── adherentsService.ts
-│       ├── evenementsService.ts
+│       ├── evenementsService.ts # updateEvenement accepte Record<string, unknown> pour deleteField()
 │       ├── inscriptionsService.ts
 │       └── logsService.ts
 ```
@@ -396,22 +475,21 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
 - Les API routes utilisent `firebase-admin` côté serveur uniquement
 - Les composants UI viennent tous de `@/components/ui/` (shadcn/ui)
 - Icônes : `lucide-react` uniquement
-- Accessibilité : WCAG 2.2 — `aria-label`, `role`, `aria-live` sur tous les éléments interactifs et les zones de statut
+- Accessibilité : WCAG 2.2 — `aria-label`, `role`, `aria-live` sur tous les éléments interactifs
 - `export const dynamic = 'force-dynamic'` sur toutes les pages publiques avec paramètres dynamiques
-
----
+- Pour les champs Firestore optionnels (`dateFin`, `dateLimiteInscription`) : utiliser `deleteField()` de `firebase/firestore` lors de la suppression, jamais `undefined`
 
 ---
 
 ## Rôles et contrôle d'accès (RBAC)
 
 ### Rôles disponibles
-| Rôle | Valeur dans Firestore |
-|---|---|
-| Administrateur |  |
-| Modérateur |  |
+
+- `Administrateur` — accès complet
+- `Modérateur` — accès restreint (sans accès aux données adhérents, RGPD)
 
 ### Permissions par rôle
+
 | Section | Administrateur | Modérateur |
 |---|---|---|
 | Tableau de bord | ✅ Complet | ✅ Complet |
@@ -422,17 +500,15 @@ L'annulation appelle `POST /api/cancel-inscription` qui utilise le **Admin SDK**
 | Admin — autres comptes + logs | ✅ Complet | ❌ Caché |
 | Admin — son propre compte | ✅ | ✅ |
 
-### Architecture technique
-- **Contexte** :  — expose  via 
-- **Hook** :  — retourne 
-- **Provider** : Injecté dans  →  lit 
-- **Composant guard** :  — affiche message RGPD si rôle insuffisant
-- **Sidebar** : Item Adhérents masqué pour les Modérateurs
-- **Firestore rules** :  helper — écriture adhérents/cotisations réservée aux Administrateurs
+### Architecture technique RBAC
+- `AdminRoleContext` expose le rôle via `useAdminRole()`
+- `AdminRoleProvider` est injecté dans `dashboard/layout.tsx` — lit le champ `role` du doc Firestore `admins/{uid}`
+- La sidebar masque l'item Adhérents pour les Modérateurs
+- Les règles Firestore bloquent l'écriture sur `adherents` et `cotisations` si le rôle n'est pas `Administrateur`
 
-### Règle Firestore
+> ⚠️ Après toute modification de `firestore.rules` → déployer manuellement via Cloud Shell
 
-> ⚠️ Après toute modification de firestore.rules → déployer manuellement via Cloud Shell
+---
 
 ## Commandes utiles
 
