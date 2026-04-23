@@ -18,7 +18,7 @@ function emailWrapper(content: string): string {
         <tr>
           <td style="background-color:${BRAND_BLUE};padding:28px 32px;text-align:center;">
             <p style="margin:0;font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:1px;">H2VL</p>
-            <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">Handisport Val de Loire</p>
+            <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">Handicap Visuel Val de Loire</p>
           </td>
         </tr>
 
@@ -31,7 +31,7 @@ function emailWrapper(content: string): string {
         <tr>
           <td style="background-color:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 32px;text-align:center;font-family:Arial,sans-serif;">
             <p style="margin:0;font-size:12px;color:#6b7280;">
-              <strong style="color:#374151;">H2VL — Handisport Val de Loire</strong><br>
+              <strong style="color:#374151;">H2VL — Handicap Visuel Val de Loire</strong><br>
               Cet e-mail vous a été envoyé car vous êtes membre de l'association.
             </p>
           </td>
