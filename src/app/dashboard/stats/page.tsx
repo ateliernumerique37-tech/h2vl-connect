@@ -2,37 +2,29 @@
 
 import { useState, useMemo } from 'react';
 import type { Adherent, Evenement, Inscription } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
-const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--chart-3))', 'hsl(var(--muted-foreground))'];
-
-/**
- * Calcule l'âge à partir d'une date ISO.
- */
-const getAge = (dateString: string) => {
+const getAge = (dateString: string): number | null => {
   if (!dateString) return null;
   const birthDate = new Date(dateString);
   if (isNaN(birthDate.getTime())) return null;
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age >= 0 ? age : null;
 };
 
-/**
- * Squelette de chargement pour la page statistiques.
- */
+const pct = (n: number, total: number): string =>
+  total === 0 ? '0 %' : `${Math.round((n / total) * 100)} %`;
+
 function StatsPageSkeleton() {
   return (
     <div className="space-y-6" aria-hidden="true">
@@ -43,17 +35,15 @@ function StatsPageSkeleton() {
         </div>
         <Skeleton className="h-10 w-44" />
       </header>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2">
         {[...Array(4)].map((_, i) => (
           <Card key={i}>
-            <CardHeader className="p-4 pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
-            <CardContent className="p-4 pt-0"><Skeleton className="h-8 w-16" /></CardContent>
+            <CardHeader className="p-5 pb-3"><Skeleton className="h-5 w-40" /></CardHeader>
+            <CardContent className="p-5 pt-0 space-y-2">
+              {[...Array(4)].map((__, j) => <Skeleton key={j} className="h-4 w-full" />)}
+            </CardContent>
           </Card>
         ))}
-      </div>
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-        <Skeleton className="h-[400px] rounded-xl" />
-        <Skeleton className="h-[400px] rounded-xl" />
       </div>
     </div>
   );
@@ -64,12 +54,12 @@ export default function StatsPage() {
   const currentYear = new Date().getFullYear().toString();
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
-  const adherentsQuery = useMemoFirebase(() => collection(db, 'adherents'), [db]);
-  const evenementsQuery = useMemoFirebase(() => collection(db, 'evenements'), [db]);
+  const adherentsQuery  = useMemoFirebase(() => collection(db, 'adherents'),   [db]);
+  const evenementsQuery = useMemoFirebase(() => collection(db, 'evenements'),  [db]);
   const inscriptionsQuery = useMemoFirebase(() => collection(db, 'inscriptions'), [db]);
 
-  const { data: adherents, isLoading: isLoadingAdherents } = useCollection<Adherent>(adherentsQuery);
-  const { data: evenements, isLoading: isLoadingEvents } = useCollection<Evenement>(evenementsQuery);
+  const { data: adherents,    isLoading: isLoadingAdherents }    = useCollection<Adherent>(adherentsQuery);
+  const { data: evenements,   isLoading: isLoadingEvents }       = useCollection<Evenement>(evenementsQuery);
   const { data: inscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
 
   const isLoading = isLoadingAdherents || isLoadingEvents || isLoadingInscriptions;
@@ -77,76 +67,105 @@ export default function StatsPage() {
   const years = useMemo(() => {
     if (!evenements) return [currentYear];
     const eventYears = evenements.map(e => new Date(e.date).getFullYear());
-    const allYears = [...eventYears, new Date().getFullYear()];
-    return [...new Set(allYears)].sort((a, b) => b - a).map(String);
+    return [...new Set([...eventYears, new Date().getFullYear()])].sort((a, b) => b - a).map(String);
   }, [evenements, currentYear]);
 
-  /**
-   * Nettoyage et agrégation des données.
-   */
   const stats = useMemo(() => {
     if (!adherents || !evenements || !inscriptions) return null;
-    if (adherents.length === 0) return 'EMPTY';
+    if (adherents.length === 0) return 'EMPTY' as const;
 
     const yearNum = parseInt(selectedYear);
-    const yearEvenements = evenements.filter(e => new Date(e.date).getFullYear() === yearNum);
-    
-    // 1. Répartition par genre (gestion des vides)
-    const genreCounts = adherents.reduce((acc, a) => {
-      const g = a.genre || 'Non renseigné';
-      acc[g] = (acc[g] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const total = adherents.length;
 
-    const genderChartData = [
-      { name: 'Hommes', value: genreCounts['H'] || 0 },
-      { name: 'Femmes', value: genreCounts['F'] || 0 },
-      { name: 'Autre', value: genreCounts['Autre'] || 0 },
-      { name: 'Non renseigné', value: genreCounts['Non renseigné'] || 0 },
-    ].filter(d => d.value > 0);
+    // ── Membres ────────────────────────────────────────────────────────────────
+    const femmes   = adherents.filter(a => a.genre === 'F').length;
+    const hommes   = adherents.filter(a => a.genre === 'H').length;
+    const autres   = adherents.filter(a => a.genre === 'Autre').length;
+    const nonRenseigne = total - femmes - hommes - autres;
 
-    // 2. Pyramide des âges
     const validAges = adherents
       .map(a => getAge(a.dateNaissance))
-      .filter((age): age is number => age !== null && age >= 0);
+      .filter((age): age is number => age !== null);
+
+    const moyenneAge = validAges.length > 0
+      ? Math.round(validAges.reduce((s, a) => s + a, 0) / validAges.length)
+      : null;
 
     const ageGroups = [
-      { name: '0-18', value: validAges.filter(a => a < 18).length },
-      { name: '18-30', value: validAges.filter(a => a >= 18 && a <= 30).length },
-      { name: '31-50', value: validAges.filter(a => a >= 31 && a <= 50).length },
-      { name: '51-70', value: validAges.filter(a => a >= 51 && a <= 70).length },
-      { name: '70+', value: validAges.filter(a => a > 70).length },
-    ].filter(g => g.value > 0);
+      { label: 'Moins de 18 ans',  count: validAges.filter(a => a < 18).length },
+      { label: '18 – 30 ans',      count: validAges.filter(a => a >= 18 && a <= 30).length },
+      { label: '31 – 50 ans',      count: validAges.filter(a => a >= 31 && a <= 50).length },
+      { label: '51 – 70 ans',      count: validAges.filter(a => a >= 51 && a <= 70).length },
+      { label: 'Plus de 70 ans',   count: validAges.filter(a => a > 70).length },
+    ].filter(g => g.count > 0);
 
-    const moyenneAge = validAges.length > 0 
-      ? Math.round(validAges.reduce((sum, a) => sum + a, 0) / validAges.length) 
-      : 'N/A';
+    const cotisationsAJour = adherents.filter(a => a.cotisationAJour).length;
+    const faaf             = adherents.filter(a => a.estMembreFaaf).length;
+    const droitImage       = adherents.filter(a => a.accordeDroitImage).length;
+    const bureau           = adherents.filter(a => a.estMembreBureau).length;
+    const benevoles        = adherents.filter(a => a.estBenevole && !a.estMembreBureau).length;
+    const simples          = total - bureau - benevoles;
 
-    // 3. Engagement
-    const bureau = adherents.filter(a => a.estMembreBureau).length;
-    const benevoles = adherents.filter(a => a.estBenevole && !a.estMembreBureau).length;
-    const simples = adherents.filter(a => !a.estBenevole && !a.estMembreBureau).length;
+    // ── Événements de l'année ──────────────────────────────────────────────────
+    const yearEvenements = evenements.filter(e => new Date(e.date).getFullYear() === yearNum);
+    const yearInscriptions = inscriptions.filter(i =>
+      yearEvenements.some(e => e.id === i.id_evenement)
+    );
 
-    const engagementChartData = [
-      { name: 'Bureau', value: bureau },
-      { name: 'Bénévoles', value: benevoles },
-      { name: 'Adhérents simples', value: simples },
-    ];
+    const totalInscriptions = yearInscriptions.length;
+    const avgInscriptions   = yearEvenements.length > 0
+      ? (totalInscriptions / yearEvenements.length).toFixed(1)
+      : '0';
 
-    // 4. Inscriptions aux événements de l'année
-    const totalInscriptions = inscriptions.filter(i => yearEvenements.some(e => e.id === i.id_evenement)).length;
-    const avgInscriptions = yearEvenements.length > 0 ? (totalInscriptions / yearEvenements.length).toFixed(1) : '0';
+    const recettesTotal = yearInscriptions.reduce((sum, i) => {
+      const ev = yearEvenements.find(e => e.id === i.id_evenement);
+      return sum + (ev?.prix ?? 0);
+    }, 0);
+
+    const recettesEncaissees = yearInscriptions
+      .filter(i => i.a_paye)
+      .reduce((sum, i) => {
+        const ev = yearEvenements.find(e => e.id === i.id_evenement);
+        return sum + (ev?.prix ?? 0);
+      }, 0);
+
+    const inscriptionsPaid  = yearInscriptions.filter(i => i.a_paye).length;
+    const tauxPaiement      = totalInscriptions > 0
+      ? Math.round((inscriptionsPaid / totalInscriptions) * 100)
+      : null;
+
+    // Top événements par nombre d'inscrits
+    const topEvenements = yearEvenements
+      .map(e => ({
+        titre: e.titre,
+        count: yearInscriptions.filter(i => i.id_evenement === e.id).length,
+        payes: yearInscriptions.filter(i => i.id_evenement === e.id && i.a_paye).length,
+        prix:  e.prix,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // ── Participation individuelle ─────────────────────────────────────────────
+    const inscriptionsByAdherent = adherents.map(a => ({
+      id: a.id,
+      count: yearInscriptions.filter(i => i.id_adherent === a.id).length,
+    }));
+
+    const participe1Plus  = inscriptionsByAdherent.filter(a => a.count >= 1).length;
+    const participe2Plus  = inscriptionsByAdherent.filter(a => a.count >= 2).length;
+    const participe3Plus  = inscriptionsByAdherent.filter(a => a.count >= 3).length;
 
     return {
-      genderChartData,
+      total, femmes, hommes, autres, nonRenseigne,
+      moyenneAge, validAgesCount: validAges.length,
       ageGroups,
-      moyenneAge,
-      engagementChartData,
-      totalAdherents: adherents.length,
-      totalEvenements: yearEvenements.length,
-      avgInscriptions,
-      cotisationsAJour: adherents.filter(a => a.cotisationAJour).length,
-      validAgesCount: validAges.length
+      cotisationsAJour, faaf, droitImage,
+      bureau, benevoles, simples,
+      yearEvenementsCount: yearEvenements.length,
+      totalInscriptions, avgInscriptions,
+      recettesTotal, recettesEncaissees,
+      inscriptionsPaid, tauxPaiement,
+      topEvenements,
+      participe1Plus, participe2Plus, participe3Plus,
     };
   }, [adherents, evenements, inscriptions, selectedYear]);
 
@@ -163,12 +182,29 @@ export default function StatsPage() {
 
   if (!stats || typeof stats === 'string') return null;
 
+  const {
+    total, femmes, hommes, autres, nonRenseigne,
+    moyenneAge, validAgesCount,
+    ageGroups,
+    cotisationsAJour, faaf, droitImage,
+    bureau, benevoles, simples,
+    yearEvenementsCount, totalInscriptions, avgInscriptions,
+    recettesTotal, recettesEncaissees,
+    inscriptionsPaid, tauxPaiement,
+    topEvenements,
+    participe1Plus, participe2Plus, participe3Plus,
+  } = stats;
+
+  const recettesEnAttente = recettesTotal - recettesEncaissees;
+
   return (
     <div className="space-y-6">
+
+      {/* ── En-tête ── */}
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Analyse Statistique</h1>
-          <p className="text-muted-foreground">Données consolidées basées sur l'intégralité des 13 champs adhérents.</p>
+          <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Statistiques</h1>
+          <p className="text-muted-foreground">Vue d'ensemble de l'association H2VL.</p>
         </div>
         <div className="w-full sm:w-auto flex items-center gap-3">
           <Button variant="outline" asChild className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
@@ -190,121 +226,184 @@ export default function StatsPage() {
         </div>
       </header>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase text-primary">Total Adhérents</CardTitle></CardHeader>
-          <CardContent className="p-4 pt-0"><div className="text-2xl font-bold">{stats.totalAdherents}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase">Âge Moyen</CardTitle></CardHeader>
-          <CardContent className="p-4 pt-0"><div className="text-2xl font-bold">{stats.moyenneAge} ans</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase text-green-600">Cotisations à jour</CardTitle></CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold">{stats.cotisationsAJour}</div>
-            <p className="text-[10px] text-muted-foreground uppercase">{Math.round((stats.cotisationsAJour / stats.totalAdherents) * 100)}% de la base</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase text-accent-foreground">Événements ({selectedYear})</CardTitle></CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold">{stats.totalEvenements}</div>
-            <p className="text-[10px] text-muted-foreground uppercase">Moy. {stats.avgInscriptions} inscrits</p>
-          </CardContent>
-        </Card>
-      </div>
+      <div className="grid gap-6 md:grid-cols-2">
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+        {/* ── Bloc 1 : Vue d'ensemble des membres ── */}
         <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>Répartition par Genre</CardTitle>
-            <CardDescription>Données issues des profils complétés.</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Vue d'ensemble des membres</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full" aria-hidden="true">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={stats.genderChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                    {stats.genderChartData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="sr-only">
-              <table>
-                <caption>Répartition par Genre</caption>
-                <thead><tr><th>Genre</th><th>Nombre</th></tr></thead>
-                <tbody>
-                  {stats.genderChartData.map(d => <tr key={d.name}><td>{d.name}</td><td>{d.value}</td></tr>)}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-3">
+            <p>
+              L'association compte <strong className="text-foreground">{total} membre{total > 1 ? 's' : ''}</strong>{' '}
+              {femmes > 0 && <>dont <strong className="text-foreground">{femmes} femme{femmes > 1 ? 's' : ''}</strong> ({pct(femmes, total)})</>}
+              {femmes > 0 && hommes > 0 && <> et </>}
+              {hommes > 0 && <><strong className="text-foreground">{hommes} homme{hommes > 1 ? 's' : ''}</strong> ({pct(hommes, total)})</>}
+              {autres > 0 && <>, {autres} autre{autres > 1 ? 's' : ''} ({pct(autres, total)})</>}
+              {nonRenseigne > 0 && <>, {nonRenseigne} non renseigné{nonRenseigne > 1 ? 's' : ''}</>}
+              .
+            </p>
+
+            {moyenneAge !== null ? (
+              <p>
+                L'âge moyen est de <strong className="text-foreground">{moyenneAge} ans</strong>
+                {validAgesCount < total && (
+                  <> (calculé sur {validAgesCount} adhérent{validAgesCount > 1 ? 's' : ''} dont la date de naissance est renseignée)</>
+                )}
+                .
+              </p>
+            ) : (
+              <p>L'âge moyen n'est pas calculable : aucune date de naissance renseignée.</p>
+            )}
+
+            <p>
+              <strong className="text-foreground">{cotisationsAJour} adhérent{cotisationsAJour > 1 ? 's' : ''}</strong>{' '}
+              ({pct(cotisationsAJour, total)}) ont leur cotisation à jour.
+              {total - cotisationsAJour > 0 && (
+                <> {total - cotisationsAJour} ne sont pas encore à jour pour la période en cours.</>
+              )}
+            </p>
           </CardContent>
         </Card>
 
+        {/* ── Bloc 2 : Profil de la base ── */}
         <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>Engagement Associatif</CardTitle>
-            <CardDescription>Structure hiérarchique et bénévolat.</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Profil de la base</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full" aria-hidden="true">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.engagementChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" hide />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" name="Nombre de membres" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="sr-only">
-              <table>
-                <caption>Engagement Associatif</caption>
-                <thead><tr><th>Rôle</th><th>Nombre</th></tr></thead>
-                <tbody>
-                  {stats.engagementChartData.map(d => <tr key={d.name}><td>{d.name}</td><td>{d.value}</td></tr>)}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="text-sm text-muted-foreground space-y-4">
+            <ul className="space-y-1.5 list-none" role="list">
+              <li>
+                <strong className="text-foreground">FAAF :</strong>{' '}
+                {faaf} adhérent{faaf > 1 ? 's' : ''} ({pct(faaf, total)})
+              </li>
+              <li>
+                <strong className="text-foreground">Droit à l'image accordé :</strong>{' '}
+                {droitImage} sur {total} ({pct(droitImage, total)})
+              </li>
+              <li>
+                <strong className="text-foreground">Membres du bureau :</strong> {bureau}
+              </li>
+              <li>
+                <strong className="text-foreground">Bénévoles hors bureau :</strong> {benevoles}
+              </li>
+              <li>
+                <strong className="text-foreground">Adhérents simples :</strong> {simples}
+              </li>
+            </ul>
+
+            {ageGroups.length > 0 && (
+              <div>
+                <p className="font-semibold text-foreground mb-1.5">Tranches d'âge</p>
+                <ul className="space-y-1 list-none" role="list">
+                  {ageGroups.map(g => (
+                    <li key={g.label}>
+                      <strong className="text-foreground">{g.label} :</strong>{' '}
+                      {g.count} ({pct(g.count, validAgesCount)})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>Pyramide des Âges</CardTitle>
-            <CardDescription>Distribution des adhérents par tranches d'âge (Calcul basé sur {stats.validAgesCount} dates valides).</CardDescription>
+        {/* ── Bloc 3 : Activité événements ── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">
+              Activité événements — {selectedYear}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full" aria-hidden="true">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.ageGroups} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" />
-                  <Tooltip />
-                  <Bar dataKey="value" name="Adhérents" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="sr-only">
-              <table>
-                <caption>Distribution par tranches d'âge</caption>
-                <thead><tr><th>Tranche d'âge</th><th>Nombre</th></tr></thead>
-                <tbody>
-                  {stats.ageGroups.map(d => <tr key={d.name}><td>{d.name}</td><td>{d.value}</td></tr>)}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-4">
+            {yearEvenementsCount === 0 ? (
+              <p>Aucun événement organisé en {selectedYear}.</p>
+            ) : (
+              <>
+                <p>
+                  <strong className="text-foreground">{yearEvenementsCount} événement{yearEvenementsCount > 1 ? 's' : ''}</strong>{' '}
+                  organisé{yearEvenementsCount > 1 ? 's' : ''} en {selectedYear}, pour un total de{' '}
+                  <strong className="text-foreground">{totalInscriptions} inscription{totalInscriptions > 1 ? 's' : ''}</strong>{' '}
+                  ({avgInscriptions} en moyenne par événement).
+                </p>
+
+                {recettesTotal > 0 && (
+                  <p>
+                    Les recettes attendues s'élèvent à <strong className="text-foreground">{recettesTotal.toFixed(2)} €</strong>.{' '}
+                    <strong className="text-foreground">{recettesEncaissees.toFixed(2)} €</strong> ont été encaissés
+                    {tauxPaiement !== null && <> (taux de paiement : {tauxPaiement} %)</>}
+                    {recettesEnAttente > 0 && <>, {recettesEnAttente.toFixed(2)} € restent en attente</>}
+                    .
+                  </p>
+                )}
+
+                {recettesTotal === 0 && (
+                  <p>Tous les événements de {selectedYear} étaient gratuits.</p>
+                )}
+
+                {topEvenements.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-foreground mb-1.5">Événements par participation</p>
+                    <ul className="space-y-1 list-none" role="list">
+                      {topEvenements.map((e, i) => (
+                        <li key={i}>
+                          <strong className="text-foreground">{e.titre} :</strong>{' '}
+                          {e.count} inscrit{e.count > 1 ? 's' : ''}
+                          {e.prix > 0 && (
+                            <> — {e.payes}/{e.count} payé{e.payes > 1 ? 's' : ''}</>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
+
+        {/* ── Bloc 4 : Participation individuelle ── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">
+              Participation individuelle — {selectedYear}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-3">
+            {yearEvenementsCount === 0 ? (
+              <p>Aucune donnée de participation pour {selectedYear}.</p>
+            ) : (
+              <>
+                <p>
+                  <strong className="text-foreground">{participe1Plus} membre{participe1Plus > 1 ? 's' : ''}</strong>{' '}
+                  ({pct(participe1Plus, total)}) ont participé à au moins un événement en {selectedYear}.
+                  {total - participe1Plus > 0 && (
+                    <> {total - participe1Plus} n'ont participé à aucun événement sur la période.</>
+                  )}
+                </p>
+
+                {participe2Plus > 0 && (
+                  <p>
+                    <strong className="text-foreground">{participe2Plus} membre{participe2Plus > 1 ? 's' : ''}</strong>{' '}
+                    ({pct(participe2Plus, total)}) ont participé à au moins deux événements.
+                  </p>
+                )}
+
+                {participe3Plus > 0 && (
+                  <p>
+                    <strong className="text-foreground">{participe3Plus} membre{participe3Plus > 1 ? 's' : ''}</strong>{' '}
+                    ({pct(participe3Plus, total)}) sont particulièrement actifs avec trois événements ou plus.
+                  </p>
+                )}
+
+                {participe1Plus === 0 && (
+                  <p>Aucun membre n'a participé à un événement en {selectedYear}.</p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
       </div>
     </div>
   );
