@@ -203,11 +203,11 @@ export default function StatsPage() {
       {/* ── En-tête ── */}
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Statistiques</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Statistiques</h1>
           <p className="text-muted-foreground">Vue d'ensemble de l'association H2VL.</p>
         </div>
         <div className="w-full sm:w-auto flex items-center gap-3">
-          <Button variant="outline" asChild className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+          <Button variant="outline" asChild className="border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-700 dark:hover:text-red-400">
             <Link href="/dashboard/stats/inactifs">
               <AlertCircle className="mr-2 h-4 w-4" />
               Diagnostic Inactivité

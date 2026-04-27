@@ -216,7 +216,7 @@ export default function DashboardHomePage() {
     return (
         <div className="space-y-6">
             <header>
-                <h1 className="text-3xl font-bold tracking-tight" role="heading" aria-level={1}>Tableau de Bord</h1>
+                <h1 className="text-3xl font-bold tracking-tight">Tableau de Bord</h1>
                 <p className="text-muted-foreground">
                     Vue d'ensemble de l'activité de votre association basée sur {stats.total} adhérents.
                 </p>

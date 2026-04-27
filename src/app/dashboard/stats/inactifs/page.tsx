@@ -100,13 +100,13 @@ export default function InactiveMembersPage() {
       <div className="grid gap-6 md:grid-cols-3">
         <Card className="border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900/50">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold uppercase text-red-600 flex items-center gap-2">
+            <CardTitle className="text-sm font-bold uppercase text-red-600 dark:text-red-400 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" /> Analyse du risque
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-700">{inactiveCount} membres</div>
-            <p className="text-xs text-red-600/80 mt-1">N'ont plus donné de nouvelles depuis 6 mois.</p>
+            <div className="text-3xl font-bold text-red-700 dark:text-red-400">{inactiveCount} membres</div>
+            <p className="text-xs text-red-600/80 dark:text-red-400/70 mt-1">N'ont plus donné de nouvelles depuis 6 mois.</p>
           </CardContent>
         </Card>
 
@@ -151,7 +151,7 @@ export default function InactiveMembersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Adhérent</TableHead>
-                  <TableHead>Dernier contact connu</TableHead>
+                  <TableHead className="hidden sm:table-cell">Dernier contact connu</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -162,8 +162,9 @@ export default function InactiveMembersPage() {
                       <TableCell className="font-bold py-4">
                         {member.prenom} {member.nom}
                         <span className="block text-xs font-normal text-muted-foreground">{member.email}</span>
+                        <span className="block text-xs font-normal text-muted-foreground sm:hidden">{member.lastContact}</span>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
                         {member.lastContact}
                       </TableCell>
                       <TableCell className="text-right">
