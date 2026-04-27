@@ -21,6 +21,7 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 - **Project ID** : `studio-6079106449-cf583`
 - **Backend App Hosting** : `studio` (région `us-central1`)
 - **Auth domain** : `studio-6079106449-cf583.firebaseapp.com`
+- **URL de production** : `https://studio--studio-6079106449-cf583.us-central1.hosted.app`
 
 ---
 
@@ -130,6 +131,26 @@ CampagneEmail
 EmailTracking
 InvitationEvenement
 ```
+
+### Champs attendus `Adherent` (13 champs)
+
+| Champ | Type | Obligatoire | Notes |
+|---|---|---|---|
+| `prenom` | string | ✅ | |
+| `nom` | string | ✅ | En majuscules par convention |
+| `email` | string | ✅ | Peut être vide si inconnu |
+| `telephone` | string | ✅ | Peut être vide si inconnu |
+| `adresse` | string | ✅ | Peut être vide si inconnue |
+| `dateNaissance` | string | ✅ | Format `YYYY-MM-DD`. Vide si non renseignée (fréquent) |
+| `genre` | string | ✅ | `'H'` ou `'F'` |
+| `dateInscription` | string | ✅ | ISO string |
+| `estMembreBureau` | boolean | ✅ | |
+| `estBenevole` | boolean | ✅ | |
+| `estMembreFaaf` | boolean | ✅ | Cotisation FAAF → 40 € au lieu de 15 € |
+| `accordeDroitImage` | boolean | ✅ | |
+| `cotisationAJour` | boolean | ✅ | |
+
+> `dateNaissance` est souvent vide pour les anciens adhérents — ce n'est pas bloquant pour le fonctionnement de l'application.
 
 ### Champs spéciaux `Evenement`
 - `necessiteMenu?: boolean` — active le choix de menu à l'inscription
@@ -299,6 +320,38 @@ Paramètres acceptés :
 }
 ```
 
+### Envoi de mails en masse via script (hors interface)
+
+Il est possible d'envoyer des mails groupés en appelant directement l'API `/api/send-email` depuis un script Python, sans passer par l'interface Communication. Utile pour des campagnes ponctuelles ciblées (ex. : relance données manquantes).
+
+Pattern utilisé :
+```python
+import urllib.request, json, time
+
+API_URL = "https://studio--studio-6079106449-cf583.us-central1.hosted.app/api/send-email"
+
+recipients = [
+    ("Prénom", "email@example.com"),
+    # ...
+]
+
+for prenom, email in recipients:
+    payload = json.dumps({
+        "to": email,
+        "firstName": prenom,
+        "type": "campaign",
+        "campaignSubject": "Sujet du mail",
+        "campaignBody": "Corps du mail en texte simple."
+    }).encode("utf-8")
+    req = urllib.request.Request(API_URL, data=payload,
+          headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        pass
+    time.sleep(0.8)  # pause entre chaque envoi
+```
+
+> Si deux adhérents partagent le même email (ex. : couple), n'envoyer qu'une seule fois à cette adresse.
+
 ### Design des templates
 
 Tous les emails partagent la même structure :
@@ -371,6 +424,31 @@ L'annulation appelle `POST /api/cancel-inscription` (Admin SDK) qui :
 - `deleteCotisationForYear(db, adherentId, annee)` — met à jour `cotisationAJour` uniquement si `annee === currentYear`
 - Historique affiché depuis 2022 (`FIRST_YEAR = 2022`)
 - `addCotisation` / `removeCotisation` sont des aliases conservés pour compatibilité
+
+### Page Statistiques (`/dashboard/stats`)
+
+La page stats n'utilise **pas** de graphiques (recharts a été supprimé). Elle affiche 4 blocs de texte narratif :
+1. **Vue d'ensemble des membres** — genre, âge moyen, cotisations à jour
+2. **Profil de la base** — FAAF, droit image, bureau, bénévoles, simples, tranches d'âge
+3. **Activité événements** — nombre d'événements, inscriptions, recettes, top événements
+4. **Participation individuelle** — % ayant participé à 1+, 2+, 3+ événements dans l'année
+
+Helper `pct(n, total)` utilisé pour les pourcentages. Année sélectionnable via un `Select`.
+
+### Maintenance de la base adhérents
+
+Pour des opérations de masse sur les adhérents (import, audit, corrections) :
+- Utiliser le **plugin Firestore MCP** (`firestore_list_documents`, `firestore_update_document`, `firestore_add_document`, `firestore_delete_document`)
+- Pour lire des fichiers `.xlsx`, utiliser **Python + openpyxl** (`pip install openpyxl`)
+- Pour croiser des données Excel avec Firestore, utiliser `unicodedata.normalize('NFD', s)` pour gérer les accents lors des comparaisons de noms
+
+Opérations réalisées en avril 2026 :
+- Import de 11 nouveaux adhérents depuis `membre 2026.xlsx`
+- Mise à jour `cotisationAJour=true` pour 63 adhérents depuis `cotisations 2026.xlsx`
+- Suppression de 3 adhérents (Nicole ABDELATIF, Sonia LEMERLE, Philippe PEROLLE)
+- Fusion Sophie PASCAL → Pascal BERNIER (mise à jour du document existant)
+- Audit exhaustif des 13 champs sur 92 adhérents
+- Campagne e-mail de relance date de naissance (39 destinataires uniques)
 
 ### Sauvegardes Firestore
 - Managed Backups hebdomadaires activées → Google Cloud Storage
