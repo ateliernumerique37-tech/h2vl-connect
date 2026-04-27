@@ -297,7 +297,7 @@ export default function CommunicationPage() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <Select value={cotisationFilter} onValueChange={setCotisationFilter}>
                     <SelectTrigger className="text-xs h-9" aria-label="Filtrer par statut de cotisation"><SelectValue placeholder="Cotisation" /></SelectTrigger>
                     <SelectContent>
@@ -386,7 +386,7 @@ export default function CommunicationPage() {
                 <div className="space-y-2">
                   <Label htmlFor="message">Message</Label>
                   <Textarea id="message" placeholder="Votre message ici..." className="min-h-[300px]" value={body} onChange={(e) => setBody(e.target.value)} />
-                  <p className="text-[10px] text-muted-foreground italic flex items-center gap-1">
+                  <p className="text-xs text-muted-foreground italic flex items-center gap-1">
                     <Info className="h-3 w-3" /> Un bouton d'accusé de réception sera ajouté en bas du mail.
                   </p>
                 </div>
@@ -464,7 +464,7 @@ export default function CommunicationPage() {
                         <CardHeader className="p-4 pb-2">
                           <div className="flex justify-between items-start gap-2">
                             <CardTitle className="text-sm font-bold line-clamp-1">{campaign.sujet}</CardTitle>
-                            <span className="text-[10px] text-muted-foreground whitespace-nowrap" aria-hidden="true">{new Date(campaign.dateEnvoi).toLocaleDateString('fr-FR')}</span>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap" aria-hidden="true">{new Date(campaign.dateEnvoi).toLocaleDateString('fr-FR')}</span>
                           </div>
                         </CardHeader>
                         <CardContent className="p-4 pt-0 space-y-3">

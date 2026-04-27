@@ -238,12 +238,12 @@ function RegisterMemberDialog({
             </div>
           )}
           {!isFull && isEventPast && (
-            <div className="p-3 bg-orange-50 border border-orange-200 text-orange-700 rounded-md text-sm font-semibold text-center" role="alert">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 rounded-md text-sm font-semibold text-center" role="alert">
               Cet événement est passé — les inscriptions sont fermées.
             </div>
           )}
           {!isFull && !isEventPast && isDeadlinePassed && (
-            <div className="p-3 bg-orange-50 border border-orange-200 text-orange-700 rounded-md text-sm font-semibold text-center" role="alert">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 rounded-md text-sm font-semibold text-center" role="alert">
               La date limite d'inscription est dépassée.
             </div>
           )}
@@ -860,7 +860,7 @@ export default function EventDetailPage() {
           <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2"><TrendingUp className="h-3 w-3" /> Taux de remplissage</CardTitle></CardHeader>
           <CardContent className="p-4 pt-1">
             <div className="text-2xl font-bold">{financialStats.occupancyRate}%</div>
-            <p className="text-[10px] text-muted-foreground">{financialStats.attendance} / {event.nombrePlacesMax || '∞'} places</p>
+            <p className="text-xs text-muted-foreground">{financialStats.attendance} / {event.nombrePlacesMax || '∞'} places</p>
           </CardContent>
         </Card>
         <Card>
@@ -869,16 +869,16 @@ export default function EventDetailPage() {
             <div className="text-2xl font-bold">{financialStats.expected.toFixed(2)} €</div>
           </CardContent>
         </Card>
-        <Card className="bg-green-50 border-green-100">
-          <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-green-700 flex items-center gap-2"><Coins className="h-3 w-3" /> Recettes perçues</CardTitle></CardHeader>
+        <Card className="bg-green-50 dark:bg-green-950/30 border-green-100 dark:border-green-900">
+          <CardHeader className="p-4 pb-0"><CardTitle className="text-xs font-bold uppercase text-green-700 dark:text-green-400 flex items-center gap-2"><Coins className="h-3 w-3" /> Recettes perçues</CardTitle></CardHeader>
           <CardContent className="p-4 pt-1">
-            <div className="text-2xl font-bold text-green-700">{financialStats.perceived.toFixed(2)} €</div>
+            <div className="text-2xl font-bold text-green-700 dark:text-green-400">{financialStats.perceived.toFixed(2)} €</div>
           </CardContent>
         </Card>
-        <Card className={cn(financialStats.remaining > 0 ? "bg-red-50 border-red-100" : "bg-muted/30")}>
-          <CardHeader className="p-4 pb-0"><CardTitle className={cn("text-xs font-bold uppercase", financialStats.remaining > 0 ? "text-red-700" : "text-muted-foreground")}>Reste à percevoir</CardTitle></CardHeader>
+        <Card className={cn(financialStats.remaining > 0 ? "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900" : "bg-muted/30")}>
+          <CardHeader className="p-4 pb-0"><CardTitle className={cn("text-xs font-bold uppercase", financialStats.remaining > 0 ? "text-red-700 dark:text-red-400" : "text-muted-foreground")}>Reste à percevoir</CardTitle></CardHeader>
           <CardContent className="p-4 pt-1">
-            <div className={cn("text-2xl font-bold", financialStats.remaining > 0 ? "text-red-700" : "text-muted-foreground")}>
+            <div className={cn("text-2xl font-bold", financialStats.remaining > 0 ? "text-red-700 dark:text-red-400" : "text-muted-foreground")}>
               {financialStats.remaining.toFixed(2)} €
             </div>
           </CardContent>
@@ -986,7 +986,7 @@ export default function EventDetailPage() {
                             />
                             <span className="text-sm flex-1">{adherent.prenom} {adherent.nom}</span>
                             {!adherent.email && (
-                              <span className="text-[10px] text-muted-foreground italic">sans email</span>
+                              <span className="text-xs text-muted-foreground italic">sans email</span>
                             )}
                           </div>
                         ))
@@ -1086,12 +1086,12 @@ export default function EventDetailPage() {
                             <div className="mt-1 space-y-1">
                               <span className="sr-only">Statut du paiement : </span>
                               {inscription.a_paye ? (
-                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Payé</Badge>
+                                <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800">Payé</Badge>
                               ) : (
-                                <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">En attente</Badge>
+                                <Badge variant="destructive" className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 border-red-200 dark:border-red-800">En attente</Badge>
                               )}
                               {inscription.a_paye && inscription.moyenPaiement && (
-                                <p className="text-[10px] text-muted-foreground">{MOYEN_PAIEMENT_LABEL[inscription.moyenPaiement]}</p>
+                                <p className="text-xs text-muted-foreground">{MOYEN_PAIEMENT_LABEL[inscription.moyenPaiement]}</p>
                               )}
                             </div>
                           </div>
@@ -1131,10 +1131,10 @@ export default function EventDetailPage() {
                               if (!value) return null;
                               return (
                                 <div key={menuItem.key} className="block w-full">
-                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-1">
+                                  <span className="text-xs font-bold text-primary uppercase tracking-widest block mb-1">
                                     {menuItem.label}
                                   </span>
-                                  <div className="text-[11px] text-foreground bg-muted/40 rounded px-2 py-1.5 border-l-2 border-primary/30">
+                                  <div className="text-xs text-foreground bg-muted/40 rounded px-2 py-1.5 border-l-2 border-primary/30">
                                     {value}
                                   </div>
                                 </div>
@@ -1145,16 +1145,16 @@ export default function EventDetailPage() {
 
                         {inscription.choixBowling && Object.values(inscription.choixBowling).some(v => v) && (
                           <div className="mt-2 border-t pt-3" role="region" aria-label={`Options bowling pour ${adherentName}`}>
-                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-2">🎳 Bowling</span>
+                            <span className="text-xs font-bold text-primary uppercase tracking-widest block mb-2">🎳 Bowling</span>
                             <div className="flex flex-wrap gap-2">
                               {inscription.choixBowling.avecBarrieres && (
-                                <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1">Avec barrières</span>
+                                <span className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded px-2 py-1">Avec barrières</span>
                               )}
                               {inscription.choixBowling.sansBarrieres && (
-                                <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1">Sans barrières</span>
+                                <span className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded px-2 py-1">Sans barrières</span>
                               )}
                               {inscription.choixBowling.prendGouter && (
-                                <span className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-1">Goûter de l'amitié</span>
+                                <span className="text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">Goûter de l'amitié</span>
                               )}
                             </div>
                           </div>
