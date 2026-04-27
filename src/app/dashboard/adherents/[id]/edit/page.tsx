@@ -17,7 +17,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Trash2, Save, ChevronLeft, Loader2 } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useAuth, useDoc, useMemoFirebase } from '@/firebase';
+import { addLog } from '@/services/logsService';
 import { doc } from 'firebase/firestore';
 import Link from 'next/link';
 
@@ -27,6 +28,7 @@ export default function EditAdherentPage() {
   const params = useParams();
   const router = useRouter();
   const db = useFirestore();
+  const auth = useAuth();
   const { toast } = useToast();
   
   const id = params?.id as string;
@@ -107,6 +109,7 @@ export default function EditAdherentPage() {
   const handleDelete = async () => {
     try {
         await deleteAdherent(db, id);
+        await addLog(db, auth, `Suppression de l'adhérent : ${adherent.prenom} ${adherent.nom}`);
         toast({ title: "Adhérent supprimé" });
         router.push('/dashboard/adherents');
     } catch (error) {
@@ -122,6 +125,7 @@ export default function EditAdherentPage() {
     setIsSaving(true);
     try {
         await updateAdherent(db, id, formData);
+        await addLog(db, auth, `Modification de l'adhérent : ${formData.prenom} ${formData.nom}`);
         toast({ title: "Modifications enregistrées" });
         router.push(`/dashboard/adherents/${id}`);
     } catch (error) {

@@ -12,7 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useAuth } from '@/firebase';
+import { addLog } from '@/services/logsService';
 import { RoleGuard } from '@/components/dashboard/role-guard';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -21,6 +22,7 @@ import { MOYENS_PAIEMENT, type MoyenPaiement } from '@/lib/types';
 function CreateAdherentPageContent() {
     const router = useRouter();
     const db = useFirestore();
+    const auth = useAuth();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [doublon, setDoublon] = useState<string | null>(null);
@@ -85,6 +87,7 @@ function CreateAdherentPageContent() {
                 dateInscription: new Date().toISOString(),
             };
             await addAdherent(db, newAdherentData, formData.cotisationAJour ? moyenPaiement : undefined);
+            await addLog(db, auth, `Création de l'adhérent : ${formData.prenom} ${formData.nom}`);
             toast({
                 title: "Adhérent ajouté",
                 description: `${formData.prenom} ${formData.nom} a été ajouté avec succès.`,
