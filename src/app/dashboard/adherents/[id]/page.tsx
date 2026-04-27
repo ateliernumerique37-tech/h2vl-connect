@@ -285,12 +285,22 @@ function AdherentDetailPageContent() {
                 { label: 'Membre FAAF', value: adherent.estMembreFaaf },
                 { label: 'Droit à l\'image', value: adherent.accordeDroitImage },
             ].map((statut, i) => (
-                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                <div
+                    key={i}
+                    className="flex items-center justify-between p-2 rounded-lg bg-muted/30"
+                    aria-label={`${statut.label} : ${statut.value ? 'Oui' : 'Non'}`}
+                >
                     <span className="text-sm font-medium">{statut.label}</span>
                     {statut.value ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <span className="flex items-center gap-1 text-green-600">
+                            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                            <span className="text-xs font-semibold">Oui</span>
+                        </span>
                     ) : (
-                        <XCircle className="h-5 w-5 text-muted-foreground/30" />
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                            <XCircle className="h-5 w-5" aria-hidden="true" />
+                            <span className="text-xs font-semibold">Non</span>
+                        </span>
                     )}
                 </div>
             ))}
