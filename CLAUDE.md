@@ -57,7 +57,9 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 | Route | Rôle | Auth requise |
 |---|---|---|
 | `POST /api/send-email` | Envoi d'un e-mail (confirmation inscription, anniversaire, campagne) | Non (appelé côté serveur) |
-| `POST /api/send-invitation` | Envoi d'une invitation à un événement avec lien d'auto-inscription | Non |
+| `POST /api/send-invitation` | Envoi d'une invitation individuelle avec lien d'auto-inscription | Non (usage interne uniquement) |
+| `POST /api/queue-invitations` | Crée la file d'attente d'invitations en batch (sans envoyer) | Bearer token admin |
+| `POST /api/process-invitation-queue` | Traite la file d'attente avec 800ms entre chaque email | Bearer token admin |
 | `POST /api/confirm-inscription` | Valide une inscription via lien d'invitation (Admin SDK) | Non (jeton secret) |
 | `POST /api/create-annulation-token` | Crée un jeton d'annulation pour une inscription admin manuelle (Admin SDK) | Non (appelé côté serveur) |
 | `POST /api/cancel-inscription` | Annule une inscription via jeton d'annulation (Admin SDK) | Non (jeton secret) |
@@ -65,6 +67,7 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 | `POST /api/delete-admin` | Supprime un admin (Auth + Firestore), protège le dernier admin | Bearer token admin |
 | `POST /api/update-admin-password` | Change le mot de passe d'un admin (Admin SDK) | Bearer token admin |
 | `POST /api/cron/anniversaires` | Envoi automatique des emails d'anniversaire | Header `x-cron-secret` |
+| `POST /api/cron/date-limite` | Envoie la liste des inscrits quand la date limite d'inscription est atteinte | Header `x-cron-secret` |
 | `POST /api/confirm-read` | Obsolète — retourne 410 | — |
 
 ---
@@ -81,8 +84,10 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 | `email_campaigns/{id}` | Campagnes e-mail envoyées | Admin uniquement |
 | `email_tracking/{jeton}` | Suivi des accusés de réception | **Public** (lecture/écriture) |
 | `invitations_evenement/{jeton}` | Invitations événement avec lien auto-inscription | **Lecture publique**, écriture : `false` (Admin SDK uniquement) |
+| `queue_invitations/{id}` | File d'attente d'envoi des invitations | Lecture : admin. Écriture : `false` (Admin SDK uniquement) |
 | `annulations_inscription/{jeton}` | Jetons d'annulation d'inscription | **Lecture publique**, écriture : `false` (Admin SDK uniquement) |
 | `logs_anniversaires/{id}` | Historique envois e-mail anniversaire | Admin uniquement |
+| `logs_liste_inscrits/{id}` | Anti-doublon pour le cron date-limite | Admin uniquement |
 | `logs_admin/{id}` | Historique des actions admin | Admin uniquement |
 | `roles_admins/{id}` | Ancienne collection (compatibilité) | Lecture : connecté |
 
@@ -99,6 +104,32 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
   "dateInscription": "ISO string | null"
 }
 ```
+
+### Structure clé : `queue_invitations/{id}`
+```json
+{
+  "evenementId": "...",
+  "jeton": "UUID",
+  "adherentId": "...",
+  "adherentEmail": "...",
+  "adherentFirstName": "...",
+  "inscriptionUrl": "https://...lien/inscription-invitation/[jeton]",
+  "eventTitle": "...",
+  "eventDate": "chaîne formatée fr-FR",
+  "eventDateFin": "chaîne formatée fr-FR | null",
+  "eventLocation": "...",
+  "eventPrix": 0,
+  "eventDescription": "...",
+  "necessiteMenu": false,
+  "estSortieBowling": false,
+  "statut": "en_attente | en_cours | envoyé | erreur",
+  "erreur": "null | message d'erreur",
+  "createdAt": "ISO string",
+  "sentAt": "ISO string | null"
+}
+```
+
+> Le statut `en_cours` est utilisé comme verrou anti-race-condition : le serveur marque tous les items `en_cours` en batch avant de commencer l'envoi. Tout appel concurrent trouvera 0 items `en_attente` et s'arrêtera immédiatement. En cas de retry (`retryErrors: true`), les items `en_cours` et `erreur` sont remis à `en_attente` (récupération après run interrompu).
 
 ### Structure clé : `annulations_inscription/{jeton}`
 ```json
@@ -120,16 +151,17 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 ## Types TypeScript (`src/lib/types.ts`)
 
 ```typescript
-Adherent       // Membre de l'association
-Evenement      // Événement (avec necessiteMenu?, optionsMenu?, estSortieBowling?)
-Inscription    // Inscription à un événement (avec choixMenu?, choixBowling?)
-Cotisation     // Cotisation annuelle
-Admin          // Compte administrateur
-LogAdmin       // Log d'action admin
+Adherent            // Membre de l'association
+Evenement           // Événement (avec necessiteMenu?, optionsMenu?, estSortieBowling?)
+Inscription         // Inscription à un événement (avec choixMenu?, choixBowling?)
+Cotisation          // Cotisation annuelle
+Admin               // Compte administrateur
+LogAdmin            // Log d'action admin
 LogAnniversaire
 CampagneEmail
 EmailTracking
 InvitationEvenement
+QueueInvitation     // Item de file d'attente d'invitation — statut: en_attente | en_cours | envoyé | erreur
 ```
 
 ### Champs attendus `Adherent` (13 champs)
@@ -239,6 +271,8 @@ Définies dans `apphosting.yaml` (disponibles au runtime sur Cloud Run) :
 
 En développement local, copier ces valeurs dans un fichier `.env.local`.
 
+Le `timeoutSeconds: 300` dans `runConfig` de `apphosting.yaml` permet à `/api/process-invitation-queue` de tourner jusqu'à 5 minutes sans être coupé par Cloud Run. Sur Cloud Run, c'est ce paramètre qui fait foi — le `export const maxDuration` dans le code Next.js n'a pas d'effet sur Firebase App Hosting (c'est une directive Vercel uniquement).
+
 ---
 
 ## Déploiement
@@ -247,21 +281,21 @@ En développement local, copier ces valeurs dans un fichier `.env.local`.
 Firebase App Hosting est connecté au dépôt GitHub.
 **Chaque push sur `main` déclenche automatiquement un build et un déploiement** de l'application Next.js.
 
-### Règles et indexes Firestore (manuel)
-Les règles et indexes Firestore ne se déploient **pas** automatiquement.
-À chaque modification de `firestore.rules` ou `firestore.indexes.json`, déployer manuellement depuis **Cloud Shell** :
+### Règles et indexes Firestore (via plugin MCP Firebase)
+Les règles et indexes Firestore ne se déploient **pas** automatiquement avec l'application.
+À chaque modification de `firestore.rules` ou `firestore.indexes.json`, utiliser le **plugin MCP Firebase** :
 
+```
+1. firebase_validate_security_rules (type: firestore, source_file: firestore.rules)
+2. firebase_deploy (only: firestore)
+3. firebase_deploy_status (jobId: ...)
+```
+
+En alternative, depuis Cloud Shell :
 ```bash
 cd h2vl-connect && git pull
 firebase deploy --only firestore --project studio-6079106449-cf583
 ```
-
-Pour cloner si pas encore fait :
-```bash
-git clone https://github.com/ateliernumerique37-tech/h2vl-connect.git
-```
-
-> Le dépôt doit être **public** pour le clonage sans token. Le repasser en **privé** après.
 
 ### Accès public Cloud Run (à faire une seule fois, persiste)
 ```bash
@@ -275,6 +309,19 @@ gcloud run services add-iam-policy-binding studio \
 ---
 
 ## E-mails
+
+### File d'attente invitations (anti-throttling Gmail)
+
+L'envoi en masse d'invitations (jusqu'à 92 adhérents) utilisait une boucle directe qui provoquait des blocages Gmail. Le système utilise maintenant une file d'attente Firestore :
+
+1. `POST /api/queue-invitations` — crée tous les docs `invitations_evenement` + `queue_invitations` en batch Firestore. Retourne immédiatement. Requiert un Bearer token Firebase Auth.
+2. `POST /api/process-invitation-queue` — lu par le frontend en fire-and-forget (pas d'`await`). Marque d'abord tous les items `en_cours` (verrou anti-race-condition), puis envoie les emails un par un avec 800ms de pause. Requiert un Bearer token Firebase Auth.
+3. Le frontend suit la progression en temps réel via `useCollection` sur `queue_invitations` filtré par `evenementId`.
+4. Si des emails échouent (`statut: erreur`), un bouton "Réessayer" appelle process-invitation-queue avec `{ retryErrors: true }`, qui remet `erreur` + `en_cours` à `en_attente` avant de retraiter.
+
+**Batch Firestore** : le batch est découpé en chunks de 200 destinataires maximum (400 ops, sous la limite de 500 ops/batch Firestore).
+
+**Nodemailer** : le `transporter` est créé une seule fois avant la boucle (réutilisation de la connexion SMTP) et fermé dans un bloc `finally` après traitement.
 
 ### API `POST /api/send-email`
 
@@ -315,16 +362,15 @@ Paramètres acceptés :
   eventDateFin?: string,
   eventLocation: string,
   eventPrix: number,
-  necessiteMenu: boolean,    // conditionne le texte du CTA dans l'email
-  estSortieBowling: boolean, // idem
+  necessiteMenu: boolean,
+  estSortieBowling: boolean,
 }
 ```
 
+> ⚠️ `/api/send-invitation` envoie un seul email à la fois et n'est plus utilisé pour les envois en masse depuis le dashboard. Le flux en masse passe désormais par `/api/queue-invitations` + `/api/process-invitation-queue`.
+
 ### Envoi de mails en masse via script (hors interface)
 
-Il est possible d'envoyer des mails groupés en appelant directement l'API `/api/send-email` depuis un script Python, sans passer par l'interface Communication. Utile pour des campagnes ponctuelles ciblées (ex. : relance données manquantes).
-
-Pattern utilisé :
 ```python
 import urllib.request, json, time
 
@@ -332,7 +378,6 @@ API_URL = "https://studio--studio-6079106449-cf583.us-central1.hosted.app/api/se
 
 recipients = [
     ("Prénom", "email@example.com"),
-    # ...
 ]
 
 for prenom, email in recipients:
@@ -347,7 +392,7 @@ for prenom, email in recipients:
           headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=20) as resp:
         pass
-    time.sleep(0.8)  # pause entre chaque envoi
+    time.sleep(0.8)
 ```
 
 > Si deux adhérents partagent le même email (ex. : couple), n'envoyer qu'une seule fois à cette adresse.
@@ -366,6 +411,19 @@ Le bouton de tracking s'appelle **"J'ai bien reçu cet e-mail ✓"** (ancienneme
 Chaque e-mail contient un bouton vers `/lien/confirmation/[jeton]`.
 Le jeton est stocké dans `email_tracking/{jeton}` avec `statut: 'envoyé'`.
 Quand l'utilisateur clique, le statut passe à `confirmé` et `dateLecture` est renseignée.
+
+### Fuseau horaire dans les emails
+**⚠️ Règle critique** : les emails générés côté serveur (Cloud Run = UTC) doivent toujours spécifier `timeZone: 'Europe/Paris'` dans `toLocaleDateString`. Sans ça, les heures affichées dans les emails sont décalées de 2h en été (UTC+2).
+
+```typescript
+const fmt = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  hour: '2-digit', minute: '2-digit',
+  timeZone: 'Europe/Paris', // OBLIGATOIRE côté serveur
+});
+```
+
+Les pages client (dashboard) n'ont pas ce problème car le navigateur de l'admin est en heure de Paris.
 
 ### Lien d'annulation d'inscription
 Chaque e-mail de confirmation contient un lien vers `/lien/annulation/[jeton]`.
@@ -403,6 +461,7 @@ L'annulation appelle `POST /api/cancel-inscription` (Admin SDK) qui :
 - Options définies par l'admin (champ texte, valeurs séparées par virgules)
 - À l'inscription → RadioGroup par catégorie (Apéritif, Entrée, Plat, Fromage, Dessert)
 - Les choix s'affichent dans la liste des inscrits, dans l'export CSV et dans l'e-mail de confirmation
+- **Les choix de menu et bowling sont obligatoires** pour valider une inscription si l'événement les requiert. Le bouton de confirmation reste désactivé tant que tous les choix ne sont pas faits (validé côté client dans `RegisterMemberDialog` et dans la page publique `/lien/inscription-invitation/[jeton]`).
 
 ### Sortie bowling
 - Activé via le switch **"C'est une sortie bowling"** à la création/édition
@@ -418,6 +477,12 @@ L'annulation appelle `POST /api/cancel-inscription` (Admin SDK) qui :
 - Le cron appelle `/api/send-email` (pas Nodemailer directement) → tracking email complet inclus
 - Anti-doublons via `logs_anniversaires` (champ `date_envoi: YYYY-MM-DD`)
 - **Ne jamais envoyer via Nodemailer directement dans le cron** — toujours passer par `/api/send-email`
+
+### Cron date limite d'inscription
+- Job Cloud Scheduler GCP → POST `.../api/cron/date-limite`
+- Header requis : `x-cron-secret`
+- Envoie la liste des inscrits à `contact.h2vl@gmail.com` le jour où la date limite est atteinte
+- Anti-doublons via `logs_liste_inscrits/{evenementId}` (champ `date_envoi: YYYY-MM-DD`)
 
 ### Cotisations
 - `addCotisationForYear(db, adherentId, annee, isFaaf)` — montant : 40 € FAAF / 15 € sinon
@@ -454,19 +519,17 @@ Opérations réalisées en avril 2026 :
 - Managed Backups hebdomadaires activées → Google Cloud Storage
 - Point-in-time recovery (PITR) activé — restauration possible jusqu'à 7 jours en arrière
 
-### Invitation par lien
-1. L'admin envoie des invitations depuis la page de détail d'un événement
-2. Sélection individuelle des adhérents non inscrits (recherche + cases à cocher + "tout sélectionner")
-3. Chaque adhérent sélectionné reçoit un e-mail avec un lien unique `/lien/inscription-invitation/[jeton]`
-4. Le jeton est créé dans `invitations_evenement` via Admin SDK (`/api/send-invitation`)
-5. La page publique lit l'invitation et l'événement (les deux sont en lecture publique)
-6. Si menu ou bowling → page de choix avant confirmation
-7. La confirmation appelle `/api/confirm-inscription` (Admin SDK) qui :
-   - Valide le jeton, vérifie les places, vérifie les doublons
-   - Crée l'inscription et le jeton d'annulation (avec `jetonInvitation` pour pouvoir réinitialiser)
-   - Met l'invitation à `statut: 'inscrit'`
-8. E-mail de confirmation envoyé avec choix + lien d'annulation
-9. Si l'adhérent annule via le lien → l'invitation repasse à `statut: 'envoyé'` → lien réutilisable
+### Invitation par lien (nouveau flux avec file d'attente)
+1. L'admin sélectionne les adhérents non inscrits et clique "Envoyer"
+2. `POST /api/queue-invitations` crée tous les docs `invitations_evenement` (jetons) et `queue_invitations` en batch → retour immédiat
+3. `POST /api/process-invitation-queue` est lancé en fire-and-forget (pas d'`await` côté frontend)
+4. Le serveur marque tous les items `en_cours` (verrou), puis envoie les emails avec 800ms de pause
+5. Le frontend affiche la progression en temps réel via `useCollection` sur `queue_invitations`
+6. Si des items échouent → bouton "Réessayer" → `retryErrors: true` → reset + retraitement
+7. La page publique `/lien/inscription-invitation/[jeton]` fonctionne comme avant (inchangée)
+8. Si menu ou bowling → choix obligatoires avant confirmation
+9. `/api/confirm-inscription` crée l'inscription + jeton d'annulation
+10. Si l'adhérent annule → l'invitation repasse à `statut: 'envoyé'` → lien réutilisable
 
 ### Inscription manuelle (par un admin depuis le dashboard)
 1. L'admin utilise le dialog "Inscrire un adhérent" sur la page de détail de l'événement
@@ -482,16 +545,32 @@ Opérations réalisées en avril 2026 :
 - **Les routes `/lien/*` sont exclues du Service Worker PWA** (`navigateFallbackDenylist: [/^\/lien/]`) pour éviter que le SW intercepte les liens d'e-mail
 - **Firebase Hosting intercepte `/public/*`** → toutes les routes publiques dynamiques sont sous `/lien/`
 - **`allow create: if false`** sur `admins` → impossible de créer un admin depuis le client → Admin SDK obligatoire
-- **`allow write: if false`** sur `invitations_evenement` et `annulations_inscription` → toutes les écritures passent par des routes API avec Admin SDK
+- **`allow write: if false`** sur `invitations_evenement`, `annulations_inscription` et `queue_invitations` → toutes les écritures passent par des routes API avec Admin SDK
 - **`annulationUrl`** utilise un UUID unique par inscription → non-devinable, à usage unique
 - **`evenements` est en lecture publique** (`allow read: if true`) — nécessaire pour que la page d'invitation publique puisse lire les détails de l'événement (choix de menu, bowling)
+- **Toute API route qui déclenche un effet de bord (envoi d'email, écriture Firestore sensible) doit être authentifiée** via Bearer token Firebase Auth (`adminAuth().verifyIdToken(token)`). Pattern :
+
+```typescript
+const token = request.headers.get('authorization')?.replace('Bearer ', '');
+if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+await adminAuth().verifyIdToken(token);
+```
+
+Côté frontend :
+```typescript
+const token = await auth.currentUser?.getIdToken();
+fetch('/api/ma-route', {
+  headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+  ...
+});
+```
 
 ---
 
 ## Structure des fichiers clés
 
 ```
-├── apphosting.yaml              # Config Firebase App Hosting (env vars, Cloud Run)
+├── apphosting.yaml              # Config Firebase App Hosting (env vars, Cloud Run, timeoutSeconds)
 ├── firebase.json                # Config Firebase (firestore rules/indexes)
 ├── firestore.rules              # Règles de sécurité Firestore
 ├── firestore.indexes.json       # Index composites Firestore
@@ -501,13 +580,18 @@ Opérations réalisées en avril 2026 :
 │   │   ├── (auth)/              # Pages login / forgot-password / signup
 │   │   ├── api/
 │   │   │   ├── send-email/            # Envoi e-mail (confirmation, anniversaire, campagne)
-│   │   │   ├── send-invitation/       # Envoi invitation événement (Admin SDK)
+│   │   │   ├── send-invitation/       # Envoi invitation individuelle (usage interne)
+│   │   │   ├── queue-invitations/     # Création batch de la file d'attente (Bearer token)
+│   │   │   ├── process-invitation-queue/ # Traitement séquentiel de la file (Bearer token)
 │   │   │   ├── confirm-inscription/   # Validation inscription via lien (Admin SDK)
 │   │   │   ├── create-annulation-token/ # Jeton d'annulation pour inscription manuelle (Admin SDK)
 │   │   │   ├── cancel-inscription/    # Annulation inscription (Admin SDK)
 │   │   │   ├── create-admin/          # Création admin (Admin SDK)
 │   │   │   ├── delete-admin/          # Suppression admin (Admin SDK)
-│   │   │   └── update-admin-password/ # Changement mot de passe (Admin SDK)
+│   │   │   ├── update-admin-password/ # Changement mot de passe (Admin SDK)
+│   │   │   └── cron/
+│   │   │       ├── anniversaires/     # Cron anniversaires (x-cron-secret)
+│   │   │       └── date-limite/       # Cron liste inscrits à date limite (x-cron-secret)
 │   │   ├── dashboard/           # Pages du tableau de bord (protégées)
 │   │   │   └── layout.tsx       # AuthGuard : gestion auth + rôle + protection race condition
 │   │   ├── lien/                # Pages publiques accessibles par lien e-mail
@@ -559,6 +643,130 @@ Opérations réalisées en avril 2026 :
 
 ---
 
+## Règles de développement — erreurs à ne jamais reproduire
+
+Ces règles sont issues de bugs réels détectés en code review sur ce projet. Les appliquer systématiquement dès l'écriture du code, sans attendre la review.
+
+### 1. Authentifier toute API route qui a des effets de bord
+
+Toute route API qui envoie des emails, modifie Firestore ou déclenche une action sensible **doit** vérifier un Bearer token Firebase Auth. Une route non authentifiée peut être appelée par n'importe qui depuis Internet qui connaît l'URL et un `evenementId` (visible dans les URL du dashboard).
+
+Seules exceptions admises : les routes appelées par le cron GCP (protégées par `x-cron-secret`) et les routes avec un jeton secret non-devinable (ex. : `/api/confirm-inscription` avec UUID).
+
+### 2. Pattern anti-race-condition pour les traitements par lot
+
+Quand un endpoint traite une liste d'items en base (ex. : file d'attente), il faut **les réclamer atomiquement avant de commencer**, pour qu'un appel concurrent ne traite pas les mêmes items en double.
+
+Pattern à utiliser systématiquement :
+
+```typescript
+// 1. Lire les items en attente
+const pendingSnap = await db.collection('ma_collection')
+  .where('statut', '==', 'en_attente').get();
+
+// 2. Les marquer "en_cours" immédiatement en batch (verrou)
+const claimBatch = db.batch();
+pendingSnap.docs.forEach(doc => claimBatch.update(doc.ref, { statut: 'en_cours' }));
+await claimBatch.commit();
+
+// 3. Seulement maintenant, traiter les docs capturés
+for (const doc of pendingSnap.docs) { ... }
+```
+
+Un deuxième appel concurrent arrivant après le `claimBatch.commit()` ne trouvera plus rien à traiter.
+
+### 3. Limite de 500 opérations par batch Firestore
+
+Un seul `db.batch()` accepte au maximum **500 opérations** (set, update, delete confondus). Si le code crée plusieurs docs par entrée (ex. : 2 docs par destinataire = 400 ops pour 200 destinataires), découper en chunks :
+
+```typescript
+const CHUNK_SIZE = 200; // 200 destinataires × 2 docs = 400 ops, sous la limite
+for (let i = 0; i < recipients.length; i += CHUNK_SIZE) {
+  const batch = db.batch();
+  for (const item of recipients.slice(i, i + CHUNK_SIZE)) {
+    batch.set(...);
+    batch.set(...);
+  }
+  await batch.commit();
+}
+```
+
+### 4. Fermer le transporter Nodemailer après usage
+
+`nodemailer.createTransport()` maintient un pool de connexions TCP ouvertes. Sur Cloud Run (serverless avec instances réutilisées), ces connexions peuvent s'accumuler. Toujours appeler `transporter.close()` dans un bloc `finally` :
+
+```typescript
+const transporter = nodemailer.createTransport({ ... });
+try {
+  for (const item of items) {
+    await transporter.sendMail({ ... });
+  }
+} finally {
+  transporter.close();
+}
+```
+
+### 5. Protéger les divisions dans les useMemo
+
+Un `useMemo` qui calcule un ratio (ex. : pour une barre de progression) peut provoquer une division par zéro si le total est 0. Toujours retourner `null` ou une valeur de guard quand la collection est vide :
+
+```typescript
+const stats = useMemo(() => {
+  if (!items || items.length === 0) return null; // guard obligatoire
+  return {
+    total: items.length,
+    ratio: items.filter(...).length / items.length, // sûr car total > 0
+  };
+}, [items]);
+```
+
+### 6. Ne pas afficher d'état UI persistant entre les sessions
+
+Quand un bloc de progression ou de statut est alimenté par une collection Firestore, il restera visible lors des visites futures si les données persistent. Il faut conditionner l'affichage à un état **actif** (traitement en cours ou erreurs), pas à la simple présence de données historiques.
+
+```typescript
+// ❌ Mauvais : affiche toujours si des données existent
+if (queueItems.length > 0) return { ... };
+
+// ✅ Bon : n'affiche que si quelque chose requiert l'attention
+const pending = items.filter(i => i.statut === 'en_attente' || i.statut === 'en_cours').length;
+const error = items.filter(i => i.statut === 'erreur').length;
+if (pending === 0 && error === 0) return null; // rien à montrer
+```
+
+### 7. Positionner les pauses dans les boucles (avant, pas après)
+
+Dans une boucle d'envoi avec throttling, la pause doit être **avant** chaque itération sauf la première, pour ne pas attendre inutilement après le dernier traitement :
+
+```typescript
+for (let i = 0; i < items.length; i++) {
+  if (i > 0) await sleep(800); // pause avant, sauf premier
+  await process(items[i]);
+}
+```
+
+### 8. `maxDuration` n'a pas d'effet sur Firebase App Hosting
+
+`export const maxDuration = 300` est une directive **Vercel uniquement**. Sur Firebase App Hosting (Cloud Run), le timeout est contrôlé exclusivement par `timeoutSeconds` dans `apphosting.yaml`. Il faut configurer les deux pour être cohérent, mais savoir que seul `apphosting.yaml` a un effet réel en production.
+
+---
+
+## Processus de développement
+
+**Après chaque session de code**, lancer systématiquement l'agent `feature-dev:code-reviewer` pour vérifier les fichiers modifiés avant de commit. Cet agent a détecté des problèmes critiques (race condition, endpoints non authentifiés) que la première version du code contenait.
+
+Le prompt type pour la review :
+
+```
+Effectue une code review sur les fichiers suivants récemment modifiés.
+Recherche : bugs, race conditions, problèmes de sécurité (endpoints non authentifiés),
+limites de plateforme dépassées, fuites de ressources, états UI incohérents.
+Ne rapporte que les problèmes réels à haute confiance. Pas de suggestions de style.
+Fichiers : [liste des fichiers modifiés]
+```
+
+---
+
 ## Rôles et contrôle d'accès (RBAC)
 
 ### Rôles disponibles
@@ -584,7 +792,7 @@ Opérations réalisées en avril 2026 :
 - La sidebar masque l'item Adhérents pour les Modérateurs
 - Les règles Firestore bloquent l'écriture sur `adherents` et `cotisations` si le rôle n'est pas `Administrateur`
 
-> ⚠️ Après toute modification de `firestore.rules` → déployer manuellement via Cloud Shell
+> ⚠️ Après toute modification de `firestore.rules` → déployer via plugin MCP Firebase ou Cloud Shell
 
 ---
 
