@@ -139,3 +139,25 @@ export interface InvitationEvenement {
   dateEnvoi: string;
   dateInscription: string | null;
 }
+
+export interface QueueInvitation {
+  id: string;
+  evenementId: string;
+  jeton: string;
+  adherentId: string;
+  adherentEmail: string;
+  adherentFirstName: string;
+  inscriptionUrl: string;
+  eventTitle: string;
+  eventDate: string;
+  eventDateFin?: string | null;
+  eventLocation: string;
+  eventPrix: number;
+  eventDescription?: string;
+  necessiteMenu: boolean;
+  estSortieBowling: boolean;
+  statut: 'en_attente' | 'envoyé' | 'erreur';
+  erreur: string | null;
+  createdAt: string;
+  sentAt: string | null;
+}

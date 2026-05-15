@@ -4,6 +4,7 @@
 runConfig:
   maxInstances: 1
   invoker: public
+  timeoutSeconds: 300
 
 env:
   - variable: EMAIL_HOST

@@ -2,13 +2,13 @@
 
 import { useParams, notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { Evenement, Adherent, Inscription, MoyenPaiementInscription } from '@/lib/types';
+import type { Evenement, Adherent, Inscription, MoyenPaiementInscription, QueueInvitation } from '@/lib/types';
 import { MOYENS_PAIEMENT_INSCRIPTION, MOYEN_PAIEMENT_LABEL } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
@@ -23,7 +23,7 @@ import { deleteEvenement } from '@/services/evenementsService';
 import { addInscription, updateInscription, deleteInscription } from '@/services/inscriptionsService';
 import { addLog } from '@/services/logsService';
 import { useAuth, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection, query } from 'firebase/firestore';
+import { doc, collection, query, where } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
@@ -485,6 +485,12 @@ export default function EventDetailPage() {
   const inscriptionsQuery = useMemoFirebase(() => query(collection(db, 'inscriptions')), [db]);
   const { data: allInscriptions, isLoading: isLoadingInscriptions } = useCollection<Inscription>(inscriptionsQuery);
 
+  const queueQuery = useMemoFirebase(
+    () => id ? query(collection(db, 'queue_invitations'), where('evenementId', '==', id)) : null,
+    [db, id]
+  );
+  const { data: queueItems } = useCollection<QueueInvitation>(queueQuery);
+
   const eventInscriptions = useMemo(() => {
     if (!allInscriptions || !id) return [];
     return allInscriptions.filter(ins => ins.id_evenement === id);
@@ -512,8 +518,7 @@ export default function EventDetailPage() {
       .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [rawAdherents, eventInscriptions]);
 
-  const [isSendingInvitations, setIsSendingInvitations] = useState(false);
-  const [invitationProgress, setInvitationProgress] = useState(0);
+  const [isQueuing, setIsQueuing] = useState(false);
   const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
   const [inviteeSearch, setInviteeSearch] = useState('');
   const [pendingPayInscriptionId, setPendingPayInscriptionId] = useState<string | null>(null);
@@ -527,55 +532,85 @@ export default function EventDetailPage() {
   }, [nonRegisteredAdherents, inviteeSearch]);
   const [selectedMoyenInscription, setSelectedMoyenInscription] = useState<MoyenPaiementInscription>('especes');
 
+  const queueStats = useMemo(() => {
+    if (!queueItems || queueItems.length === 0) return null;
+    return {
+      total: queueItems.length,
+      sent: queueItems.filter(i => i.statut === 'envoyé').length,
+      error: queueItems.filter(i => i.statut === 'erreur').length,
+      pending: queueItems.filter(i => i.statut === 'en_attente').length,
+    };
+  }, [queueItems]);
+
   const handleSendInvitations = async () => {
     if (!event || selectedInvitees.size === 0) return;
-    setIsSendingInvitations(true);
-    setInvitationProgress(0);
+    setIsQueuing(true);
 
-    const targets = nonRegisteredAdherents.filter(a => selectedInvitees.has(a.id));
-    const formattedEventDate = new Date(event.date).toLocaleDateString('fr-FR', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-
-    let successCount = 0;
-    for (let i = 0; i < targets.length; i++) {
-      const adherent = targets[i];
-      if (!adherent.email) {
-        setInvitationProgress(Math.round(((i + 1) / targets.length) * 100));
-        continue;
-      }
-      try {
-        const res = await fetch('/api/send-invitation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: adherent.email,
-            firstName: adherent.prenom,
-            adherentId: adherent.id,
-            eventId: event.id,
-            eventTitle: event.titre,
-            eventDate: formattedEventDate,
-            eventDateFin: event.dateFin
-              ? new Date(event.dateFin).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-              : undefined,
-            eventLocation: event.lieu,
-            eventDescription: event.description,
-            eventPrix: event.prix,
-            necessiteMenu: event.necessiteMenu || false,
-            estSortieBowling: event.estSortieBowling || false,
-          }),
-        });
-        if (res.ok) successCount++;
-      } catch (e) {
-        console.error(`Echec invitation ${adherent.email}:`, e);
-      }
-      setInvitationProgress(Math.round(((i + 1) / targets.length) * 100));
+    const targets = nonRegisteredAdherents.filter(a => selectedInvitees.has(a.id) && a.email);
+    if (targets.length === 0) {
+      toast({ variant: 'destructive', title: 'Aucun destinataire', description: "Les adhérents sélectionnés n'ont pas d'adresse e-mail." });
+      setIsQueuing(false);
+      return;
     }
 
-    await addLog(db, auth, `Invitations envoyées pour "${event.titre}" (${successCount}/${targets.length})`);
-    toast({ title: 'Invitations envoyées', description: `${successCount} invitation(s) envoyée(s).` });
-    setIsSendingInvitations(false);
-    setSelectedInvitees(new Set());
+    const fmt = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      timeZone: 'Europe/Paris',
+    });
+
+    try {
+      const res = await fetch('/api/queue-invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evenementId: event.id,
+          eventTitle: event.titre,
+          eventDate: fmt(event.date),
+          eventDateFin: event.dateFin ? fmt(event.dateFin) : undefined,
+          eventLocation: event.lieu,
+          eventPrix: event.prix,
+          eventDescription: event.description,
+          necessiteMenu: event.necessiteMenu || false,
+          estSortieBowling: event.estSortieBowling || false,
+          recipients: targets.map(a => ({
+            adherentId: a.id,
+            adherentEmail: a.email,
+            adherentFirstName: a.prenom,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      // Lancement du traitement en arrière-plan (pas d'await)
+      fetch('/api/process-invitation-queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ evenementId: event.id }),
+      }).catch(console.error);
+
+      await addLog(db, auth, `Invitations mises en file pour "${event.titre}" (${targets.length})`);
+      toast({
+        title: 'Invitations en cours d\'envoi',
+        description: `${targets.length} invitation(s) seront envoyées progressivement.`,
+      });
+      setSelectedInvitees(new Set());
+    } catch {
+      toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de créer la file d'invitations." });
+    } finally {
+      setIsQueuing(false);
+    }
+  };
+
+  const handleRetryQueue = () => {
+    if (!event) return;
+    fetch('/api/process-invitation-queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ evenementId: event.id, retryErrors: true }),
+    }).catch(console.error);
+    toast({ title: 'Relance en cours', description: 'Les invitations en erreur vont être renvoyées.' });
   };
 
   const handlePaymentStatusChange = async (inscriptionId: string, hasPaid: boolean) => {
@@ -1022,25 +1057,49 @@ export default function EventDetailPage() {
                     </div>
                   </ScrollArea>
 
-                  {/* Progression */}
-                  <div aria-live="polite" aria-atomic="true">
-                    {isSendingInvitations && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Envoi en cours…</span>
-                          <span aria-label={`${invitationProgress} pourcent`}>{invitationProgress}%</span>
+                  {/* Suivi temps réel de la file d'envoi */}
+                  {queueStats && (
+                    <div className="rounded-lg border p-3 space-y-2 bg-muted/20" aria-live="polite" aria-atomic="true">
+                      {queueStats.pending === 0 && queueStats.error === 0 ? (
+                        <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400 font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          Toutes les invitations ont été envoyées.
                         </div>
-                        <Progress
-                          value={invitationProgress}
-                          className="h-2"
-                          aria-label="Progression de l'envoi des invitations"
-                          aria-valuenow={invitationProgress}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                        />
-                      </div>
-                    )}
-                  </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{queueStats.pending > 0 ? 'Envoi en cours…' : 'Traitement terminé'}</span>
+                            <span aria-label={`${queueStats.sent} sur ${queueStats.total} envoyés`}>
+                              {queueStats.sent}/{queueStats.total}
+                            </span>
+                          </div>
+                          <Progress
+                            value={(queueStats.sent / queueStats.total) * 100}
+                            className="h-1.5"
+                            aria-label="Progression de l'envoi des invitations"
+                          />
+                          {queueStats.error > 0 && (
+                            <div className="flex items-center justify-between pt-1">
+                              <div className="flex items-center gap-1.5 text-xs text-destructive">
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                {queueStats.error} invitation(s) en erreur
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs px-2 focus-visible:ring-2 focus-visible:ring-primary"
+                                onClick={handleRetryQueue}
+                                aria-label="Réessayer les invitations en erreur"
+                              >
+                                <RefreshCw className="mr-1 h-3 w-3" aria-hidden="true" />
+                                Réessayer
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Bouton d'envoi */}
                   <AlertDialog>
@@ -1048,11 +1107,11 @@ export default function EventDetailPage() {
                       <Button
                         className="w-full min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
                         variant="outline"
-                        disabled={isSendingInvitations || selectedInvitees.size === 0 || isLoadingAdherents || isLoadingInscriptions}
+                        disabled={isQueuing || selectedInvitees.size === 0 || isLoadingAdherents || isLoadingInscriptions}
                         aria-label={`Envoyer les invitations aux ${selectedInvitees.size} adhérent(s) sélectionné(s)`}
                       >
-                        {isSendingInvitations
-                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Envoi…</>
+                        {isQueuing
+                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Mise en file…</>
                           : <><Mail className="mr-2 h-4 w-4" aria-hidden="true" /> Envoyer {selectedInvitees.size > 0 ? `(${selectedInvitees.size})` : ''}</>
                         }
                       </Button>

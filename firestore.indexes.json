@@ -47,6 +47,14 @@
         { "fieldPath": "adherentId", "order": "ASCENDING" },
         { "fieldPath": "annee", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "queue_invitations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "evenementId", "order": "ASCENDING" },
+        { "fieldPath": "statut", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
