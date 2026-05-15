@@ -82,6 +82,7 @@ export async function POST(request: Request) {
     const jetonAnnulation = crypto.randomUUID();
     const fmt = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      timeZone: 'Europe/Paris',
     });
     const formattedDate = fmt(event.date);
     const formattedDateFin = event.dateFin ? fmt(event.dateFin) : null;
