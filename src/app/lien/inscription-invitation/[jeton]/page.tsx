@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { initializeFirebase } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -39,6 +39,24 @@ function InscriptionContent() {
 
   const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
   const [bowlingChoices, setBowlingChoices] = useState<Inscription['choixBowling']>({});
+
+  const isMenuComplete = useMemo(() => {
+    if (!eventData?.necessiteMenu || !eventData.optionsMenu) return true;
+    return (
+      (!eventData.optionsMenu.aperitifs?.length || !!menuChoices?.aperitifChoisi) &&
+      (!eventData.optionsMenu.entrees?.length   || !!menuChoices?.entreeChoisie)  &&
+      (!eventData.optionsMenu.plats?.length     || !!menuChoices?.platChoisi)     &&
+      (!eventData.optionsMenu.fromages?.length  || !!menuChoices?.fromageChoisi)  &&
+      (!eventData.optionsMenu.desserts?.length  || !!menuChoices?.dessertChoisi)
+    );
+  }, [eventData, menuChoices]);
+
+  const isBowlingComplete = useMemo(() => {
+    if (!eventData?.estSortieBowling) return true;
+    return !!(bowlingChoices?.avecBarrieres || bowlingChoices?.sansBarrieres);
+  }, [eventData, bowlingChoices]);
+
+  const isChoicesComplete = isMenuComplete && isBowlingComplete;
 
   // Appelle l'API Admin SDK et gère la réponse
   const callConfirmApi = async (extraChoices?: { menuChoices?: Inscription['choixMenu']; bowlingChoices?: Inscription['choixBowling'] }) => {
@@ -272,11 +290,20 @@ function InscriptionContent() {
             )}
           </CardContent>
 
-          <CardFooter className="pt-2">
+          <CardFooter className="pt-2 flex-col gap-2">
+            {!isChoicesComplete && (
+              <p className="text-xs text-amber-600 text-center w-full" role="alert">
+                {!isMenuComplete && !isBowlingComplete
+                  ? 'Complétez le menu et les options bowling avant de valider.'
+                  : !isMenuComplete
+                  ? 'Tous les choix de menu sont obligatoires.'
+                  : "Sélectionnez « Avec barrières » ou « Sans barrières » pour continuer."}
+              </p>
+            )}
             <Button
               className="w-full h-12 text-base font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               onClick={handleConfirmWithChoices}
-              disabled={status === 'submitting'}
+              disabled={status === 'submitting' || !isChoicesComplete}
               aria-label="Confirmer mon inscription"
             >
               {status === 'submitting' ? (

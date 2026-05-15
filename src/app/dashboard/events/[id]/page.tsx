@@ -105,6 +105,25 @@ function RegisterMemberDialog({
   const [moyenPaiementDialog, setMoyenPaiementDialog] = useState<MoyenPaiementInscription>('especes');
   const [menuChoices, setMenuChoices] = useState<Inscription['choixMenu']>({});
   const [bowlingChoices, setBowlingChoices] = useState<Inscription['choixBowling']>({});
+
+  const isMenuComplete = useMemo(() => {
+    if (!event.necessiteMenu || !event.optionsMenu) return true;
+    return (
+      (!event.optionsMenu.aperitifs?.length || !!menuChoices?.aperitifChoisi) &&
+      (!event.optionsMenu.entrees?.length   || !!menuChoices?.entreeChoisie)  &&
+      (!event.optionsMenu.plats?.length     || !!menuChoices?.platChoisi)     &&
+      (!event.optionsMenu.fromages?.length  || !!menuChoices?.fromageChoisi)  &&
+      (!event.optionsMenu.desserts?.length  || !!menuChoices?.dessertChoisi)
+    );
+  }, [event.necessiteMenu, event.optionsMenu, menuChoices]);
+
+  const isBowlingComplete = useMemo(() => {
+    if (!event.estSortieBowling) return true;
+    return !!(bowlingChoices?.avecBarrieres || bowlingChoices?.sansBarrieres);
+  }, [event.estSortieBowling, bowlingChoices]);
+
+  const isChoicesComplete = isMenuComplete && isBowlingComplete;
+
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -423,10 +442,19 @@ function RegisterMemberDialog({
           )}
         </div>
 
-        <DialogFooter className="mt-auto pt-4 border-t">
-          <Button 
+        <DialogFooter className="mt-auto pt-4 border-t flex-col gap-2">
+          {!isChoicesComplete && selectedAdherentId && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 text-center w-full" role="alert">
+              {!isMenuComplete && !isBowlingComplete
+                ? 'Complétez le menu et les options bowling avant de valider.'
+                : !isMenuComplete
+                ? 'Tous les choix de menu sont obligatoires.'
+                : "Sélectionnez « Avec barrières » ou « Sans barrières » pour continuer."}
+            </p>
+          )}
+          <Button
             onClick={handleRegister}
-            disabled={!selectedAdherentId || isSubmitting || isFull || isRegistrationClosed}
+            disabled={!selectedAdherentId || isSubmitting || isFull || isRegistrationClosed || !isChoicesComplete}
             className="w-full h-12 text-base font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label="Confirmer l'inscription"
             aria-busy={isSubmitting}
