@@ -156,7 +156,7 @@ export interface QueueInvitation {
   eventDescription?: string;
   necessiteMenu: boolean;
   estSortieBowling: boolean;
-  statut: 'en_attente' | 'envoyé' | 'erreur';
+  statut: 'en_attente' | 'en_cours' | 'envoyé' | 'erreur';
   erreur: string | null;
   createdAt: string;
   sentAt: string | null;

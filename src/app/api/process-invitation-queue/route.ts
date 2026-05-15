@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import nodemailer from 'nodemailer';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +48,14 @@ function emailWrapper(content: string): string {
 
 export async function POST(request: Request) {
   try {
+    // Vérification du token Firebase Auth
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    await adminAuth().verifyIdToken(token);
+
     const { evenementId, retryErrors } = await request.json();
 
     if (!evenementId) {
@@ -56,23 +64,23 @@ export async function POST(request: Request) {
 
     const db = adminDb();
 
-    // Si retryErrors : remettre les items en erreur à en_attente
+    // Si retryErrors : remettre les items en erreur ET en_cours (run interrompu) à en_attente
     if (retryErrors) {
-      const errorsSnap = await db.collection('queue_invitations')
+      const toResetSnap = await db.collection('queue_invitations')
         .where('evenementId', '==', evenementId)
-        .where('statut', '==', 'erreur')
+        .where('statut', 'in', ['erreur', 'en_cours'])
         .get();
 
-      if (!errorsSnap.empty) {
+      if (!toResetSnap.empty) {
         const resetBatch = db.batch();
-        errorsSnap.docs.forEach(doc => {
+        toResetSnap.docs.forEach(doc => {
           resetBatch.update(doc.ref, { statut: 'en_attente', erreur: null });
         });
         await resetBatch.commit();
       }
     }
 
-    // Lire tous les items en attente pour cet événement
+    // Lire tous les items en_attente
     const pendingSnap = await db.collection('queue_invitations')
       .where('evenementId', '==', evenementId)
       .where('statut', '==', 'en_attente')
@@ -81,6 +89,14 @@ export async function POST(request: Request) {
     if (pendingSnap.empty) {
       return NextResponse.json({ success: true, processed: 0 });
     }
+
+    // Marquer tous les items en_cours en une seule passe
+    // → toute requête concurrente trouvera 0 items en_attente et s'arrêtera
+    const claimBatch = db.batch();
+    pendingSnap.docs.forEach(doc => {
+      claimBatch.update(doc.ref, { statut: 'en_cours' });
+    });
+    await claimBatch.commit();
 
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
@@ -92,76 +108,81 @@ export async function POST(request: Request) {
 
     let processed = 0;
 
-    for (const docSnap of pendingSnap.docs) {
-      const item = docSnap.data();
+    try {
+      for (let idx = 0; idx < pendingSnap.docs.length; idx++) {
+        // Pause avant chaque email sauf le premier
+        if (idx > 0) await sleep(800);
 
-      try {
-        const prixLabel = Number(item.eventPrix) > 0
-          ? `${Number(item.eventPrix).toFixed(2)} €`
-          : 'Gratuit';
+        const docSnap = pendingSnap.docs[idx];
+        const item = docSnap.data();
 
-        const needsChoices = item.necessiteMenu || item.estSortieBowling;
-        const ctaExplainer = needsChoices
-          ? 'En quelques clics, faites vos choix et confirmez votre participation.'
-          : 'Un seul clic suffit — votre place sera confirmée immédiatement.';
+        try {
+          const prixLabel = Number(item.eventPrix) > 0
+            ? `${Number(item.eventPrix).toFixed(2)} €`
+            : 'Gratuit';
 
-        const body = `
-          <h2 style="margin:0 0 20px;font-size:21px;color:#1f2937;">Vous êtes invité(e) !</h2>
+          const needsChoices = item.necessiteMenu || item.estSortieBowling;
+          const ctaExplainer = needsChoices
+            ? 'En quelques clics, faites vos choix et confirmez votre participation.'
+            : 'Un seul clic suffit — votre place sera confirmée immédiatement.';
 
-          <p style="margin:0 0 6px;font-size:16px;color:#1f2937;">Bonjour <strong>${item.adherentFirstName}</strong>,</p>
-          <p style="margin:0 0 ${item.eventDescription ? '16px' : '28px'};font-size:15px;color:#4b5563;line-height:1.7;">
-            Nous avons le plaisir de vous convier à notre prochain événement.
-          </p>
+          const body = `
+            <h2 style="margin:0 0 20px;font-size:21px;color:#1f2937;">Vous êtes invité(e) !</h2>
 
-          ${item.eventDescription ? `<p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.7;">${item.eventDescription}</p>` : ''}
+            <p style="margin:0 0 6px;font-size:16px;color:#1f2937;">Bonjour <strong>${item.adherentFirstName}</strong>,</p>
+            <p style="margin:0 0 ${item.eventDescription ? '16px' : '28px'};font-size:15px;color:#4b5563;line-height:1.7;">
+              Nous avons le plaisir de vous convier à notre prochain événement.
+            </p>
 
-          <p style="margin:0 0 10px;font-size:17px;font-weight:bold;color:${BRAND_BLUE_DARK};">${item.eventTitle}</p>
-          <ul style="margin:0 0 28px;padding-left:20px;font-size:15px;color:#374151;line-height:2;">
-            <li>📅 <strong>Début :</strong> ${item.eventDate}</li>
-            ${item.eventDateFin ? `<li>🏁 <strong>Fin :</strong> ${item.eventDateFin}</li>` : ''}
-            <li>📍 <strong>Lieu :</strong> ${item.eventLocation}</li>
-            <li>💶 <strong>Tarif :</strong> ${prixLabel}</li>
-          </ul>
+            ${item.eventDescription ? `<p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.7;">${item.eventDescription}</p>` : ''}
 
-          <p style="margin:0 0 16px;font-size:15px;color:#4b5563;">${ctaExplainer}</p>
+            <p style="margin:0 0 10px;font-size:17px;font-weight:bold;color:${BRAND_BLUE_DARK};">${item.eventTitle}</p>
+            <ul style="margin:0 0 28px;padding-left:20px;font-size:15px;color:#374151;line-height:2;">
+              <li>📅 <strong>Début :</strong> ${item.eventDate}</li>
+              ${item.eventDateFin ? `<li>🏁 <strong>Fin :</strong> ${item.eventDateFin}</li>` : ''}
+              <li>📍 <strong>Lieu :</strong> ${item.eventLocation}</li>
+              <li>💶 <strong>Tarif :</strong> ${prixLabel}</li>
+            </ul>
 
-          <p style="margin:0 0 28px;">
-            <a href="${item.inscriptionUrl}"
-              style="display:inline-block;padding:14px 30px;background-color:#16a34a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">
-              Je m'inscris à cet événement →
-            </a>
-          </p>
+            <p style="margin:0 0 16px;font-size:15px;color:#4b5563;">${ctaExplainer}</p>
 
-          <p style="margin:0;font-size:12px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:16px;">
-            Ce lien est personnel et nominatif — merci de ne pas le transférer.<br>
-            Si vous ne souhaitez pas participer, vous pouvez ignorer cet e-mail.
-          </p>
-        `;
+            <p style="margin:0 0 28px;">
+              <a href="${item.inscriptionUrl}"
+                style="display:inline-block;padding:14px 30px;background-color:#16a34a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">
+                Je m'inscris à cet événement →
+              </a>
+            </p>
 
-        await transporter.sendMail({
-          from: `"${process.env.EMAIL_FROM_NAME || 'H2VL'}" <${process.env.EMAIL_USER}>`,
-          to: item.adherentEmail,
-          subject: `Invitation : ${item.eventTitle}`,
-          html: emailWrapper(body),
-        });
+            <p style="margin:0;font-size:12px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:16px;">
+              Ce lien est personnel et nominatif — merci de ne pas le transférer.<br>
+              Si vous ne souhaitez pas participer, vous pouvez ignorer cet e-mail.
+            </p>
+          `;
 
-        await docSnap.ref.update({
-          statut: 'envoyé',
-          sentAt: new Date().toISOString(),
-          erreur: null,
-        });
+          await transporter.sendMail({
+            from: `"${process.env.EMAIL_FROM_NAME || 'H2VL'}" <${process.env.EMAIL_USER}>`,
+            to: item.adherentEmail,
+            subject: `Invitation : ${item.eventTitle}`,
+            html: emailWrapper(body),
+          });
 
-        processed++;
-      } catch (err: any) {
-        console.error(`Erreur invitation ${item.adherentEmail}:`, err);
-        await docSnap.ref.update({
-          statut: 'erreur',
-          erreur: err.message || 'Erreur inconnue',
-        });
+          await docSnap.ref.update({
+            statut: 'envoyé',
+            sentAt: new Date().toISOString(),
+            erreur: null,
+          });
+
+          processed++;
+        } catch (err: any) {
+          console.error(`Erreur invitation ${item.adherentEmail}:`, err);
+          await docSnap.ref.update({
+            statut: 'erreur',
+            erreur: err.message || 'Erreur inconnue',
+          });
+        }
       }
-
-      // Pause pour éviter le throttling Gmail
-      await sleep(800);
+    } finally {
+      transporter.close();
     }
 
     return NextResponse.json({ success: true, processed });

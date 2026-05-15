@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
+// Nombre max de destinataires par batch Firestore (2 ops/destinataire, limite = 500)
+const BATCH_SIZE = 200;
+
 export async function POST(request: Request) {
   try {
+    // Vérification du token Firebase Auth
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    await adminAuth().verifyIdToken(token);
+
     const {
       evenementId,
       eventTitle,
@@ -39,48 +50,53 @@ export async function POST(request: Request) {
     const origin = `${protocol}://${host}`;
 
     const db = adminDb();
-    const batch = db.batch();
     const createdAt = new Date().toISOString();
 
-    for (const { adherentId, adherentEmail, adherentFirstName } of recipients) {
-      const jeton = crypto.randomUUID();
+    // Découpage en chunks pour rester sous la limite de 500 ops/batch Firestore
+    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+      const chunk = recipients.slice(i, i + BATCH_SIZE);
+      const batch = db.batch();
 
-      // Doc dans invitations_evenement (jeton d'inscription)
-      batch.set(db.collection('invitations_evenement').doc(jeton), {
-        evenementId,
-        eventTitle: eventTitle || '',
-        adherentId,
-        adherentEmail,
-        adherentFirstName: adherentFirstName || '',
-        statut: 'envoyé',
-        dateEnvoi: createdAt,
-        dateInscription: null,
-      });
+      for (const { adherentId, adherentEmail, adherentFirstName } of chunk) {
+        const jeton = crypto.randomUUID();
 
-      // Doc dans queue_invitations (file d'attente d'envoi)
-      batch.set(db.collection('queue_invitations').doc(), {
-        evenementId,
-        jeton,
-        adherentId,
-        adherentEmail,
-        adherentFirstName: adherentFirstName || '',
-        inscriptionUrl: `${origin}/lien/inscription-invitation/${jeton}`,
-        eventTitle: eventTitle || '',
-        eventDate: eventDate || '',
-        eventDateFin: eventDateFin || null,
-        eventLocation: eventLocation || '',
-        eventPrix: eventPrix ?? 0,
-        eventDescription: eventDescription || '',
-        necessiteMenu: necessiteMenu || false,
-        estSortieBowling: estSortieBowling || false,
-        statut: 'en_attente',
-        erreur: null,
-        createdAt,
-        sentAt: null,
-      });
+        // Doc dans invitations_evenement (jeton d'inscription)
+        batch.set(db.collection('invitations_evenement').doc(jeton), {
+          evenementId,
+          eventTitle: eventTitle || '',
+          adherentId,
+          adherentEmail,
+          adherentFirstName: adherentFirstName || '',
+          statut: 'envoyé',
+          dateEnvoi: createdAt,
+          dateInscription: null,
+        });
+
+        // Doc dans queue_invitations (file d'attente d'envoi)
+        batch.set(db.collection('queue_invitations').doc(), {
+          evenementId,
+          jeton,
+          adherentId,
+          adherentEmail,
+          adherentFirstName: adherentFirstName || '',
+          inscriptionUrl: `${origin}/lien/inscription-invitation/${jeton}`,
+          eventTitle: eventTitle || '',
+          eventDate: eventDate || '',
+          eventDateFin: eventDateFin || null,
+          eventLocation: eventLocation || '',
+          eventPrix: eventPrix ?? 0,
+          eventDescription: eventDescription || '',
+          necessiteMenu: necessiteMenu || false,
+          estSortieBowling: estSortieBowling || false,
+          statut: 'en_attente',
+          erreur: null,
+          createdAt,
+          sentAt: null,
+        });
+      }
+
+      await batch.commit();
     }
-
-    await batch.commit();
 
     return NextResponse.json({ success: true, count: recipients.length });
   } catch (error: any) {

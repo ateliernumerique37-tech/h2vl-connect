@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
@@ -534,11 +534,15 @@ export default function EventDetailPage() {
 
   const queueStats = useMemo(() => {
     if (!queueItems || queueItems.length === 0) return null;
+    const pending = queueItems.filter(i => i.statut === 'en_attente' || i.statut === 'en_cours').length;
+    const error = queueItems.filter(i => i.statut === 'erreur').length;
+    // N'afficher le bloc que s'il y a encore du travail en cours ou des erreurs
+    if (pending === 0 && error === 0) return null;
     return {
       total: queueItems.length,
       sent: queueItems.filter(i => i.statut === 'envoyé').length,
-      error: queueItems.filter(i => i.statut === 'erreur').length,
-      pending: queueItems.filter(i => i.statut === 'en_attente').length,
+      error,
+      pending,
     };
   }, [queueItems]);
 
@@ -559,9 +563,10 @@ export default function EventDetailPage() {
     });
 
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/queue-invitations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           evenementId: event.id,
           eventTitle: event.titre,
@@ -586,7 +591,7 @@ export default function EventDetailPage() {
       // Lancement du traitement en arrière-plan (pas d'await)
       fetch('/api/process-invitation-queue', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ evenementId: event.id }),
       }).catch(console.error);
 
@@ -603,11 +608,12 @@ export default function EventDetailPage() {
     }
   };
 
-  const handleRetryQueue = () => {
+  const handleRetryQueue = async () => {
     if (!event) return;
+    const token = await auth.currentUser?.getIdToken();
     fetch('/api/process-invitation-queue', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ evenementId: event.id, retryErrors: true }),
     }).catch(console.error);
     toast({ title: 'Relance en cours', description: 'Les invitations en erreur vont être renvoyées.' });
@@ -1057,46 +1063,37 @@ export default function EventDetailPage() {
                     </div>
                   </ScrollArea>
 
-                  {/* Suivi temps réel de la file d'envoi */}
+                  {/* Suivi temps réel de la file d'envoi (visible uniquement si en cours ou erreurs) */}
                   {queueStats && (
                     <div className="rounded-lg border p-3 space-y-2 bg-muted/20" aria-live="polite" aria-atomic="true">
-                      {queueStats.pending === 0 && queueStats.error === 0 ? (
-                        <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400 font-medium">
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                          Toutes les invitations ont été envoyées.
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{queueStats.pending > 0 ? 'Envoi en cours…' : 'Traitement terminé'}</span>
-                            <span aria-label={`${queueStats.sent} sur ${queueStats.total} envoyés`}>
-                              {queueStats.sent}/{queueStats.total}
-                            </span>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{queueStats.pending > 0 ? 'Envoi en cours…' : 'Erreurs à résoudre'}</span>
+                        <span aria-label={`${queueStats.sent} sur ${queueStats.total} envoyés`}>
+                          {queueStats.sent}/{queueStats.total}
+                        </span>
+                      </div>
+                      <Progress
+                        value={(queueStats.sent / queueStats.total) * 100}
+                        className="h-1.5"
+                        aria-label="Progression de l'envoi des invitations"
+                      />
+                      {queueStats.error > 0 && (
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex items-center gap-1.5 text-xs text-destructive">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            {queueStats.error} invitation(s) en erreur
                           </div>
-                          <Progress
-                            value={(queueStats.sent / queueStats.total) * 100}
-                            className="h-1.5"
-                            aria-label="Progression de l'envoi des invitations"
-                          />
-                          {queueStats.error > 0 && (
-                            <div className="flex items-center justify-between pt-1">
-                              <div className="flex items-center gap-1.5 text-xs text-destructive">
-                                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                {queueStats.error} invitation(s) en erreur
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs px-2 focus-visible:ring-2 focus-visible:ring-primary"
-                                onClick={handleRetryQueue}
-                                aria-label="Réessayer les invitations en erreur"
-                              >
-                                <RefreshCw className="mr-1 h-3 w-3" aria-hidden="true" />
-                                Réessayer
-                              </Button>
-                            </div>
-                          )}
-                        </>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2 focus-visible:ring-2 focus-visible:ring-primary"
+                            onClick={handleRetryQueue}
+                            aria-label="Réessayer les invitations en erreur"
+                          >
+                            <RefreshCw className="mr-1 h-3 w-3" aria-hidden="true" />
+                            Réessayer
+                          </Button>
+                        </div>
                       )}
                     </div>
                   )}
