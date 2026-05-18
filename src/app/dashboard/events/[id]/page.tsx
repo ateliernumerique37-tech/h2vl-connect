@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft, RefreshCw, AlertTriangle, Send } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -608,6 +609,75 @@ export default function EventDetailPage() {
     }
   };
 
+  const [isEmailInscritsOpen, setIsEmailInscritsOpen] = useState(false);
+  const [emailInscritsSubject, setEmailInscritsSubject] = useState('');
+  const [emailInscritsMessage, setEmailInscritsMessage] = useState('');
+  const [isSendingEmailInscrits, setIsSendingEmailInscrits] = useState(false);
+  const [emailInscritsProgress, setEmailInscritsProgress] = useState<{ sent: number; total: number; errors: number } | null>(null);
+
+  const handleSendEmailToInscrits = async () => {
+    if (!event || !rawAdherents) return;
+
+    const inscritsWithEmail = eventInscriptions
+      .map(ins => rawAdherents.find(a => a.id === ins.id_adherent))
+      .filter((a): a is Adherent => !!a && !!a.email);
+
+    if (inscritsWithEmail.length === 0) {
+      toast({ variant: 'destructive', title: 'Aucun destinataire', description: "Aucun inscrit n'a d'adresse e-mail renseignée." });
+      return;
+    }
+
+    setIsSendingEmailInscrits(true);
+    setEmailInscritsProgress({ sent: 0, total: inscritsWithEmail.length, errors: 0 });
+
+    const campaignId = `event_msg_${event.id}_${Date.now()}`;
+    const eventDateFormatted = new Date(event.date).toLocaleDateString('fr-FR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Europe/Paris',
+    });
+    const campaignBody = `Ce message concerne « ${event.titre} », qui se tiendra le ${eventDateFormatted} à ${event.lieu}.\n\n${emailInscritsMessage}`;
+
+    let errors = 0;
+
+    for (let i = 0; i < inscritsWithEmail.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 800));
+      const adherent = inscritsWithEmail[i];
+      try {
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: adherent.email,
+            firstName: adherent.prenom,
+            adherentId: adherent.id,
+            campaignId,
+            type: 'campaign',
+            campaignSubject: emailInscritsSubject,
+            campaignBody,
+          }),
+        });
+        if (!res.ok) errors++;
+      } catch {
+        errors++;
+      }
+      setEmailInscritsProgress({ sent: i + 1, total: inscritsWithEmail.length, errors });
+    }
+
+    setIsSendingEmailInscrits(false);
+    await addLog(db, auth, `E-mail envoyé aux inscrits de "${event.titre}" (${inscritsWithEmail.length - errors}/${inscritsWithEmail.length})`);
+
+    if (errors === 0) {
+      toast({ title: 'E-mails envoyés', description: `${inscritsWithEmail.length} message(s) envoyé(s) avec succès.` });
+      setIsEmailInscritsOpen(false);
+      setEmailInscritsSubject('');
+      setEmailInscritsMessage('');
+      setEmailInscritsProgress(null);
+    } else {
+      toast({ variant: 'destructive', title: `${errors} erreur(s) d'envoi`, description: `${inscritsWithEmail.length - errors} message(s) envoyé(s), ${errors} en erreur.` });
+    }
+  };
+
   const handleRetryQueue = async () => {
     if (!event) return;
     const token = await auth.currentUser?.getIdToken();
@@ -1153,7 +1223,7 @@ export default function EventDetailPage() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="px-3 pt-6">
+            <CardContent className="px-3 pt-6 pb-3">
               {isLoadingInscriptions ? (
                 <div className="space-y-4"><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /></div>
               ) : eventInscriptions.length > 0 ? (
@@ -1253,9 +1323,116 @@ export default function EventDetailPage() {
                 </div>
               )}
             </CardContent>
+            {eventInscriptions.length > 0 && (
+              <CardFooter className="px-3 pb-4 pt-0">
+                <Button
+                  variant="outline"
+                  className="w-full min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={() => setIsEmailInscritsOpen(true)}
+                  aria-label="Envoyer un e-mail à tous les inscrits de cet événement"
+                >
+                  <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Envoyer un e-mail aux inscrits
+                </Button>
+              </CardFooter>
+            )}
           </Card>
         </div>
       </div>
+
+      {/* Dialog e-mail aux inscrits */}
+      <Dialog
+        open={isEmailInscritsOpen}
+        onOpenChange={(open) => {
+          if (!isSendingEmailInscrits) {
+            setIsEmailInscritsOpen(open);
+            if (!open) {
+              setEmailInscritsSubject('');
+              setEmailInscritsMessage('');
+              setEmailInscritsProgress(null);
+            }
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl">E-mail aux inscrits</DialogTitle>
+            <DialogDescription>
+              Le message sera envoyé aux {eventInscriptions.length} inscrit(s) de <strong>{event.titre}</strong> ayant une adresse e-mail.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="email-inscrits-subject" className="font-semibold">Objet</Label>
+              <Input
+                id="email-inscrits-subject"
+                placeholder="Objet du message…"
+                value={emailInscritsSubject}
+                onChange={e => setEmailInscritsSubject(e.target.value)}
+                disabled={isSendingEmailInscrits}
+                className="min-h-[44px]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="email-inscrits-message" className="font-semibold">Message</Label>
+              <Textarea
+                id="email-inscrits-message"
+                placeholder="Votre message…"
+                value={emailInscritsMessage}
+                onChange={e => setEmailInscritsMessage(e.target.value)}
+                disabled={isSendingEmailInscrits}
+                rows={6}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Chaque e-mail commencera par "Bonjour [Prénom]," suivi du nom de l'événement, de la date et du lieu, puis de votre message.
+              </p>
+            </div>
+
+            {emailInscritsProgress && (
+              <div className="space-y-2 rounded-lg border p-3 bg-muted/20" aria-live="polite" aria-atomic="true">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{emailInscritsProgress.sent < emailInscritsProgress.total ? 'Envoi en cours…' : 'Envoi terminé'}</span>
+                  <span>{emailInscritsProgress.sent} / {emailInscritsProgress.total}</span>
+                </div>
+                <Progress
+                  value={emailInscritsProgress.total > 0 ? (emailInscritsProgress.sent / emailInscritsProgress.total) * 100 : 0}
+                  className="h-1.5"
+                  aria-label="Progression de l'envoi"
+                />
+                {emailInscritsProgress.errors > 0 && (
+                  <p className="text-xs text-destructive flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    {emailInscritsProgress.errors} erreur(s) d'envoi
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { if (!isSendingEmailInscrits) setIsEmailInscritsOpen(false); }}
+              disabled={isSendingEmailInscrits}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleSendEmailToInscrits}
+              disabled={isSendingEmailInscrits || !emailInscritsSubject.trim() || !emailInscritsMessage.trim()}
+              aria-busy={isSendingEmailInscrits}
+              className="focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {isSendingEmailInscrits
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />Envoi en cours…</>
+                : <><Send className="mr-2 h-4 w-4" aria-hidden="true" />Envoyer</>
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog moyen de paiement inscription */}
       <Dialog open={pendingPayInscriptionId !== null} onOpenChange={(open) => { if (!open) setPendingPayInscriptionId(null); }}>
