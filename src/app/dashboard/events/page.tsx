@@ -31,26 +31,12 @@ function EventsPageSkeleton() {
                     <Skeleton className="h-10 w-full sm:w-[180px]" />
                 </CardContent>
             </Card>
-            {/* Mobile / tablette : squelettes de cartes */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:hidden">
-                {[...Array(3)].map((_, i) => (
-                    <Card key={i}>
-                        <Skeleton className="aspect-[3/2] w-full" />
-                        <CardContent className="p-4">
-                            <Skeleton className="h-6 w-3/4 mb-2" />
-                            <div className="space-y-2">
-                                <Skeleton className="h-4 w-full" />
-                                <Skeleton className="h-4 w-2/3" />
-                                <Skeleton className="h-4 w-1/2" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
-            {/* Desktop : squelettes de lignes */}
-            <div className="hidden lg:flex lg:flex-col lg:gap-2">
+            <div className="flex flex-col gap-3">
                 {[...Array(6)].map((_, i) => (
-                    <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                    <div key={i} className="rounded-lg border px-5 py-4 space-y-2">
+                        <Skeleton className="h-5 w-1/2" />
+                        <Skeleton className="h-4 w-3/4" />
+                    </div>
                 ))}
             </div>
         </div>
@@ -173,7 +159,7 @@ export default function EventsPage() {
       ) : (
         <div className="space-y-6">
           <ul
-            className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1 lg:gap-2 list-none p-0 m-0"
+            className="flex flex-col gap-3 list-none p-0 m-0"
             aria-label="Liste des événements"
           >
             {paginatedEvents.map((event) => (
