@@ -31,7 +31,8 @@ function EventsPageSkeleton() {
                     <Skeleton className="h-10 w-full sm:w-[180px]" />
                 </CardContent>
             </Card>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Mobile / tablette : squelettes de cartes */}
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:hidden">
                 {[...Array(3)].map((_, i) => (
                     <Card key={i}>
                         <Skeleton className="aspect-[3/2] w-full" />
@@ -44,6 +45,12 @@ function EventsPageSkeleton() {
                             </div>
                         </CardContent>
                     </Card>
+                ))}
+            </div>
+            {/* Desktop : squelettes de lignes */}
+            <div className="hidden lg:flex lg:flex-col lg:gap-2">
+                {[...Array(6)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded-lg" />
                 ))}
             </div>
         </div>
@@ -118,7 +125,7 @@ export default function EventsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/events/create" passHref>
-            <Button aria-label="Créer un nouvel événement">
+            <Button>
               <PlusCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Créer un événement
             </Button>
@@ -165,11 +172,16 @@ export default function EventsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <ul
+            className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1 lg:gap-2 list-none p-0 m-0"
+            aria-label="Liste des événements"
+          >
             {paginatedEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
+              <li key={event.id}>
+                <EventCard event={event} />
+              </li>
             ))}
-          </div>
+          </ul>
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-4 py-4 border-t">
