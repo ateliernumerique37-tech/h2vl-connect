@@ -425,6 +425,8 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', {
 
 Les pages client (dashboard) n'ont pas ce problème car le navigateur de l'admin est en heure de Paris.
 
+> ⚠️ Appliquer `timeZone: 'Europe/Paris'` dans **tous** les formateurs de date inclus dans un email, même côté client. Cela garantit la cohérence si le code migre un jour côté serveur.
+
 ### Lien d'annulation d'inscription
 Chaque e-mail de confirmation contient un lien vers `/lien/annulation/[jeton]`.
 Le jeton est stocké dans `annulations_inscription/{jeton}` via Admin SDK (`/api/create-annulation-token`).
@@ -638,6 +640,8 @@ fetch('/api/ma-route', {
 - Les composants UI viennent tous de `@/components/ui/` (shadcn/ui)
 - Icônes : `lucide-react` uniquement
 - Accessibilité : WCAG 2.2 — `aria-label`, `role`, `aria-live` sur tous les éléments interactifs
+- **Ne jamais mettre `aria-label` sur un `<Link>` qui contient du texte** : l'aria-label écrase tout le contenu intérieur pour NVDA/JAWS. Utiliser des `<h2>` par item et des détails en dessous.
+- **WCAG 2.5.3** : ne pas mettre un `aria-label` sur un bouton dont le texte visible est déjà descriptif (ex. : bouton "Créer un événement" ne doit pas avoir `aria-label="Créer un nouvel événement"`).
 - `export const dynamic = 'force-dynamic'` sur toutes les pages publiques avec paramètres dynamiques
 - Pour les champs Firestore optionnels (`dateFin`, `dateLimiteInscription`) : utiliser `deleteField()` de `firebase/firestore` lors de la suppression, jamais `undefined`
 
@@ -745,6 +749,16 @@ for (let i = 0; i < items.length; i++) {
 }
 ```
 
+### 9. Pattern de sélection unique par checkbox (shadcn/ui)
+
+Pour toute liste de sélection à choix unique (ex. : `RegisterMemberDialog`, section invitation), utiliser ce pattern :
+- `checked={selectedId === item.id}` sur le `<Checkbox>`
+- `onClick={() => setSelectedId(prev => prev === item.id ? "" : item.id)}` sur le `<div>` wrapper
+- `onClick={e => e.stopPropagation()}` sur le `<Checkbox>` pour éviter le double déclenchement
+- `<div aria-live="polite" className="sr-only">` pour annoncer le nombre de résultats en temps réel (NVDA/JAWS)
+
+Ce pattern est identique dans `RegisterMemberDialog` et la section invitations de `/dashboard/events/[id]/page.tsx`.
+
 ### 8. `maxDuration` n'a pas d'effet sur Firebase App Hosting
 
 `export const maxDuration = 300` est une directive **Vercel uniquement**. Sur Firebase App Hosting (Cloud Run), le timeout est contrôlé exclusivement par `timeoutSeconds` dans `apphosting.yaml`. Il faut configurer les deux pour être cohérent, mais savoir que seul `apphosting.yaml` a un effet réel en production.
@@ -752,6 +766,8 @@ for (let i = 0; i < items.length; i++) {
 ---
 
 ## Processus de développement
+
+**Règle de push** : ne jamais pusher sans confirmation explicite de l'utilisateur que la fonctionnalité fonctionne. Rappeler à l'utilisateur de confirmer avant de pusher après chaque feature complète.
 
 **Après chaque session de code**, lancer systématiquement l'agent `feature-dev:code-reviewer` pour vérifier les fichiers modifiés avant de commit. Cet agent a détecté des problèmes critiques (race condition, endpoints non authentifiés) que la première version du code contenait.
 
