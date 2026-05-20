@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, Check, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft, RefreshCw, AlertTriangle, Send } from 'lucide-react';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { Calendar, MapPin, Euro, Users, PlusCircle, Pencil, Trash2, UserMinus, Loader2, Search, TrendingUp, Wallet, Coins, X, Download, Mail, ChevronLeft, RefreshCw, AlertTriangle, Send } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -128,10 +128,6 @@ function RegisterMemberDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const listboxRef = useRef<HTMLDivElement>(null);
-  
-  const listboxId = `adherents-listbox-${event.id}`;
   const inputId = `adherent-search-input-${event.id}`;
   const isFull = currentCount >= (event.nombrePlacesMax || Infinity);
   const now = new Date();
@@ -155,43 +151,8 @@ function RegisterMemberDialog({
       setMenuChoices({});
       setBowlingChoices({});
       setSearchTerm("");
-      setActiveIndex(-1);
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (activeIndex >= 0 && listboxRef.current) {
-      const activeElement = listboxRef.current.querySelector(`[id="adherent-option-${filteredAdherents[activeIndex]?.id}"]`);
-      if (activeElement) {
-        activeElement.scrollIntoView({ block: 'nearest' });
-      }
-    }
-  }, [activeIndex, filteredAdherents]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (filteredAdherents.length === 0) return;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setActiveIndex((prev) => (prev + 1) % filteredAdherents.length);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setActiveIndex((prev) => (prev - 1 + filteredAdherents.length) % filteredAdherents.length);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (activeIndex >= 0) {
-          setSelectedAdherentId(filteredAdherents[activeIndex].id);
-          setSearchTerm(`${filteredAdherents[activeIndex].prenom} ${filteredAdherents[activeIndex].nom}`);
-        }
-        break;
-      case 'Escape':
-        setActiveIndex(-1);
-        break;
-    }
-  };
 
   const handleRegister = async () => {
     if (!selectedAdherentId || isFull) return;
@@ -215,7 +176,6 @@ function RegisterMemberDialog({
   const clearSelection = () => {
     setSelectedAdherentId("");
     setSearchTerm("");
-    setActiveIndex(-1);
   };
   
   return (
@@ -248,10 +208,6 @@ function RegisterMemberDialog({
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto pr-2 space-y-6 py-2">
-          <div className="sr-only" aria-live="polite">
-            {searchTerm && `${filteredAdherents.length} adhérent(s) trouvé(s). Utilisez les flèches haut et bas pour naviguer.`}
-          </div>
-
           {isFull && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm font-semibold text-center" role="alert">
               Attention : Cet événement est déjà complet.
@@ -271,32 +227,24 @@ function RegisterMemberDialog({
           <div className="space-y-3">
             <Label htmlFor={inputId} className="font-semibold">Choix de l'adhérent</Label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               <Input
                 id={inputId}
-                placeholder="Rechercher par nom ou prénom..."
-                className="pl-9 pr-9 min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                placeholder="Rechercher par nom ou prénom…"
+                className="pl-8 pr-9 min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  setActiveIndex(-1);
                   if (selectedAdherentId) setSelectedAdherentId("");
                 }}
-                onKeyDown={handleKeyDown}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded={isOpen}
-                aria-haspopup="listbox"
-                aria-controls={listboxId}
-                aria-activedescendant={activeIndex >= 0 ? `adherent-option-${filteredAdherents[activeIndex]?.id}` : undefined}
-                aria-label="Rechercher et sélectionner un adhérent"
+                aria-label="Rechercher un adhérent"
                 autoComplete="off"
               />
               {searchTerm && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground" 
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={clearSelection}
                   aria-label="Effacer la recherche"
                 >
@@ -304,48 +252,36 @@ function RegisterMemberDialog({
                 </Button>
               )}
             </div>
-            
-            <ScrollArea className="h-[200px] rounded-md border bg-muted/5 shadow-inner">
-              <div 
-                id={listboxId}
-                ref={listboxRef}
-                className="p-1" 
-                role="listbox" 
-                aria-label="Résultats de recherche des adhérents"
-              >
+
+            {/* Annonce temps réel pour NVDA / JAWS */}
+            <div className="sr-only" aria-live="polite">
+              {searchTerm
+                ? `${filteredAdherents.length} adhérent${filteredAdherents.length !== 1 ? 's' : ''} trouvé${filteredAdherents.length !== 1 ? 's' : ''}`
+                : ''}
+            </div>
+
+            <ScrollArea className="h-[200px] rounded-md border">
+              <div className="p-2 space-y-1">
                 {isLoading ? (
                   <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement...
                   </div>
                 ) : filteredAdherents.length > 0 ? (
-                  <div className="space-y-1">
-                    {filteredAdherents.map((adherent, index) => {
-                      const isSelected = selectedAdherentId === adherent.id;
-                      const isHighlighted = activeIndex === index;
-                      return (
-                        <div
-                          key={adherent.id}
-                          id={`adherent-option-${adherent.id}`}
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => {
-                            setSelectedAdherentId(adherent.id);
-                            setSearchTerm(`${adherent.prenom} ${adherent.nom}`);
-                            setActiveIndex(index);
-                          }}
-                          className={cn(
-                            "flex w-full items-center justify-between rounded-sm px-3 py-3 text-sm transition-colors cursor-pointer min-h-[44px]",
-                            isSelected && "bg-primary text-primary-foreground font-medium",
-                            isHighlighted && !isSelected && "bg-accent text-accent-foreground",
-                            !isHighlighted && !isSelected && "hover:bg-muted/50"
-                          )}
-                        >
-                          <span className="truncate">{adherent.prenom} {adherent.nom}</span>
-                          {isSelected && <Check className="h-4 w-4" aria-hidden="true" />}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  filteredAdherents.map((adherent) => (
+                    <div
+                      key={adherent.id}
+                      className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors min-h-[40px]"
+                      onClick={() => setSelectedAdherentId(prev => prev === adherent.id ? "" : adherent.id)}
+                    >
+                      <Checkbox
+                        checked={selectedAdherentId === adherent.id}
+                        onCheckedChange={() => setSelectedAdherentId(prev => prev === adherent.id ? "" : adherent.id)}
+                        aria-label={`Sélectionner ${adherent.prenom} ${adherent.nom}`}
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <span className="text-sm flex-1">{adherent.prenom} {adherent.nom}</span>
+                    </div>
+                  ))
                 ) : (
                   <div className="p-8 text-center text-sm text-muted-foreground italic">
                     {adherentsList.length === 0 ? "Tous les membres sont déjà inscrits." : "Aucun membre trouvé pour cette recherche."}
@@ -763,7 +699,8 @@ export default function EventDetailPage() {
         // Envoi de l'email de confirmation via l'API Nodemailer avec tracking
         try {
           const formattedEventDate = new Date(event.date).toLocaleDateString("fr-FR", {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            timeZone: 'Europe/Paris',
           });
           const annulationUrl = jetonAnnulation
             ? `${window.location.origin}/lien/annulation/${jetonAnnulation}`
@@ -781,7 +718,7 @@ export default function EventDetailPage() {
               eventTitle: event.titre,
               eventDate: formattedEventDate,
               eventDateFin: event.dateFin
-                ? new Date(event.dateFin).toLocaleDateString("fr-FR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                ? new Date(event.dateFin).toLocaleDateString("fr-FR", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
                 : undefined,
               eventLocation: event.lieu,
               eventDescription: event.description,
