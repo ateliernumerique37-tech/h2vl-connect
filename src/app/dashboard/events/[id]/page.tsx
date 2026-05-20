@@ -1210,20 +1210,34 @@ export default function EventDetailPage() {
                   <Users className="h-5 w-5 text-primary" />
                   <CardTitle className="text-lg">Liste des inscrits ({eventInscriptions.length})</CardTitle>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleExportCSV} 
-                  disabled={eventInscriptions.length === 0}
-                  className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
-                  aria-label="Exporter la liste des inscrits au format CSV"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Exporter (CSV)
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportCSV}
+                    disabled={eventInscriptions.length === 0}
+                    className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label="Exporter la liste des inscrits au format CSV"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Exporter (CSV)
+                  </Button>
+                  {eventInscriptions.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEmailInscritsOpen(true)}
+                      className="min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
+                      aria-label="Envoyer un e-mail à tous les inscrits de cet événement"
+                    >
+                      <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+                      E-mail aux inscrits
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
-            <CardContent className="px-3 pt-6 pb-3">
+            <CardContent className="px-3 pt-6">
               {isLoadingInscriptions ? (
                 <div className="space-y-4"><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /></div>
               ) : eventInscriptions.length > 0 ? (
@@ -1323,19 +1337,6 @@ export default function EventDetailPage() {
                 </div>
               )}
             </CardContent>
-            {eventInscriptions.length > 0 && (
-              <CardFooter className="px-3 pb-4 pt-0">
-                <Button
-                  variant="outline"
-                  className="w-full min-h-[40px] focus-visible:ring-2 focus-visible:ring-primary"
-                  onClick={() => setIsEmailInscritsOpen(true)}
-                  aria-label="Envoyer un e-mail à tous les inscrits de cet événement"
-                >
-                  <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Envoyer un e-mail aux inscrits
-                </Button>
-              </CardFooter>
-            )}
           </Card>
         </div>
       </div>
