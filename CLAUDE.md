@@ -260,16 +260,18 @@ En développement local, définir `GOOGLE_APPLICATION_CREDENTIALS` pointant vers
 
 Définies dans `apphosting.yaml` (disponibles au runtime sur Cloud Run) :
 
-| Variable | Valeur |
+| Variable | Description |
 |---|---|
 | `EMAIL_HOST` | `smtp.gmail.com` |
 | `EMAIL_PORT` | `465` |
-| `EMAIL_USER` | `ateliernumerique37@gmail.com` |
-| `EMAIL_PASS` | `deyqfrobqwyfagsf` (mot de passe d'application Gmail) |
-| `EMAIL_FROM_NAME` | `Gestion de l'association H2VL` |
-| `CRON_SECRET` | `h2vl-cron-bK7mNpQ3rJ9sX1tZ5vE8wA4dC6fH2gL0` |
+| `EMAIL_USER` | Adresse Gmail expéditrice |
+| `EMAIL_PASS` | Mot de passe d'application Gmail (16 caractères) |
+| `EMAIL_FROM_NAME` | Nom affiché dans les emails |
+| `CRON_SECRET` | Secret partagé entre GCP Cloud Scheduler et les routes `/api/cron/*` |
 
-En développement local, copier ces valeurs dans un fichier `.env.local`.
+> ⚠️ Les valeurs réelles ne doivent **jamais** être écrites dans ce fichier (versionné Git). Les retrouver dans `apphosting.yaml` (production) et `.env.local` (développement local, gitignored).
+
+En développement local, créer un fichier `.env.local` à la racine avec ces variables.
 
 Le `timeoutSeconds: 300` dans `runConfig` de `apphosting.yaml` permet à `/api/process-invitation-queue` de tourner jusqu'à 5 minutes sans être coupé par Cloud Run. Sur Cloud Run, c'est ce paramètre qui fait foi — le `export const maxDuration` dans le code Next.js n'a pas d'effet sur Firebase App Hosting (c'est une directive Vercel uniquement).
 
@@ -653,9 +655,37 @@ Ces règles sont issues de bugs réels détectés en code review sur ce projet. 
 
 ### 1. Authentifier toute API route qui a des effets de bord
 
-Toute route API qui envoie des emails, modifie Firestore ou déclenche une action sensible **doit** vérifier un Bearer token Firebase Auth. Une route non authentifiée peut être appelée par n'importe qui depuis Internet qui connaît l'URL et un `evenementId` (visible dans les URL du dashboard).
+Toute route API qui envoie des emails, modifie Firestore ou déclenche une action sensible **doit** vérifier un Bearer token Firebase Auth. Une route non authentifiée peut être appelée par n'importe qui depuis Internet qui connaît l'URL.
 
-Seules exceptions admises : les routes appelées par le cron GCP (protégées par `x-cron-secret`) et les routes avec un jeton secret non-devinable (ex. : `/api/confirm-inscription` avec UUID).
+**Pattern d'auth implémenté sur `/api/send-email`** (accepte Bearer token OU x-cron-secret) :
+```typescript
+const cronSecret = request.headers.get('x-cron-secret');
+const bearerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+if (cronSecret) {
+  if (cronSecret !== process.env.CRON_SECRET)
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+} else if (bearerToken) {
+  try { await adminAuth().verifyIdToken(bearerToken); }
+  catch { return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 }); }
+} else {
+  return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+}
+```
+
+**Exceptions admises** : routes protégées par un jeton UUID non-devinable (`/api/confirm-inscription`, `/api/cancel-inscription`) et routes cron protégées par `x-cron-secret`.
+
+**Routes actuellement sécurisées :**
+- Bearer token : `send-email`, `create-annulation-token`, `queue-invitations`, `process-invitation-queue`, `create-admin`, `delete-admin`, `update-admin-password`
+- `x-cron-secret` : `cron/anniversaires`, `cron/date-limite`
+- UUID non-devinable : `confirm-inscription`, `cancel-inscription`
+- Obsolète (410) : `send-invitation`, `confirm-read`
+
+**Côté dashboard**, toujours récupérer le token dans la boucle d'envoi (Firebase le cache, refresh auto si proche expiry) :
+```typescript
+const token = await auth.currentUser?.getIdToken(); // dans la boucle, pas avant
+```
+
+**`/api/confirm-inscription`** envoie directement l'email de confirmation via Nodemailer (plus de délégation à `/api/send-email` depuis la page publique). Inclut le tracking `email_tracking` et le bouton "J'ai bien reçu cet e-mail ✓". L'email est best-effort : l'inscription reste valide même si l'envoi échoue.
 
 ### 2. Pattern anti-race-condition pour les traitements par lot
 
