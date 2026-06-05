@@ -516,7 +516,7 @@ Opérations réalisées en avril 2026 :
 - Mise à jour `cotisationAJour=true` pour 63 adhérents depuis `cotisations 2026.xlsx`
 - Suppression de 3 adhérents (Nicole ABDELATIF, Sonia LEMERLE, Philippe PEROLLE)
 - Fusion Sophie PASCAL → Pascal BERNIER (mise à jour du document existant)
-- Audit exhaustif des 13 champs sur 92 adhérents
+- Audit exhaustif des 13 champs sur 93 adhérents
 - Campagne e-mail de relance date de naissance (39 destinataires uniques)
 
 ### Sauvegardes Firestore
