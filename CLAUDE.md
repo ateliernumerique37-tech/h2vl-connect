@@ -265,11 +265,22 @@ Définies dans `apphosting.yaml` (disponibles au runtime sur Cloud Run) :
 | `EMAIL_HOST` | `smtp.gmail.com` |
 | `EMAIL_PORT` | `465` |
 | `EMAIL_USER` | Adresse Gmail expéditrice |
-| `EMAIL_PASS` | Mot de passe d'application Gmail (16 caractères) |
+| `EMAIL_PASS` | Mot de passe d'application Gmail (16 caractères) — **stocké dans Google Secret Manager** (`email-pass`) |
 | `EMAIL_FROM_NAME` | Nom affiché dans les emails |
-| `CRON_SECRET` | Secret partagé entre GCP Cloud Scheduler et les routes `/api/cron/*` |
+| `CRON_SECRET` | Secret partagé entre GCP Cloud Scheduler et les routes `/api/cron/*` — **stocké dans Google Secret Manager** (`cron-secret`) |
 
 > ⚠️ Les valeurs réelles ne doivent **jamais** être écrites dans ce fichier (versionné Git). Les retrouver dans `apphosting.yaml` (production) et `.env.local` (développement local, gitignored).
+
+### Secrets Google Secret Manager
+
+`EMAIL_PASS` et `CRON_SECRET` sont stockés dans **Google Secret Manager** (projet `studio-6079106449-cf583`) et référencés dans `apphosting.yaml` via `secret:` au lieu de `value:`. Les permissions ont été accordées via :
+
+```bash
+firebase apphosting:secrets:grantaccess email-pass --project studio-6079106449-cf583 --backend studio --location us-central1
+firebase apphosting:secrets:grantaccess cron-secret --project studio-6079106449-cf583 --backend studio --location us-central1
+```
+
+> ⚠️ Si de nouveaux secrets sont ajoutés dans Secret Manager, toujours utiliser `firebase apphosting:secrets:grantaccess` (pas les IAM manuels via `gcloud`) — c'est la seule commande qui accorde les bonnes permissions pour le build **et** le runtime.
 
 En développement local, créer un fichier `.env.local` à la racine avec ces variables.
 

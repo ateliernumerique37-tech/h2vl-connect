@@ -1,7 +1,11 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+
+export const viewport: Viewport = {
+  themeColor: '#1A75D1',
+};
 
 export const metadata: Metadata = {
   title: 'H2vl Connect',
@@ -12,7 +16,6 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'H2vl Connect',
   },
-  themeColor: '#1A75D1',
   icons: {
     apple: '/icons/icon-192x192.png',
   },
