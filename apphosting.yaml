@@ -22,6 +22,7 @@ env:
   - variable: EMAIL_PASS
     secret: email-pass
     availability:
+      - BUILD
       - RUNTIME
   - variable: EMAIL_FROM_NAME
     value: "Gestion de l'association H2VL"
@@ -30,4 +31,5 @@ env:
   - variable: CRON_SECRET
     secret: cron-secret
     availability:
+      - BUILD
       - RUNTIME
