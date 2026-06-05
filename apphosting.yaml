@@ -20,7 +20,7 @@ env:
     availability:
       - RUNTIME
   - variable: EMAIL_PASS
-    value: deyqfrobqwyfagsf
+    secret: email-pass
     availability:
       - RUNTIME
   - variable: EMAIL_FROM_NAME
@@ -28,6 +28,6 @@ env:
     availability:
       - RUNTIME
   - variable: CRON_SECRET
-    value: "h2vl-cron-bK7mNpQ3rJ9sX1tZ5vE8wA4dC6fH2gL0"
+    secret: cron-secret
     availability:
       - RUNTIME
