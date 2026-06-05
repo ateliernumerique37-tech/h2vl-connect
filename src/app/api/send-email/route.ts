@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
+import { adminAuth } from '@/lib/firebase-admin';
 
 const BRAND_BLUE      = '#1A75D1';
 const BRAND_BLUE_DARK = '#1558A8';
@@ -106,6 +107,24 @@ function getDb() {
 
 export async function POST(request: Request) {
   try {
+    // ── Vérification auth : Bearer token Firebase Auth OU x-cron-secret ──────
+    const cronSecret = request.headers.get('x-cron-secret');
+    const bearerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+
+    if (cronSecret) {
+      if (cronSecret !== process.env.CRON_SECRET) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+    } else if (bearerToken) {
+      try {
+        await adminAuth().verifyIdToken(bearerToken);
+      } catch {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+    } else {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const requiredEnvVars = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASS'];
     const missingVars = requiredEnvVars.filter(v => !process.env[v]);
     if (missingVars.length > 0) {
@@ -227,12 +246,16 @@ export async function POST(request: Request) {
       html = emailWrapper('#15803d', headerContent, body);
     }
 
-    await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME || 'H2VL'}" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
-    });
+    try {
+      await transporter.sendMail({
+        from: `"${process.env.EMAIL_FROM_NAME || 'H2VL'}" <${process.env.EMAIL_USER}>`,
+        to,
+        subject,
+        html,
+      });
+    } finally {
+      transporter.close();
+    }
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {

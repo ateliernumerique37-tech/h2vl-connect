@@ -579,10 +579,11 @@ export default function EventDetailPage() {
     for (let i = 0; i < inscritsWithEmail.length; i++) {
       if (i > 0) await new Promise(r => setTimeout(r, 800));
       const adherent = inscritsWithEmail[i];
+      const emailToken = await auth.currentUser?.getIdToken(); // cache Firebase, refresh auto si proche expiry
       try {
         const res = await fetch('/api/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${emailToken}` },
           body: JSON.stringify({
             to: adherent.email,
             firstName: adherent.prenom,
@@ -659,16 +660,23 @@ export default function EventDetailPage() {
 
       // Générer et stocker le jeton d'annulation via Admin SDK (annulations_inscription is write-protected)
       let jetonAnnulation: string | null = null;
+      const authToken = await auth.currentUser?.getIdToken();
+      const fmtTz = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        timeZone: 'Europe/Paris',
+      });
+      const formattedDateTz = event?.date ? fmtTz(event.date) : '';
+      const formattedDateFinTz = event?.dateFin ? fmtTz(event.dateFin) : null;
       try {
         const tokenRes = await fetch('/api/create-annulation-token', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
           body: JSON.stringify({
             inscriptionId,
             evenementId: event?.id || '',
             eventTitle: event?.titre || '',
-            eventDate: formattedDate,
-            eventDateFin: formattedDateFin || null,
+            eventDate: formattedDateTz,
+            eventDateFin: formattedDateFinTz,
           }),
         });
         const tokenData = await tokenRes.json();
@@ -708,7 +716,7 @@ export default function EventDetailPage() {
 
           const emailRes = await fetch('/api/send-email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
             body: JSON.stringify({
               to: adherent.email,
               firstName: adherent.prenom,

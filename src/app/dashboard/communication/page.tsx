@@ -130,11 +130,12 @@ export default function CommunicationPage() {
 
       for (let i = 0; i < targetAdherents.length; i++) {
         const adherent = targetAdherents[i];
-        
+        const token = await auth.currentUser?.getIdToken(); // cache Firebase, refresh auto si proche expiry
+
         try {
           const res = await fetch('/api/send-email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
               to: adherent.email,
               firstName: adherent.prenom,

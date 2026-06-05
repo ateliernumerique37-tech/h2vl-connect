@@ -5,7 +5,7 @@ import { Users, BadgeCheck, Cake, Heart, Milestone, Loader2 } from 'lucide-react
 import { useMemo, useState, useEffect } from 'react';
 import type { Adherent, LogAnniversaire } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useAuth } from '@/firebase';
 import { collection, query, where, addDoc } from 'firebase/firestore';
 import { DashboardTips } from '@/components/dashboard/dashboard-tips';
 import { Button } from '@/components/ui/button';
@@ -92,6 +92,7 @@ function DashboardSkeleton() {
 
 export default function DashboardHomePage() {
     const db = useFirestore();
+    const auth = useAuth();
     const { toast } = useToast();
     
     // État pour la date du jour (pour éviter les mismatches d'hydratation)
@@ -161,16 +162,17 @@ export default function DashboardHomePage() {
 
     const handleSendBirthday = async (adherent: Adherent) => {
         if (!adherent.email || sendingIds.includes(adherent.id) || sentAdherentIds.has(adherent.id)) return;
-        
+
         setSendingIds(prev => [...prev, adherent.id]);
-        
+
         try {
             const randomMsg = BIRTHDAY_MESSAGES[Math.floor(Math.random() * BIRTHDAY_MESSAGES.length)];
             const customMessage = randomMsg.replace('[Prenom]', adherent.prenom);
 
+            const token = await auth.currentUser?.getIdToken();
             const response = await fetch('/api/send-email', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     to: adherent.email,
                     firstName: adherent.prenom,

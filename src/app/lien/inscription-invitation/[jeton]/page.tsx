@@ -77,32 +77,7 @@ function InscriptionContent() {
       return;
     }
 
-    // Envoi de l'e-mail de confirmation (best-effort)
-    if (data.adherentEmail) {
-      try {
-        const annulationUrl = `${window.location.origin}/lien/annulation/${data.jetonAnnulation}`;
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: data.adherentEmail,
-            firstName: data.adherentFirstName || '',
-            eventTitle: data.eventTitle,
-            eventDate: data.eventDate,
-            eventDateFin: data.eventDateFin,
-            eventLocation: data.eventLocation,
-            eventDescription: data.eventDescription || '',
-            eventPrix: data.eventPrix ?? 0,
-            menuChoices: extraChoices?.menuChoices ?? null,
-            bowlingChoices: extraChoices?.bowlingChoices ?? null,
-            annulationUrl,
-          }),
-        });
-      } catch (e) {
-        console.error('Email confirmation failed:', e);
-      }
-    }
-
+    // L'email de confirmation est désormais envoyé directement par /api/confirm-inscription (côté serveur)
     setStatus('success');
   };
 

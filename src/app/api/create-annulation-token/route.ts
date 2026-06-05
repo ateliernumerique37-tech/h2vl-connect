@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
+import { adminDb, adminAuth } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
+    // Vérification Bearer token Firebase Auth (appelé uniquement depuis le dashboard)
+    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    try {
+      await adminAuth().verifyIdToken(token);
+    } catch {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { inscriptionId, evenementId, eventTitle, eventDate, eventDateFin } = await request.json();
 
     if (!inscriptionId || !evenementId) {

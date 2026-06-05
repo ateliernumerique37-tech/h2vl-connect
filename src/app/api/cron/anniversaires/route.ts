@@ -79,7 +79,10 @@ export async function POST(request: Request) {
 
         const res = await fetch(`${origin}/api/send-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-cron-secret': process.env.CRON_SECRET || '',
+          },
           body: JSON.stringify({
             to: adherent.email,
             firstName: adherent.prenom,
