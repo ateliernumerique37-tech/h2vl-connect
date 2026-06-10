@@ -132,7 +132,7 @@ export default function EditEventPage() {
         setIsSubmitting(true);
         
         try {
-            const updatedEvent = {
+            const updatedEvent: Record<string, any> = {
                 titre,
                 description,
                 date: new Date(date).toISOString(),

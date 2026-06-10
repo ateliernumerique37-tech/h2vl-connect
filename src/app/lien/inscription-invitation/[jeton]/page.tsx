@@ -228,38 +228,46 @@ function InscriptionContent() {
             {eventData?.estSortieBowling && (
               <div className="space-y-3 rounded-lg border p-4 bg-muted/5">
                 <h2 className="font-bold text-sm uppercase tracking-wider text-primary/80 border-b pb-2">
-                  🎳 Options bowling
+                  <span aria-hidden="true">🎳 </span>Options bowling
                 </h2>
+
+                {/* Avec / sans barrières : choix unique → RadioGroup (sémantique correcte SR) */}
                 <div className="space-y-2">
-                  {[
-                    {
-                      id: 'bowling-barrieres',
-                      label: 'Avec barrières',
-                      checked: bowlingChoices?.avecBarrieres ?? false,
-                      onChange: (checked: boolean) => setBowlingChoices(prev => ({
-                        ...prev, avecBarrieres: checked, sansBarrieres: checked ? false : prev?.sansBarrieres,
-                      })),
-                    },
-                    {
-                      id: 'bowling-sans-barrieres',
-                      label: 'Sans barrières',
-                      checked: bowlingChoices?.sansBarrieres ?? false,
-                      onChange: (checked: boolean) => setBowlingChoices(prev => ({
-                        ...prev, sansBarrieres: checked, avecBarrieres: checked ? false : prev?.avecBarrieres,
-                      })),
-                    },
-                    {
-                      id: 'bowling-gouter',
-                      label: "Prend le goûter de l'amitié",
-                      checked: bowlingChoices?.prendGouter ?? false,
-                      onChange: (checked: boolean) => setBowlingChoices(prev => ({ ...prev, prendGouter: checked })),
-                    },
-                  ].map(({ id, label, checked, onChange }) => (
-                    <div key={id} className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
-                      <Checkbox id={id} checked={checked} onCheckedChange={(v) => onChange(v === true)} aria-label={label} />
-                      <Label htmlFor={id} className="flex-1 cursor-pointer text-sm font-normal">{label}</Label>
-                    </div>
-                  ))}
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Barrières
+                  </Label>
+                  <RadioGroup
+                    value={bowlingChoices?.avecBarrieres ? 'avec' : bowlingChoices?.sansBarrieres ? 'sans' : ''}
+                    onValueChange={(value) => setBowlingChoices(prev => ({
+                      ...prev,
+                      avecBarrieres: value === 'avec',
+                      sansBarrieres: value === 'sans',
+                    }))}
+                    aria-label="Jouer avec ou sans les barrières"
+                    className="grid gap-2"
+                  >
+                    {[
+                      { value: 'avec', id: 'bowling-avec-barrieres', label: 'Avec barrières' },
+                      { value: 'sans', id: 'bowling-sans-barrieres', label: 'Sans barrières' },
+                    ].map(({ value, id, label }) => (
+                      <div key={id} className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
+                        <RadioGroupItem value={value} id={id} />
+                        <Label htmlFor={id} className="flex-1 cursor-pointer text-sm font-normal">{label}</Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+
+                {/* Goûter : choix indépendant → case à cocher */}
+                <div className="flex items-center space-x-3 rounded-md border p-3 hover:bg-muted/50 transition-colors">
+                  <Checkbox
+                    id="bowling-gouter"
+                    checked={bowlingChoices?.prendGouter ?? false}
+                    onCheckedChange={(v) => setBowlingChoices(prev => ({ ...prev, prendGouter: v === true }))}
+                  />
+                  <Label htmlFor="bowling-gouter" className="flex-1 cursor-pointer text-sm font-normal">
+                    Prend le goûter de l'amitié
+                  </Label>
                 </div>
               </div>
             )}
@@ -354,19 +362,9 @@ function InscriptionContent() {
           )}
 
           {status === 'error' && (
-            <div className="mt-4 p-4 bg-muted/50 rounded-lg text-left" role="region" aria-label="Informations de diagnostic">
-              <p className="font-bold text-xs mb-2 uppercase tracking-widest text-muted-foreground" aria-hidden="true">Diagnostic</p>
-              <dl className="space-y-1 font-mono text-[10px] break-all">
-                <div className="flex gap-1">
-                  <dt className="text-primary">Jeton :</dt>
-                  <dd>{jeton || 'manquant'}</dd>
-                </div>
-                <div className="flex gap-1">
-                  <dt className="text-primary">Erreur :</dt>
-                  <dd>{errorDetails || 'N/A'}</dd>
-                </div>
-              </dl>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Si le problème persiste, contactez l'association.
+            </p>
           )}
         </CardContent>
       </Card>

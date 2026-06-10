@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
-import { firebaseConfig } from '@/firebase/config';
-import { adminAuth } from '@/lib/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 
 const BRAND_BLUE      = '#1A75D1';
 const BRAND_BLUE_DARK = '#1558A8';
@@ -99,12 +96,6 @@ function buildCancellationHtml(url: string | undefined | null): string {
     </p>`;
 }
 
-// Initialisation Firebase côté serveur
-function getDb() {
-  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  return getFirestore(app);
-}
-
 export async function POST(request: Request) {
   try {
     // ── Vérification auth : Bearer token Firebase Auth OU x-cron-secret ──────
@@ -160,8 +151,9 @@ export async function POST(request: Request) {
 
     if (adherentId) {
       try {
-        const db = getDb();
-        await setDoc(doc(db, 'email_tracking', jeton), {
+        // Écriture via Admin SDK (contourne les règles) — la collection email_tracking
+        // n'autorise plus la création côté client.
+        await adminDb().collection('email_tracking').doc(jeton).set({
           adherentId,
           campagneId: campaignId || 'direct',
           statut: 'envoyé',

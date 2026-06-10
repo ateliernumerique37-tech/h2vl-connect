@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
-    const token = request.headers.get('Authorization')?.split('Bearer ')[1];
+    // Authentification : Bearer token Firebase Auth obligatoire
+    const token = request.headers.get('authorization')?.replace('Bearer ', '');
     if (!token) {
       return NextResponse.json({ success: false, error: 'Non autorisé.' }, { status: 401 });
     }
-    await adminAuth().verifyIdToken(token);
+
+    let callerUid: string;
+    try {
+      const decoded = await adminAuth().verifyIdToken(token);
+      callerUid = decoded.uid;
+    } catch {
+      return NextResponse.json({ success: false, error: 'Non autorisé.' }, { status: 401 });
+    }
 
     const { uid, password } = await request.json();
 
@@ -17,6 +25,14 @@ export async function POST(request: Request) {
 
     if (password.length < 6) {
       return NextResponse.json({ success: false, error: 'Le mot de passe doit comporter au moins 6 caractères.' }, { status: 400 });
+    }
+
+    // Autorisation : on peut changer SON PROPRE mot de passe, sinon il faut être Administrateur
+    if (uid !== callerUid) {
+      const callerSnap = await adminDb().collection('admins').doc(callerUid).get();
+      if (!callerSnap.exists || callerSnap.data()?.role !== 'Administrateur') {
+        return NextResponse.json({ success: false, error: 'Non autorisé.' }, { status: 403 });
+      }
     }
 
     await adminAuth().updateUser(uid, { password });

@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { adminAuth, adminDb, requireAdministrateur, authErrorStatus } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
-    // Vérification que l'appelant est un admin connecté
-    const token = request.headers.get('Authorization')?.split('Bearer ')[1];
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Non autorisé.' }, { status: 401 });
+    // Action réservée aux Administrateurs (suppression de comptes admin)
+    try {
+      await requireAdministrateur(request);
+    } catch (authErr) {
+      return NextResponse.json({ success: false, error: 'Non autorisé.' }, { status: authErrorStatus(authErr) });
     }
-    await adminAuth().verifyIdToken(token);
 
     const { uid } = await request.json();
     if (!uid) {

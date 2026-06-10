@@ -5,6 +5,15 @@ import nodemailer from 'nodemailer';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
+function escapeHtml(str: string): string {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function getTodayStr(): string {
   // Retourne YYYY-MM-DD en heure de Paris
   return new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
@@ -122,12 +131,12 @@ export async function POST(req: NextRequest) {
 
           const detailTexte = extras.length > 0 ? ` — ${extras.join(', ')}` : '';
           const detailHtml  = extras.length > 0
-            ? ` <span style="color:#555;font-size:13px;">(${extras.join(', ')})</span>`
+            ? ` <span style="color:#555;font-size:13px;">(${escapeHtml(extras.join(', '))})</span>`
             : '';
 
           lignesTexte.push(`• ${nom}${detailTexte}`);
           lignesHtml.push(
-            `<li style="margin:4px 0;"><strong>${nom}</strong>${detailHtml}</li>`
+            `<li style="margin:4px 0;"><strong>${escapeHtml(nom)}</strong>${detailHtml}</li>`
           );
         }
 
@@ -158,7 +167,7 @@ export async function POST(req: NextRequest) {
   <p>Bonjour,</p>
   <p>
     La date limite d'inscription à l'événement
-    <strong>"${event.titre}"</strong> du <strong>${eventDateStr}</strong>${eventDateFinStr ? ` au <strong>${eventDateFinStr}</strong>` : ''}
+    <strong>"${escapeHtml(event.titre)}"</strong> du <strong>${eventDateStr}</strong>${eventDateFinStr ? ` au <strong>${eventDateFinStr}</strong>` : ''}
     est atteinte.
   </p>
 

@@ -82,13 +82,9 @@ function ConfirmationContent() {
           )}
 
           {status === 'error' && (
-            <div className="mt-8 p-4 bg-muted/50 rounded-lg text-left">
-              <p className="font-bold text-xs mb-2 uppercase tracking-widest text-muted-foreground">Diagnostic Technique</p>
-              <div className="space-y-1 font-mono text-[10px] break-all">
-                <p><span className="text-primary">JETON:</span> {jeton || 'manquant'}</p>
-                <p><span className="text-primary">STATUS:</span> {errorDetails || 'N/A'}</p>
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Si le problème persiste, contactez l'association.
+            </p>
           )}
         </CardContent>
       </Card>

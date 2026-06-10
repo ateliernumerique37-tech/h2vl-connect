@@ -159,7 +159,7 @@ export default function AdminPage() {
         }
 
         const existingSnap = await getDocs(collection(db, 'adherents'));
-        const existingAdherents = existingSnap.docs.map(d => ({ id: d.id, ...d.data() as Adherent }));
+        const existingAdherents = existingSnap.docs.map(d => ({ ...(d.data() as Adherent), id: d.id }));
 
         // Pré-chargement des cotisations existantes pour l'année détectée (upsert)
         const cotisSnap = await getDocs(query(collection(db, 'cotisations'), where('annee', '==', cotisationYear)));

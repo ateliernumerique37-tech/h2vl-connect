@@ -34,7 +34,11 @@ service cloud.firestore {
       // La création et suppression passent par l'API Firebase Admin SDK (serveur)
       // qui contourne les règles. Les clients ne peuvent jamais écrire directement.
       allow create: if false;
-      allow update: if isAdmin();
+      // Un Administrateur peut tout modifier. Un autre admin (ex. Modérateur) ne peut
+      // modifier QUE son propre doc et JAMAIS son champ role (anti-élévation de privilège).
+      allow update: if isAdministrateur()
+                    || (isOwner(adminId)
+                        && request.resource.data.role == resource.data.role);
       allow delete: if false;
     }
 
@@ -72,9 +76,24 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    /** Suivi des e-mails (Tracking) - ACCÈS PUBLIC POUR LA VALIDATION */
-    match /email_tracking/{document} {
-      allow read, write: if true;
+    /** Suivi des e-mails (Tracking)
+     *  - get public : la page /lien/confirmation/[jeton] lit le doc par son jeton (non devinable)
+     *  - list interdit : empêche l'énumération de tous les jetons/adherentId
+     *  - create interdit côté client : les docs sont créés via Admin SDK (send-email, confirm-inscription)
+     *  - update public limité : seul le passage statut 'envoyé' -> 'confirmé' + dateLecture est permis
+     *    (le visiteur confirme la réception sans pouvoir altérer le reste du doc)
+     */
+    match /email_tracking/{jeton} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if false;
+      // Le visiteur confirme la réception : passage vers 'confirmé' uniquement,
+      // sans pouvoir altérer adherentId / campagneId. Idempotent (re-clic toléré).
+      allow update: if resource.data.statut in ['envoyé', 'confirmé']
+                    && request.resource.data.statut == 'confirmé'
+                    && request.resource.data.adherentId == resource.data.adherentId
+                    && request.resource.data.campagneId == resource.data.campagneId;
+      allow delete: if false;
     }
 
     /** Logs d'anniversaires */

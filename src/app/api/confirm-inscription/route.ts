@@ -91,6 +91,20 @@ function buildCancellationHtml(url: string): string {
     </p>`;
 }
 
+type TxErrorCode = 'NOT_FOUND' | 'EVENT_NOT_FOUND' | 'ALREADY_REGISTERED' | 'EVENT_FULL' | 'REGISTRATION_CLOSED';
+type TxResult =
+  | { code: TxErrorCode }
+  | {
+      ok: true;
+      event: Record<string, any>;
+      evenementId: string;
+      adherentId: string;
+      adherentEmail: string;
+      adherentFirstName: string;
+      inscriptionId: string;
+      inscriptionDate: string;
+    };
+
 export async function POST(request: Request) {
   try {
     const { jeton, menuChoices, bowlingChoices } = await request.json();
@@ -101,72 +115,93 @@ export async function POST(request: Request) {
 
     const db = adminDb();
 
-    // 1. Lire l'invitation
     const invitationRef = db.collection('invitations_evenement').doc(jeton);
-    const invitationSnap = await invitationRef.get();
 
-    if (!invitationSnap.exists) {
-      return NextResponse.json({ success: false, error: 'NOT_FOUND' }, { status: 404 });
-    }
+    // Étapes 1 à 6 réalisées dans UNE transaction Firestore pour fermer la course
+    // entre la vérification de capacité/doublon et la création de l'inscription.
+    // Deux requêtes concurrentes ne peuvent plus dépasser nombrePlacesMax ni créer
+    // de doublon : la transaction relit et réessaie en cas de conflit.
+    const txResult = await db.runTransaction(async (t): Promise<TxResult> => {
+      // 1. Invitation
+      const invitationSnap = await t.get(invitationRef);
+      if (!invitationSnap.exists) return { code: 'NOT_FOUND' as const };
+      const invitation = invitationSnap.data()!;
+      if (invitation.statut === 'inscrit') return { code: 'ALREADY_REGISTERED' as const };
 
-    const invitation = invitationSnap.data()!;
+      const { evenementId, adherentId, adherentEmail, adherentFirstName } = invitation;
 
-    if (invitation.statut === 'inscrit') {
-      return NextResponse.json({ success: false, error: 'ALREADY_REGISTERED' }, { status: 409 });
-    }
+      // 2. Événement
+      const eventRef = db.collection('evenements').doc(evenementId);
+      const eventSnap = await t.get(eventRef);
+      if (!eventSnap.exists) return { code: 'EVENT_NOT_FOUND' as const };
+      const event = eventSnap.data()!;
 
-    const { evenementId, adherentId, adherentEmail, adherentFirstName } = invitation;
-
-    // 2. Lire l'événement
-    const eventSnap = await db.collection('evenements').doc(evenementId).get();
-    if (!eventSnap.exists) {
-      return NextResponse.json({ success: false, error: 'EVENT_NOT_FOUND' }, { status: 404 });
-    }
-
-    const event = eventSnap.data()!;
-
-    // 3. Vérifier si les inscriptions sont fermées
-    const now = new Date();
-    if (new Date(event.date) < now) {
-      return NextResponse.json({ success: false, error: 'REGISTRATION_CLOSED' }, { status: 409 });
-    }
-    if (event.dateLimiteInscription && new Date(event.dateLimiteInscription) < now) {
-      return NextResponse.json({ success: false, error: 'REGISTRATION_CLOSED' }, { status: 409 });
-    }
-
-    // 4. Vérifier la capacité
-    if (event.nombrePlacesMax && event.nombrePlacesMax > 0) {
-      const allInscriptionsSnap = await db.collection('inscriptions')
-        .where('id_evenement', '==', evenementId)
-        .get();
-      if (allInscriptionsSnap.size >= event.nombrePlacesMax) {
-        return NextResponse.json({ success: false, error: 'EVENT_FULL' }, { status: 409 });
+      // 3. Inscriptions fermées ?
+      const now = new Date();
+      if (new Date(event.date) < now) return { code: 'REGISTRATION_CLOSED' as const };
+      if (event.dateLimiteInscription && new Date(event.dateLimiteInscription) < now) {
+        return { code: 'REGISTRATION_CLOSED' as const };
       }
+
+      // 4+5. Lire toutes les inscriptions de l'événement (capacité + doublon)
+      const inscriptionsSnap = await t.get(
+        db.collection('inscriptions').where('id_evenement', '==', evenementId)
+      );
+
+      const dejaInscrit = inscriptionsSnap.docs.some(d => d.data().id_adherent === adherentId);
+      if (dejaInscrit) {
+        t.update(invitationRef, { statut: 'inscrit', dateInscription: now.toISOString() });
+        return { code: 'ALREADY_REGISTERED' as const };
+      }
+
+      if (event.nombrePlacesMax && event.nombrePlacesMax > 0 && inscriptionsSnap.size >= event.nombrePlacesMax) {
+        return { code: 'EVENT_FULL' as const };
+      }
+
+      // 6. Créer l'inscription + marquer l'invitation (atomique)
+      const inscriptionDate = now.toISOString();
+      const inscriptionData: Record<string, unknown> = {
+        id_evenement: evenementId,
+        id_adherent: adherentId,
+        a_paye: false,
+        date_inscription: inscriptionDate,
+      };
+      if (menuChoices) inscriptionData.choixMenu = menuChoices;
+      if (bowlingChoices) inscriptionData.choixBowling = bowlingChoices;
+
+      const inscriptionRef = db.collection('inscriptions').doc();
+      t.set(inscriptionRef, inscriptionData);
+      t.update(invitationRef, { statut: 'inscrit', dateInscription: inscriptionDate });
+
+      return {
+        ok: true as const,
+        event,
+        evenementId,
+        adherentId,
+        adherentEmail,
+        adherentFirstName,
+        inscriptionId: inscriptionRef.id,
+        inscriptionDate,
+      };
+    });
+
+    // Codes d'erreur → réponses HTTP
+    if ('code' in txResult) {
+      const statusByCode: Record<string, number> = {
+        NOT_FOUND: 404,
+        EVENT_NOT_FOUND: 404,
+        ALREADY_REGISTERED: 409,
+        EVENT_FULL: 409,
+        REGISTRATION_CLOSED: 409,
+      };
+      return NextResponse.json(
+        { success: false, error: txResult.code },
+        { status: statusByCode[txResult.code] ?? 400 }
+      );
     }
 
-    // 5. Vérifier doublon
-    const existingSnap = await db.collection('inscriptions')
-      .where('id_evenement', '==', evenementId)
-      .where('id_adherent', '==', adherentId)
-      .get();
-
-    if (!existingSnap.empty) {
-      await invitationRef.update({ statut: 'inscrit', dateInscription: now.toISOString() });
-      return NextResponse.json({ success: false, error: 'ALREADY_REGISTERED' }, { status: 409 });
-    }
-
-    // 6. Créer l'inscription
-    const inscriptionDate = now.toISOString();
-    const inscriptionData: Record<string, unknown> = {
-      id_evenement: evenementId,
-      id_adherent: adherentId,
-      a_paye: false,
-      date_inscription: inscriptionDate,
-    };
-    if (menuChoices) inscriptionData.choixMenu = menuChoices;
-    if (bowlingChoices) inscriptionData.choixBowling = bowlingChoices;
-
-    const inscriptionRef = await db.collection('inscriptions').add(inscriptionData);
+    const { event, evenementId, adherentId, adherentEmail, adherentFirstName, inscriptionId, inscriptionDate } = txResult;
+    const inscriptionRef = { id: inscriptionId };
 
     // 7. Créer le jeton d'annulation
     const jetonAnnulation = crypto.randomUUID();
@@ -188,10 +223,9 @@ export async function POST(request: Request) {
       createdAt: inscriptionDate,
     });
 
-    // 8. Marquer l'invitation comme traitée
-    await invitationRef.update({ statut: 'inscrit', dateInscription: inscriptionDate });
+    // (L'invitation a déjà été marquée 'inscrit' dans la transaction ci-dessus.)
 
-    // 9. Envoyer l'email de confirmation directement (best-effort)
+    // 8. Envoyer l'email de confirmation directement (best-effort)
     if (adherentEmail) {
       try {
         const forwardedProto = request.headers.get('x-forwarded-proto');

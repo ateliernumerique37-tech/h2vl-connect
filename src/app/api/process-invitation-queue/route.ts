@@ -12,6 +12,15 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function escapeHtml(str: string): string {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function emailWrapper(content: string): string {
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -129,25 +138,25 @@ export async function POST(request: Request) {
           const body = `
             <h2 style="margin:0 0 20px;font-size:21px;color:#1f2937;">Vous êtes invité(e) !</h2>
 
-            <p style="margin:0 0 6px;font-size:16px;color:#1f2937;">Bonjour <strong>${item.adherentFirstName}</strong>,</p>
+            <p style="margin:0 0 6px;font-size:16px;color:#1f2937;">Bonjour <strong>${escapeHtml(item.adherentFirstName)}</strong>,</p>
             <p style="margin:0 0 ${item.eventDescription ? '16px' : '28px'};font-size:15px;color:#4b5563;line-height:1.7;">
               Nous avons le plaisir de vous convier à notre prochain événement.
             </p>
 
-            ${item.eventDescription ? `<p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.7;">${item.eventDescription}</p>` : ''}
+            ${item.eventDescription ? `<p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.7;">${escapeHtml(item.eventDescription)}</p>` : ''}
 
-            <p style="margin:0 0 10px;font-size:17px;font-weight:bold;color:${BRAND_BLUE_DARK};">${item.eventTitle}</p>
+            <p style="margin:0 0 10px;font-size:17px;font-weight:bold;color:${BRAND_BLUE_DARK};">${escapeHtml(item.eventTitle)}</p>
             <ul style="margin:0 0 28px;padding-left:20px;font-size:15px;color:#374151;line-height:2;">
-              <li>📅 <strong>Début :</strong> ${item.eventDate}</li>
-              ${item.eventDateFin ? `<li>🏁 <strong>Fin :</strong> ${item.eventDateFin}</li>` : ''}
-              <li>📍 <strong>Lieu :</strong> ${item.eventLocation}</li>
+              <li>📅 <strong>Début :</strong> ${escapeHtml(item.eventDate)}</li>
+              ${item.eventDateFin ? `<li>🏁 <strong>Fin :</strong> ${escapeHtml(item.eventDateFin)}</li>` : ''}
+              <li>📍 <strong>Lieu :</strong> ${escapeHtml(item.eventLocation)}</li>
               <li>💶 <strong>Tarif :</strong> ${prixLabel}</li>
             </ul>
 
             <p style="margin:0 0 16px;font-size:15px;color:#4b5563;">${ctaExplainer}</p>
 
             <p style="margin:0 0 28px;">
-              <a href="${item.inscriptionUrl}"
+              <a href="${encodeURI(item.inscriptionUrl)}"
                 style="display:inline-block;padding:14px 30px;background-color:#16a34a;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">
                 Je m'inscris à cet événement →
               </a>

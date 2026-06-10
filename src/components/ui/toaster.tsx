@@ -11,7 +11,7 @@ import {
   ToastViewport,
 } from "@/components/ui/toast"
 
-function playSound(variant?: string) {
+function playSound(variant?: string | null) {
   try {
     const src = variant === 'destructive' ? '/sounds/error.mp3' : '/sounds/success.mp3';
     const audio = new Audio(src);
