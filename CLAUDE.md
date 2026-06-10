@@ -76,13 +76,13 @@ Permet aux administrateurs de gérer les adhérents, les événements, les inscr
 
 | Collection | Description | Règles |
 |---|---|---|
-| `admins/{uid}` | Profils admins — l'ID doc = UID Firebase Auth | `get` : owner ou admin. `list` : admin. `create/delete` : `false` (Admin SDK uniquement). `update` : admin |
+| `admins/{uid}` | Profils admins — l'ID doc = UID Firebase Auth | `get` : owner ou admin. `list` : admin. `create/delete` : `false` (Admin SDK uniquement). `update` : **Administrateur**, OU owner **sans changer son `role`** (anti-élévation de privilège) |
 | `adherents/{id}` | Membres de l'association | Lecture : admin. Écriture : Administrateur uniquement (RGPD) |
 | `evenements/{id}` | Événements | **Lecture : publique** (`allow read: if true`). Écriture : admin |
 | `inscriptions/{id}` | Inscriptions aux événements | Lecture : connecté. Écriture : admin |
 | `cotisations/{id}` | Cotisations annuelles | Lecture/écriture : Administrateur uniquement |
 | `email_campaigns/{id}` | Campagnes e-mail envoyées | Admin uniquement |
-| `email_tracking/{jeton}` | Suivi des accusés de réception | **Public** (lecture/écriture) |
+| `email_tracking/{jeton}` | Suivi des accusés de réception | `get` public (lecture par jeton). `list` : admin. `create` : `false` → **Admin SDK uniquement** (`send-email`, `confirm-inscription`). `update` public **borné** : seul le passage `envoyé`→`confirmé` est permis, sans altérer `adherentId`/`campagneId` |
 | `invitations_evenement/{jeton}` | Invitations événement avec lien auto-inscription | **Lecture publique**, écriture : `false` (Admin SDK uniquement) |
 | `queue_invitations/{id}` | File d'attente d'envoi des invitations | Lecture : admin. Écriture : `false` (Admin SDK uniquement) |
 | `annulations_inscription/{jeton}` | Jetons d'annulation d'inscription | **Lecture publique**, écriture : `false` (Admin SDK uniquement) |
@@ -563,6 +563,9 @@ Opérations réalisées en avril 2026 :
 - **`allow write: if false`** sur `invitations_evenement`, `annulations_inscription` et `queue_invitations` → toutes les écritures passent par des routes API avec Admin SDK
 - **`annulationUrl`** utilise un UUID unique par inscription → non-devinable, à usage unique
 - **`evenements` est en lecture publique** (`allow read: if true`) — nécessaire pour que la page d'invitation publique puisse lire les détails de l'événement (choix de menu, bowling)
+- **Les routes de gestion d'admins vérifient le rôle côté serveur** — `create-admin`, `delete-admin` exigent `role === 'Administrateur'` via `requireAdministrateur()` (pas seulement l'authentification). `update-admin-password` autorise le self-service OU un Administrateur. Le masquage UI ne suffit jamais : un Modérateur a un token valide.
+- **`email_tracking` n'est plus en écriture publique** — les docs sont créés via Admin SDK (`send-email`, `confirm-inscription`). Le visiteur ne peut que confirmer la réception (`envoyé`→`confirmé`).
+- **En-têtes de sécurité HTTP** définis dans `next.config.ts` (`headers()`) : CSP, `X-Frame-Options: DENY`, `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`. ⚠️ La **CSP** liste explicitement les domaines Firebase/Google (`*.googleapis.com`, `identitytoolkit`, `securetoken`, `firestore`, fonts) — toute nouvelle dépendance externe (script, font, API) doit être ajoutée à la directive correspondante sinon elle sera bloquée.
 - **Toute API route qui déclenche un effet de bord (envoi d'email, écriture Firestore sensible) doit être authentifiée** via Bearer token Firebase Auth (`adminAuth().verifyIdToken(token)`). Pattern :
 
 ```typescript
@@ -803,6 +806,30 @@ Ce pattern est identique dans `RegisterMemberDialog` et la section invitations d
 ### 8. `maxDuration` n'a pas d'effet sur Firebase App Hosting
 
 `export const maxDuration = 300` est une directive **Vercel uniquement**. Sur Firebase App Hosting (Cloud Run), le timeout est contrôlé exclusivement par `timeoutSeconds` dans `apphosting.yaml`. Il faut configurer les deux pour être cohérent, mais savoir que seul `apphosting.yaml` a un effet réel en production.
+
+### 10. Vérifier le RÔLE côté serveur, pas seulement l'authentification
+
+Pour toute action réservée aux Administrateurs (gestion des comptes admin), il ne suffit pas de vérifier que l'appelant est connecté (`verifyIdToken`) : un Modérateur possède aussi un token valide. Il faut vérifier le rôle :
+
+```typescript
+import { requireAdministrateur, authErrorStatus } from '@/lib/firebase-admin';
+
+try {
+  await requireAdministrateur(request); // lève 'UNAUTHORIZED' (401) ou 'FORBIDDEN' (403)
+} catch (e) {
+  return NextResponse.json({ success: false, error: 'Non autorisé.' }, { status: authErrorStatus(e) });
+}
+```
+
+De même, **ne jamais autoriser un client à écrire son propre champ `role`** : la règle Firestore `admins` interdit à un non-Administrateur de modifier `role` même sur son propre document.
+
+### 11. Toujours échapper les données dynamiques injectées dans du HTML d'e-mail
+
+Tout champ provenant de Firestore (titre/description d'événement, nom d'adhérent…) inséré dans un template HTML d'e-mail doit passer par `escapeHtml()`. Les URLs passent par `encodeURI()`. Les fichiers `send-email`, `confirm-inscription`, `process-invitation-queue` et `cron/date-limite` suivent ce pattern — le reproduire pour tout nouvel e-mail.
+
+### 12. Le type-check et le lint sont actifs au build
+
+`next.config.ts` a `typescript.ignoreBuildErrors: false` et `eslint.ignoreDuringBuilds: false`. Un build échouera sur une erreur de type ou de lint — ne **jamais** les remettre à `true` pour contourner une erreur ; corriger la cause. Pour lister toutes les erreurs de type rapidement : `npx tsc --noEmit`.
 
 ---
 
