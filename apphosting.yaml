@@ -6,6 +6,9 @@ runConfig:
   invoker: public
   timeoutSeconds: 300
 
+# Les secrets EMAIL_PASS et CRON_SECRET sont stockés dans Google Secret Manager.
+# La valeur référencée est toujours la dernière version (latest) — un nouveau rollout
+# est nécessaire pour charger une nouvelle version d'un secret.
 env:
   - variable: EMAIL_HOST
     value: smtp.gmail.com
